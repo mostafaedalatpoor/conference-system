@@ -1,5 +1,5 @@
 name: conference_admin
-description: اپ مدیریت کنفرانس برای ویندوز — ورود اکسل، ساخت کارت و PDF، تنظیم رویداد و گزارش.
+description: رویداد یار (Roydadyar) — اپ مدیریت کنفرانس برای ویندوز — ورود اکسل، ساخت کارت و PDF، تنظیم رویداد و گزارش.
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -28,6 +28,7 @@ flutter:
   # فونت وزیرمتن (OFL) در CI از مخزن رسمی دانلود و اینجا گذاشته می‌شود.
   assets:
     - assets/fonts/
+    - assets/brand/
   fonts:
     - family: Vazirmatn
       fonts:

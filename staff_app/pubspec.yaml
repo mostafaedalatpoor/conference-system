@@ -1,5 +1,5 @@
 name: conference_staff
-description: اپ نیروهای اجرایی روز کنفرانس — پذیرش، ثبت‌نام در محل و پذیرایی، آفلاین.
+description: رویداد یار (Roydadyar) — اپ نیروهای اجرایی روز کنفرانس — پذیرش، ثبت‌نام در محل و پذیرایی، آفلاین.
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -23,6 +23,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/brand/
   # فونت وزیرمتن (OFL) در CI از مخزن رسمی دانلود و اینجا گذاشته می‌شود تا روی همه‌ی گوشی‌ها یکسان باشد.
   # وزن ۵۰۰ و ۷۰۰ به نزدیک‌ترین وزن موجود می‌رسد.
   fonts:

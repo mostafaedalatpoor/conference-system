@@ -33,7 +33,7 @@ class AdminApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'مدیریت کنفرانس',
+      title: 'رویداد یار — مدیریت',
       debugShowCheckedModeBanner: false,
       locale: const Locale('fa'),
       supportedLocales: const [Locale('fa'), Locale('en')],
@@ -131,7 +131,16 @@ class _ShellState extends State<Shell> {
                   padding: const EdgeInsets.all(DaftarSize.space3),
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(DaftarSize.space2, DaftarSize.space3, DaftarSize.space2, DaftarSize.space4),
+                      padding: const EdgeInsets.fromLTRB(DaftarSize.space2, DaftarSize.space2, DaftarSize.space2, 0),
+                      child: Row(children: [
+                        Image.asset('assets/brand/logo.png', width: 32, height: 32, semanticLabel: 'لوگوی رویداد یار'),
+                        const SizedBox(width: DaftarSize.space2),
+                        Text('رویداد یار', style: Theme.of(context).textTheme.titleMedium),
+                      ]),
+                    ),
+                    Divider(color: x.line, height: DaftarSize.space5),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(DaftarSize.space2, 0, DaftarSize.space2, DaftarSize.space4),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(s.event?.name ?? 'رویدادی انتخاب نشده',
                             style: Theme.of(context).textTheme.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),

@@ -1,4 +1,4 @@
-"""بعد از flutter create: مجوز اینترنت و نام اپ را در AndroidManifest می‌گذارد."""
+"""بعد از flutter create: مجوز اینترنت و نام اپ (رویداد یار) را در AndroidManifest می‌گذارد."""
 import re
 import sys
 from pathlib import Path
@@ -14,6 +14,6 @@ if "android.permission.INTERNET" not in text:
         count=1,
     )
 
-text = re.sub(r'android:label="[^"]*"', 'android:label="نیروهای کنفرانس"', text, count=1)
+text = re.sub(r'android:label="[^"]*"', 'android:label="رویداد یار"', text, count=1)
 manifest.write_text(text, encoding="utf-8")
 print("patched", manifest)

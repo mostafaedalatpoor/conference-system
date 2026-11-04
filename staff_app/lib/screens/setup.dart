@@ -79,6 +79,15 @@ class _SetupScreenState extends State<SetupScreen> {
         child: ListView(
           padding: const EdgeInsets.all(DaftarSize.space4),
           children: [
+            Padding(
+              padding: const EdgeInsets.only(top: DaftarSize.space3, bottom: DaftarSize.space5),
+              child: Column(children: [
+                Image.asset('assets/brand/logo.png', width: 88, height: 88, semanticLabel: 'لوگوی رویداد یار'),
+                const SizedBox(height: DaftarSize.space2),
+                Text('رویداد یار', style: theme.textTheme.titleLarge),
+                Text('Roydadyar', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+              ]),
+            ),
             if (store.needsLogin) ...[
               Notice(
                 tone: NoticeTone.stop,

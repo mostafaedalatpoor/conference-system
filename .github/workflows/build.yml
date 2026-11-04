@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, design-system-daftar]
   workflow_dispatch:
   # بعد از باز شدن bundle، ساخت خودکار اجرا شود.
   workflow_run:
@@ -11,7 +11,7 @@ on:
 
 jobs:
   staff-apk:
-    name: اپ اندروید نیروها
+    name: رویداد یار — اندروید (نیروها)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -43,6 +43,8 @@ jobs:
           flutter create --org ir.newvisionteam --project-name conference_staff --platforms=android .
           rm -rf test
           python3 ci/patch_android.py android/app/src/main/AndroidManifest.xml
+          # آیکن رویداد یار به‌جای آیکن پیش‌فرض فلاتر
+          cp -r ../branding/android/mipmap-* android/app/src/main/res/
 
       # کلید امضای ثابت: نسخه‌های بعدی روی نسخه‌ی قبلی نصب می‌شوند و داده‌ی گوشی پاک نمی‌شود.
       - name: کلید امضا
@@ -55,13 +57,13 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: staff-apk
+          name: roydadyar-android
           path: |
             staff_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             staff_app/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
 
   admin-windows:
-    name: اپ مدیریت ویندوز
+    name: رویداد یار — ویندوز (مدیریت)
     runs-on: windows-latest
     defaults:
       run:
@@ -88,12 +90,16 @@ jobs:
         run: |
           flutter create --org ir.newvisionteam --project-name conference_admin --platforms=windows .
           rm -rf test
-          sed -i 's/L"conference_admin"/L"Conference Admin"/' windows/runner/main.cpp
+          # نام پنجره «رویداد یار» (با \u تا به کدگذاری فایل منبع وابسته نباشد)، نام فایل اجرایی و آیکن
+          sed -i 's/L"conference_admin"/L"\\u0631\\u0648\\u06CC\\u062F\\u0627\\u062F \\u06CC\\u0627\\u0631"/' windows/runner/main.cpp
+          sed -i 's/conference_admin/Roydadyar/g' windows/CMakeLists.txt windows/runner/Runner.rc
+          cp ../branding/windows/app_icon.ico windows/runner/resources/app_icon.ico
+          grep -n 'L"' windows/runner/main.cpp
 
       - run: flutter pub get
       - run: flutter build windows --release
 
       - uses: actions/upload-artifact@v4
         with:
-          name: admin-windows
+          name: roydadyar-windows
           path: admin_app/build/windows/x64/runner/Release/
