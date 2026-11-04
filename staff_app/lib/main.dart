@@ -1,0 +1,61 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+
+import 'screens/home.dart';
+import 'screens/setup.dart';
+import 'store.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  final store = AppStore();
+  store.load();
+  runApp(StoreScope(store: store, child: const StaffApp()));
+}
+
+/// دسترسی صفحه‌ها به AppStore و بازسازی با هر تغییر.
+class StoreScope extends InheritedNotifier<AppStore> {
+  const StoreScope({super.key, required AppStore store, required super.child}) : super(notifier: store);
+
+  static AppStore of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<StoreScope>()!.notifier!;
+
+  static AppStore read(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<StoreScope>()!.notifier!;
+}
+
+class StaffApp extends StatelessWidget {
+  const StaffApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final seed = const Color(0xFF1F5FBF);
+    return MaterialApp(
+      title: 'نیروهای کنفرانس',
+      debugShowCheckedModeBanner: false,
+      locale: const Locale('fa'),
+      supportedLocales: const [Locale('fa'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true, brightness: Brightness.light),
+      darkTheme: ThemeData(colorSchemeSeed: seed, useMaterial3: true, brightness: Brightness.dark),
+      home: const _Root(),
+    );
+  }
+}
+
+class _Root extends StatelessWidget {
+  const _Root();
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    if (!store.loaded) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (!store.loggedIn || store.needsLogin) return const SetupScreen();
+    return const HomeScreen();
+  }
+}

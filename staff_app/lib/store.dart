@@ -1,0 +1,524 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' show ClientException;
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
+
+import 'api.dart';
+import 'models.dart';
+import 'normalize.dart';
+
+const _uuid = Uuid();
+
+/// همه‌ی وضعیت اپ: داده‌ی رویداد، دفتر رخدادها، صف ارسال، و همگام‌سازی.
+/// همه‌چیز روی گوشی ذخیره می‌شود، پس اپ بدون اینترنت کار می‌کند.
+class AppStore extends ChangeNotifier {
+  // ورود
+  String? server;
+  String? token;
+  String? eventCode;
+  String deviceLabel = '';
+  int? staffId;
+  String staffName = '';
+  bool canCheckin = true;
+  bool canServe = true;
+  bool isAdmin = false;
+
+  // داده‌ی رویداد
+  String eventName = '';
+  int configVersion = 0;
+  List<NamedItem> types = [];
+  List<NamedItem> roles = [];
+  List<Meal> meals = [];
+  List<Session> sessions = [];
+  Map<String, Attendee> _baseAttendees = {};
+  Map<String, PassCard> cards = {};
+  Map<int, String> staffNames = {};
+
+  // دفتر رخدادها
+  List<LogEvent> serverLog = [];
+  final Set<String> _serverUuids = {};
+  List<LogEvent> pending = [];
+  List<Map<String, dynamic>> rejected = [];
+  int cursor = 0;
+
+  // وضعیت همگام‌سازی
+  DateTime? lastSyncOk;
+  String? lastError;
+  bool syncing = false;
+  bool online = false;
+  bool needsLogin = false;
+
+  int? selectedMealId;
+
+  // وضعیت محاسبه‌شده
+  Map<String, Attendee> attendees = {};
+  Map<String, String> cardOwner = {}; // token → attendee id
+  Map<String, CheckState> checkins = {};
+  Map<String, Map<int, List<DateTime>>> mealsServed = {};
+
+  Timer? _timer;
+  Timer? _saveDebounce;
+  bool _loaded = false;
+
+  bool get loggedIn => token != null && server != null;
+  bool get loaded => _loaded;
+
+  // ---------------------------------------------------------------- ذخیره‌سازی
+
+  Future<File> _file() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/conference_state.json');
+  }
+
+  Future<void> load() async {
+    try {
+      final f = await _file();
+      if (await f.exists()) {
+        final j = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+        _fromJson(j);
+      }
+    } catch (e) {
+      lastError = 'خواندن داده‌ی ذخیره‌شده ناموفق بود: $e';
+    }
+    _recompute();
+    _loaded = true;
+    notifyListeners();
+    if (loggedIn) startSyncLoop();
+  }
+
+  void _scheduleSave() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 300), _save);
+  }
+
+  Future<void> _save() async {
+    try {
+      final f = await _file();
+      final tmp = File('${f.path}.tmp');
+      await tmp.writeAsString(jsonEncode(_toJson()), flush: true);
+      await tmp.rename(f.path);
+    } catch (e) {
+      lastError = 'ذخیره‌ی داده روی گوشی ناموفق بود: $e';
+      notifyListeners();
+    }
+  }
+
+  Map<String, dynamic> _toJson() => {
+        'server': server,
+        'token': token,
+        'event_code': eventCode,
+        'device_label': deviceLabel,
+        'staff_id': staffId,
+        'staff_name': staffName,
+        'can_checkin': canCheckin,
+        'can_serve': canServe,
+        'is_admin': isAdmin,
+        'event_name': eventName,
+        'config_version': configVersion,
+        'types': types.map((e) => e.toJson()).toList(),
+        'roles': roles.map((e) => e.toJson()).toList(),
+        'meals': meals.map((e) => e.toJson()).toList(),
+        'sessions': sessions.map((e) => e.toJson()).toList(),
+        'attendees': _baseAttendees.values.map((e) => e.toJson()).toList(),
+        'cards': cards.values.map((e) => e.toJson()).toList(),
+        'staff': staffNames.entries.map((e) => {'id': e.key, 'name': e.value}).toList(),
+        'log': serverLog.map((e) => e.toJson()).toList(),
+        'pending': pending.map((e) => e.toJson()).toList(),
+        'rejected': rejected,
+        'cursor': cursor,
+        'last_sync_ok': lastSyncOk?.toIso8601String(),
+        'selected_meal_id': selectedMealId,
+      };
+
+  void _fromJson(Map<String, dynamic> j) {
+    server = j['server'] as String?;
+    token = j['token'] as String?;
+    eventCode = j['event_code'] as String?;
+    deviceLabel = (j['device_label'] as String?) ?? '';
+    staffId = j['staff_id'] as int?;
+    staffName = (j['staff_name'] as String?) ?? '';
+    canCheckin = (j['can_checkin'] as bool?) ?? true;
+    canServe = (j['can_serve'] as bool?) ?? true;
+    isAdmin = (j['is_admin'] as bool?) ?? false;
+    _applyConfig(j);
+    serverLog = _list(j['log']).map(LogEvent.fromJson).toList();
+    _serverUuids
+      ..clear()
+      ..addAll(serverLog.map((e) => e.uuid));
+    pending = _list(j['pending']).map(LogEvent.fromJson).toList();
+    rejected = _list(j['rejected']);
+    cursor = (j['cursor'] as int?) ?? 0;
+    lastSyncOk = DateTime.tryParse((j['last_sync_ok'] as String?) ?? '');
+    selectedMealId = j['selected_meal_id'] as int?;
+  }
+
+  static List<Map<String, dynamic>> _list(dynamic v) =>
+      ((v as List?) ?? const []).map((e) => (e as Map).cast<String, dynamic>()).toList();
+
+  /// پیکربندی رویداد از snapshot سرور یا فایل ذخیره‌شده.
+  void _applyConfig(Map<String, dynamic> j) {
+    final ev = (j['event'] as Map?)?.cast<String, dynamic>();
+    if (ev != null) {
+      eventName = (ev['name'] ?? '').toString();
+      configVersion = (ev['config_version'] as int?) ?? 0;
+      eventCode = (ev['code'] ?? eventCode)?.toString();
+    } else {
+      eventName = (j['event_name'] as String?) ?? eventName;
+      configVersion = (j['config_version'] as int?) ?? configVersion;
+    }
+    types = _list(j['types'] ?? j['registration_types']).map(NamedItem.fromJson).toList();
+    roles = _list(j['roles']).map(NamedItem.fromJson).toList();
+    meals = _list(j['meals']).map(Meal.fromJson).toList();
+    sessions = _list(j['sessions']).map(Session.fromJson).toList();
+    _baseAttendees = {for (final a in _list(j['attendees']).map(Attendee.fromJson)) a.id: a};
+    cards = {for (final c in _list(j['cards']).map(PassCard.fromJson)) c.token: c};
+    staffNames = {
+      for (final s in _list(j['staff'])) (s['id'] as int): (s['name'] ?? '').toString(),
+    };
+  }
+
+  // ---------------------------------------------------------------- محاسبه‌ی وضعیت
+
+  /// وضعیت هر نفر از روی دفتر رخدادهای سرور و بعد رخدادهای ارسال‌نشده.
+  void _recompute() {
+    final att = Map<String, Attendee>.from(_baseAttendees);
+    final owner = <String, String>{};
+    for (final c in cards.values) {
+      if (c.attendeeId != null) owner[c.token] = c.attendeeId!;
+    }
+    final chk = <String, CheckState>{};
+    final served = <String, Map<int, List<DateTime>>>{};
+
+    final all = [...serverLog, ...pending];
+    for (final e in all) {
+      String? aid = e.attendeeId ?? (e.cardToken != null ? owner[e.cardToken] : null);
+      switch (e.kind) {
+        case 'walkin_register':
+          final a = (e.payload?['attendee'] as Map?)?.cast<String, dynamic>();
+          if (a != null) {
+            final w = Attendee.fromJson({...a, 'source': 'walkin'});
+            att.putIfAbsent(w.id, () => w);
+            aid = w.id;
+            if (e.cardToken != null) owner.putIfAbsent(e.cardToken!, () => w.id);
+          }
+          break;
+        case 'checkin':
+          if (aid != null) chk.putIfAbsent(aid, () => CheckState(e.deviceTime, e.staffId));
+          break;
+        case 'checkin_undo':
+          if (aid != null) chk.remove(aid);
+          break;
+        case 'meal_served':
+          if (aid != null && e.mealId != null) {
+            served.putIfAbsent(aid, () => {}).putIfAbsent(e.mealId!, () => []).add(e.deviceTime);
+          }
+          break;
+      }
+    }
+    attendees = att;
+    cardOwner = owner;
+    checkins = chk;
+    mealsServed = served;
+  }
+
+  // ---------------------------------------------------------------- پرس‌وجو
+
+  Attendee? attendeeForToken(String token) {
+    final id = cardOwner[token];
+    return id == null ? null : attendees[id];
+  }
+
+  PassCard? cardOf(String attendeeId) {
+    for (final e in cardOwner.entries) {
+      if (e.value == attendeeId) return cards[e.key];
+    }
+    return null;
+  }
+
+  String typeName(int id) => types.firstWhere((t) => t.id == id, orElse: () => NamedItem(id, '', '')).name;
+  String roleName(int? id) =>
+      id == null ? '' : roles.firstWhere((r) => r.id == id, orElse: () => NamedItem(id, '', '')).name;
+
+  /// جستجو با چند حرف از نام، موبایل، ایمیل یا سازمان. همه‌ی کلمه‌ها باید پیدا شوند.
+  List<Attendee> search(String query, {int limit = 60}) {
+    final q = normalizeText(query);
+    if (q.isEmpty) return const [];
+    final words = q.split(' ');
+    final digits = normalizeMobile(query);
+    final out = <Attendee>[];
+    for (final a in attendees.values) {
+      final hit = words.every(a.searchKey.contains) ||
+          (digits.length >= 4 && normalizeMobile(a.mobile).contains(digits));
+      if (hit) out.add(a);
+    }
+    out.sort((x, y) {
+      final xs = normalizeText(x.fullName).startsWith(q) ? 0 : 1;
+      final ys = normalizeText(y.fullName).startsWith(q) ? 0 : 1;
+      if (xs != ys) return xs - ys;
+      return x.lastName.compareTo(y.lastName);
+    });
+    return out.length > limit ? out.sublist(0, limit) : out;
+  }
+
+  Attendee? findByMobile(String mobile) {
+    final m = normalizeMobile(mobile);
+    if (m.isEmpty) return null;
+    for (final a in attendees.values) {
+      if (normalizeMobile(a.mobile) == m) return a;
+    }
+    return null;
+  }
+
+  Meal? get selectedMeal {
+    for (final m in meals) {
+      if (m.id == selectedMealId) return m;
+    }
+    return null;
+  }
+
+  void selectMeal(int? id) {
+    selectedMealId = id;
+    _scheduleSave();
+    notifyListeners();
+  }
+
+  MealCheck checkMeal(Attendee a, Meal m) {
+    final prev = mealsServed[a.id]?[m.id];
+    if (prev != null && prev.isNotEmpty) return MealCheck(MealVerdict.duplicate, prev.first);
+    if (!m.entitles(a)) return MealCheck(MealVerdict.notEntitled);
+    return MealCheck(MealVerdict.ok);
+  }
+
+  int servedCount(int mealId) =>
+      mealsServed.values.where((m) => (m[mealId]?.isNotEmpty ?? false)).length;
+
+  int entitledCount(Meal m) => attendees.values.where(m.entitles).length;
+
+  List<PassCard> get freeReserveCards => cards.values
+      .where((c) => c.isReserve && !cardOwner.containsKey(c.token))
+      .toList()
+    ..sort((a, b) => a.serial.compareTo(b.serial));
+
+  // ---------------------------------------------------------------- ثبت رخداد
+
+  LogEvent _record(String kind, {String? cardToken, String? attendeeId, int? mealId, Map<String, dynamic>? payload}) {
+    final e = LogEvent(
+      uuid: _uuid.v4(),
+      kind: kind,
+      cardToken: cardToken,
+      attendeeId: attendeeId,
+      mealId: mealId,
+      payload: payload,
+      deviceTime: DateTime.now().toUtc(),
+      staffId: staffId,
+    );
+    pending.add(e);
+    _recompute();
+    _scheduleSave();
+    notifyListeners();
+    Future.microtask(sync);
+    return e;
+  }
+
+  void checkin(Attendee a) => _record('checkin', attendeeId: a.id, cardToken: cardOf(a.id)?.token);
+
+  void undoCheckin(Attendee a) => _record('checkin_undo', attendeeId: a.id);
+
+  void serveMeal(Attendee a, Meal m) =>
+      _record('meal_served', attendeeId: a.id, mealId: m.id, cardToken: cardOf(a.id)?.token);
+
+  /// ثبت‌نام در محل: شرکت‌کننده‌ی جدید + وصل‌کردن کارت رزرو + پذیرش.
+  Attendee walkin({
+    required String firstName,
+    required String lastName,
+    required String mobile,
+    required String email,
+    required int registrationTypeId,
+    required PassCard card,
+  }) {
+    final a = Attendee(
+      id: _uuid.v4(),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      mobile: normalizeMobile(mobile),
+      email: email.trim(),
+      registrationTypeId: registrationTypeId,
+      source: 'walkin',
+    );
+    _record('walkin_register', cardToken: card.token, attendeeId: a.id, payload: {
+      'attendee': {
+        'id': a.id,
+        'first_name': a.firstName,
+        'last_name': a.lastName,
+        'mobile': a.mobile,
+        'email': a.email,
+        'registration_type_id': registrationTypeId,
+      },
+    });
+    _record('checkin', attendeeId: a.id, cardToken: card.token);
+    return attendees[a.id] ?? a;
+  }
+
+  // ---------------------------------------------------------------- سرور
+
+  Future<void> login({
+    required String server,
+    required String eventCode,
+    required String pin,
+    required String label,
+  }) async {
+    final api = Api(server);
+    final r = await api.post('/device/login', {
+      'event_code': eventCode.trim(),
+      'pin': latinDigits(pin.trim()),
+      'label': label.trim(),
+    });
+    final sameEvent = this.eventCode == eventCode.trim();
+    this.server = server;
+    token = r['token'] as String;
+    this.eventCode = eventCode.trim();
+    deviceLabel = label.trim();
+    final me = (r['me'] as Map).cast<String, dynamic>();
+    _applyMe(me);
+    if (!sameEvent) {
+      // رویداد دیگر: داده‌ی قبلی به درد نمی‌خورد. صف ارسالِ رویداد قبلی هم معتبر نیست.
+      pending = [];
+      rejected = [];
+    }
+    needsLogin = false;
+    await refreshSnapshot();
+    startSyncLoop();
+  }
+
+  void _applyMe(Map<String, dynamic> me) {
+    staffId = me['staff_id'] as int?;
+    staffName = (me['staff_name'] ?? '').toString();
+    canCheckin = me['can_checkin'] == true;
+    canServe = me['can_serve'] == true;
+    isAdmin = me['is_admin'] == true;
+  }
+
+  /// گرفتن کل داده‌ی رویداد از سرور. صف ارسال دست نمی‌خورد.
+  Future<void> refreshSnapshot() async {
+    final api = Api(server!, token);
+    final s = await api.get('/device/snapshot', timeout: const Duration(seconds: 60));
+    _applyConfig(s);
+    final me = (s['me'] as Map?)?.cast<String, dynamic>();
+    if (me != null) _applyMe(me);
+    serverLog = _list(s['log']).map(LogEvent.fromJson).toList();
+    _serverUuids
+      ..clear()
+      ..addAll(serverLog.map((e) => e.uuid));
+    pending.removeWhere((e) => _serverUuids.contains(e.uuid));
+    cursor = (s['cursor'] as int?) ?? 0;
+    if (selectedMealId != null && !meals.any((m) => m.id == selectedMealId)) selectedMealId = null;
+    lastSyncOk = DateTime.now();
+    online = true;
+    lastError = null;
+    _recompute();
+    _scheduleSave();
+    notifyListeners();
+  }
+
+  void startSyncLoop() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 8), (_) => sync());
+    Future.microtask(sync);
+  }
+
+  /// یک دور همگام‌سازی: ارسال صف و گرفتن رخدادهای جدید. خطای شبکه فقط ثبت می‌شود.
+  Future<void> sync() async {
+    if (syncing || !loggedIn || needsLogin) return;
+    syncing = true;
+    notifyListeners();
+    try {
+      var more = true;
+      var rounds = 0;
+      while (more && rounds < 10) {
+        rounds++;
+        final batch = pending.take(200).toList();
+        final api = Api(server!, token);
+        final r = await api.post('/device/sync', {
+          'events': batch.map((e) => e.toPush()).toList(),
+          'since': cursor,
+        });
+
+        final sent = batch.map((e) => e.uuid).toSet();
+        for (final rej in _list(r['rejected'])) {
+          rejected.add({...rej, 'at': DateTime.now().toIso8601String()});
+        }
+        if (rejected.length > 100) rejected = rejected.sublist(rejected.length - 100);
+
+        for (final ev in _list(r['events']).map(LogEvent.fromJson)) {
+          if (_serverUuids.add(ev.uuid)) serverLog.add(ev);
+        }
+        pending.removeWhere((e) => sent.contains(e.uuid) || _serverUuids.contains(e.uuid));
+        cursor = (r['cursor'] as int?) ?? cursor;
+        more = r['more'] == true || pending.isNotEmpty;
+
+        final cv = (r['config_version'] as int?) ?? configVersion;
+        if (cv != configVersion) {
+          await refreshSnapshot();
+        }
+      }
+      lastSyncOk = DateTime.now();
+      online = true;
+      lastError = null;
+      _recompute();
+      _scheduleSave();
+    } on ApiException catch (e) {
+      online = !e.isAuth && e.status > 0;
+      lastError = e.message;
+      if (e.isAuth) needsLogin = true;
+    } on TimeoutException {
+      online = false;
+      lastError = 'سرور جواب نداد؛ اپ آفلاین کار می‌کند.';
+    } on SocketException {
+      online = false;
+      lastError = 'اینترنت وصل نیست؛ اپ آفلاین کار می‌کند.';
+    } on ClientException {
+      online = false;
+      lastError = 'اینترنت وصل نیست؛ اپ آفلاین کار می‌کند.';
+    } catch (e) {
+      online = false;
+      lastError = 'خطای همگام‌سازی: $e';
+    } finally {
+      syncing = false;
+      notifyListeners();
+    }
+  }
+
+  /// خروج. داده‌ی رویداد پاک می‌شود؛ اگر صف ارسال خالی نباشد، caller باید قبلش هشدار بدهد.
+  Future<void> logout() async {
+    _timer?.cancel();
+    token = null;
+    needsLogin = false;
+    pending = [];
+    rejected = [];
+    serverLog = [];
+    _serverUuids.clear();
+    _baseAttendees = {};
+    cards = {};
+    meals = [];
+    types = [];
+    roles = [];
+    sessions = [];
+    cursor = 0;
+    configVersion = 0;
+    eventName = '';
+    _recompute();
+    await _save();
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _saveDebounce?.cancel();
+    super.dispose();
+  }
+}

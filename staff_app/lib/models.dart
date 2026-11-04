@@ -1,0 +1,234 @@
+import 'normalize.dart';
+
+int? _int(dynamic v) => v == null ? null : (v is int ? v : int.tryParse(v.toString()));
+String _str(dynamic v) => v == null ? '' : v.toString();
+
+class NamedItem {
+  final int id;
+  final String code;
+  final String name;
+  NamedItem(this.id, this.code, this.name);
+
+  factory NamedItem.fromJson(Map<String, dynamic> j) =>
+      NamedItem(_int(j['id'])!, _str(j['code']), _str(j['name']));
+
+  Map<String, dynamic> toJson() => {'id': id, 'code': code, 'name': name};
+}
+
+class Meal {
+  final int id;
+  final String code;
+  final String name;
+  final String? day;
+  final Set<int> typeIds;
+  final Set<int> roleIds;
+
+  Meal(this.id, this.code, this.name, this.day, this.typeIds, this.roleIds);
+
+  factory Meal.fromJson(Map<String, dynamic> j) {
+    final rules = (j['rules'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return Meal(
+      _int(j['id'])!,
+      _str(j['code']),
+      _str(j['name']),
+      j['day']?.toString(),
+      ((rules['registration_type_ids'] as List?) ?? const []).map((e) => _int(e)!).toSet(),
+      ((rules['role_ids'] as List?) ?? const []).map((e) => _int(e)!).toSet(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'code': code,
+        'name': name,
+        'day': day,
+        'rules': {'registration_type_ids': typeIds.toList(), 'role_ids': roleIds.toList()},
+      };
+
+  bool entitles(Attendee a) =>
+      typeIds.contains(a.registrationTypeId) || (a.roleId != null && roleIds.contains(a.roleId));
+}
+
+class Attendee {
+  final String id;
+  final String title;
+  final String firstName;
+  final String lastName;
+  final String email;
+  final String mobile;
+  final String organization;
+  final String country;
+  final int registrationTypeId;
+  final String presentationKind;
+  final int? roleId;
+  final String source;
+  late final String searchKey;
+
+  Attendee({
+    required this.id,
+    this.title = '',
+    required this.firstName,
+    required this.lastName,
+    this.email = '',
+    this.mobile = '',
+    this.organization = '',
+    this.country = '',
+    required this.registrationTypeId,
+    this.presentationKind = '',
+    this.roleId,
+    this.source = 'import',
+  }) {
+    searchKey = normalizeText('$firstName $lastName $mobile $email $organization');
+  }
+
+  String get fullName => '$firstName $lastName'.trim();
+  String get displayName => '$title $firstName $lastName'.trim();
+
+  factory Attendee.fromJson(Map<String, dynamic> j) => Attendee(
+        id: _str(j['id']).toLowerCase(),
+        title: _str(j['title']),
+        firstName: _str(j['first_name']),
+        lastName: _str(j['last_name']),
+        email: _str(j['email']),
+        mobile: _str(j['mobile']),
+        organization: _str(j['organization']),
+        country: _str(j['country']),
+        registrationTypeId: _int(j['registration_type_id']) ?? 0,
+        presentationKind: _str(j['presentation_kind']),
+        roleId: _int(j['role_id']),
+        source: _str(j['source']).isEmpty ? 'import' : _str(j['source']),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'first_name': firstName,
+        'last_name': lastName,
+        'email': email,
+        'mobile': mobile,
+        'organization': organization,
+        'country': country,
+        'registration_type_id': registrationTypeId,
+        'presentation_kind': presentationKind,
+        'role_id': roleId,
+        'source': source,
+      };
+}
+
+class PassCard {
+  final String token;
+  final String? attendeeId;
+  final int serial;
+  final bool isReserve;
+  PassCard(this.token, this.attendeeId, this.serial, this.isReserve);
+
+  factory PassCard.fromJson(Map<String, dynamic> j) => PassCard(
+        _str(j['token']),
+        j['attendee_id']?.toString().toLowerCase(),
+        _int(j['serial']) ?? 0,
+        j['is_reserve'] == true || j['is_reserve'] == 1,
+      );
+
+  Map<String, dynamic> toJson() =>
+      {'token': token, 'attendee_id': attendeeId, 'serial': serial, 'is_reserve': isReserve};
+}
+
+/// یک رخداد در دفتر رخدادها. seq برای رخدادهای هنوز ارسال‌نشده null است.
+class LogEvent {
+  final String uuid;
+  final String kind;
+  final String? cardToken;
+  final String? attendeeId;
+  final int? mealId;
+  final Map<String, dynamic>? payload;
+  final DateTime deviceTime;
+  final int? staffId;
+  final int? seq;
+  final String? flag;
+
+  LogEvent({
+    required this.uuid,
+    required this.kind,
+    this.cardToken,
+    this.attendeeId,
+    this.mealId,
+    this.payload,
+    required this.deviceTime,
+    this.staffId,
+    this.seq,
+    this.flag,
+  });
+
+  factory LogEvent.fromJson(Map<String, dynamic> j) => LogEvent(
+        uuid: _str(j['uuid']).toLowerCase(),
+        kind: _str(j['kind']),
+        cardToken: j['card_token']?.toString(),
+        attendeeId: j['attendee_id']?.toString().toLowerCase(),
+        mealId: _int(j['meal_id']),
+        payload: (j['payload'] as Map?)?.cast<String, dynamic>(),
+        deviceTime: DateTime.tryParse(_str(j['device_time'])) ?? DateTime.now().toUtc(),
+        staffId: _int(j['staff_id']),
+        seq: _int(j['seq']),
+        flag: j['flag']?.toString(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'uuid': uuid,
+        'kind': kind,
+        'card_token': cardToken,
+        'attendee_id': attendeeId,
+        'meal_id': mealId,
+        'payload': payload,
+        'device_time': deviceTime.toUtc().toIso8601String(),
+        'staff_id': staffId,
+        'seq': seq,
+        'flag': flag,
+      };
+
+  /// شکلی که به /device/sync فرستاده می‌شود.
+  Map<String, dynamic> toPush() => {
+        'uuid': uuid,
+        'kind': kind,
+        if (cardToken != null) 'card_token': cardToken,
+        if (attendeeId != null) 'attendee_id': attendeeId,
+        if (mealId != null) 'meal_id': mealId,
+        if (payload != null) 'payload': payload,
+        'device_time': deviceTime.toUtc().toIso8601String(),
+      };
+}
+
+class Session {
+  final String day;
+  final String start;
+  final String? end;
+  final String title;
+  final String hall;
+  final String kind;
+  Session(this.day, this.start, this.end, this.title, this.hall, this.kind);
+
+  factory Session.fromJson(Map<String, dynamic> j) => Session(
+        _str(j['day']),
+        _str(j['start_time']),
+        j['end_time']?.toString(),
+        _str(j['title']),
+        _str(j['hall']),
+        _str(j['kind']),
+      );
+
+  Map<String, dynamic> toJson() =>
+      {'day': day, 'start_time': start, 'end_time': end, 'title': title, 'hall': hall, 'kind': kind};
+}
+
+class CheckState {
+  final DateTime at;
+  final int? staffId;
+  CheckState(this.at, this.staffId);
+}
+
+enum MealVerdict { ok, duplicate, notEntitled }
+
+class MealCheck {
+  final MealVerdict verdict;
+  final DateTime? previousAt;
+  MealCheck(this.verdict, [this.previousAt]);
+}

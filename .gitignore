@@ -1,0 +1,13 @@
+# فایل‌های ساخت فلاتر
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/pubspec.lock
+# پوشه‌های پلتفرم در CI ساخته می‌شوند
+staff_app/android/
+staff_app/ios/
+staff_app/test/
+admin_app/windows/
+admin_app/test/
+admin_app/assets/fonts/*.ttf
