@@ -1,0 +1,35 @@
+name: bootstrap
+
+# یک‌بار مصرف: فایل bundle.b64 (کل سورس، فشرده) را باز می‌کند، فایل‌ها را
+# در مخزن commit می‌کند و خود bundle را پاک می‌کند.
+on:
+  push:
+    paths: [bundle.b64]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: باز کردن bundle
+        run: |
+          test -f bundle.b64 || { echo "bundle.b64 نیست"; exit 0; }
+          base64 -d bundle.b64 > bundle.tar.xz
+          sha256sum bundle.tar.xz
+          tar -xJf bundle.tar.xz
+          rm bundle.b64 bundle.tar.xz
+          git ls-files --others --exclude-standard | head -50
+
+      - name: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Unpack project source from bundle"
+          git push
