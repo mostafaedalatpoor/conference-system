@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../cards_pdf.dart';
 import '../main.dart';
+import '../theme/daftar.dart';
 import '../normalize.dart';
 import '../state.dart';
 
@@ -128,7 +129,7 @@ class _CardsScreenState extends State<CardsScreen> {
       _reserveCount.text = '${(people.length / 10).ceil().clamp(1, 1000)}';
     }
 
-    return PageBody(children: [
+    return PageBody(title: 'کارت‌ها', children: [
       const SectionTitle('کارت‌های رزرو (برای ثبت‌نام در محل)'),
       Text('${faDigits(s.reserveCards.length)} کارت رزرو ساخته شده؛ ${faDigits(free)} هنوز آزاد است. '
           'پیشنهاد: حدود ۱۰٪ ثبت‌نامی‌ها (${faDigits((people.length / 10).ceil())} کارت).'),
@@ -149,19 +150,19 @@ class _CardsScreenState extends State<CardsScreen> {
       const SectionTitle('قالب کارت'),
       Wrap(spacing: 12, runSpacing: 8, children: [
         OutlinedButton.icon(
-          icon: const Icon(Icons.image),
+          icon: const Icon(Icons.image_rounded),
           label: Text(t.frontImage.isEmpty ? 'طرح روی کارت' : 'روی: ${t.frontImage.split(Platform.pathSeparator).last}'),
           onPressed: () => _pickImage(s, true),
         ),
         OutlinedButton.icon(
-          icon: const Icon(Icons.image_outlined),
+          icon: const Icon(Icons.image_rounded),
           label: Text(t.backImage.isEmpty ? 'طرح پشت کارت' : 'پشت: ${t.backImage.split(Platform.pathSeparator).last}'),
           onPressed: () => _pickImage(s, false),
         ),
       ]),
       const SizedBox(height: 8),
-      const Text('طرح‌ها PNG یا JPG با همان نسبت ابعاد کارت و دست‌کم ۳۰۰ DPI باشند (برای ۸۵×۵۵ میلی‌متر حدود ۱۰۰۴×۶۵۰ پیکسل).',
-          style: TextStyle(color: Colors.grey)),
+      const Hint('طرح‌ها PNG یا JPG، با حاشیه‌ی اضافه‌ی ۳ میلی‌متر از هر طرف و ۳۰۰ DPI باشند '
+          '(برای ۸۵×۵۵ میلی‌متر فایل ۹۱×۶۱ میلی‌متر، حدود ۱۰۷۵×۷۲۰ پیکسل). متن مهم دست‌کم ۴ میلی‌متر داخل لبه‌ی برش باشد.'),
       const SizedBox(height: 12),
       Wrap(spacing: 12, runSpacing: 12, children: [
         _num('مرکز نام: افقی ٪', t.nameX, (v) => t.nameX = v),
@@ -196,22 +197,21 @@ class _CardsScreenState extends State<CardsScreen> {
       const SizedBox(height: 20),
       Wrap(spacing: 12, runSpacing: 12, children: [
         FilledButton.icon(
-          icon: const Icon(Icons.picture_as_pdf),
+          icon: const Icon(Icons.picture_as_pdf_rounded),
           onPressed: s.busy || people.isEmpty ? null : () => _generateCards(s),
           label: Text('ساخت PDF کارت‌ها (${faDigits(people.length)} نفر + ${faDigits(free)} رزرو)'),
         ),
         OutlinedButton.icon(
-          icon: const Icon(Icons.list_alt),
+          icon: const Icon(Icons.list_alt_rounded),
           onPressed: s.busy || people.isEmpty ? null : () => _generateLists(s),
           label: const Text('PDF لیست پشتیبان کاغذی'),
         ),
         TextButton(onPressed: () => s.save(), child: const Text('ذخیره‌ی تنظیمات قالب')),
       ]),
       const SizedBox(height: 8),
-      const Text(
+      const Hint(
         'PDF کارت‌ها برای هر کارت یک صفحه‌ی رو و پشت‌سرش یک صفحه‌ی پشت دارد (چاپ دورو)، به ترتیب الفبایی نام خانوادگی. '
         'بعد از ساخت PDF، آدرس پایه قفل می‌شود تا لینک QR کارت‌های چاپ‌شده عوض نشود.',
-        style: TextStyle(color: Colors.grey),
       ),
     ]);
   }
@@ -231,7 +231,7 @@ class _Preview extends StatelessWidget {
         aspectRatio: t.widthMm / t.heightMm,
         child: LayoutBuilder(builder: (context, c) {
           return Container(
-            decoration: BoxDecoration(border: Border.all(color: Colors.grey), color: Colors.white),
+            decoration: BoxDecoration(border: Border.all(color: DaftarColors.of(context).lineStrong), color: Colors.white),
             child: Stack(children: [
               if (imagePath.isNotEmpty && File(imagePath).existsSync())
                 Positioned.fill(child: Image.file(File(imagePath), fit: BoxFit.cover)),
@@ -250,21 +250,21 @@ class _Preview extends StatelessWidget {
     try {
       color = Color(int.parse('FF${t.nameColor}', radix: 16));
     } catch (_) {
-      color = Colors.black;
+      color = const Color(0xFF10141A);
     }
     final scale = 340 / (t.widthMm * 72 / 25.4); // pt → پیکسل پیش‌نمایش
     return Wrap(spacing: 16, runSpacing: 16, children: [
       _side(t.frontImage, [
         _At(t.nameX, t.nameY, Text(person?.displayName ?? 'نام نمونه',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: t.nameSize * scale, fontWeight: FontWeight.bold, color: color))),
+            style: TextStyle(fontSize: t.nameSize * scale, fontWeight: FontWeight.w800, color: color, letterSpacing: 0))),
       ]),
       _side(t.backImage, [
         _At(t.qrX, t.qrY, Container(
           width: 340 * t.qrSizeMm / t.widthMm,
           height: 340 * t.qrSizeMm / t.widthMm,
           color: Colors.white,
-          child: const FittedBox(child: Icon(Icons.qr_code_2)),
+          child: const FittedBox(child: Icon(Icons.qr_code_2_rounded)),
         )),
       ]),
     ]);

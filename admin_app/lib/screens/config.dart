@@ -65,7 +65,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
     final s = StateScope.of(context);
     final empty = s.types.isEmpty && s.roles.isEmpty && s.meals.isEmpty;
 
-    return PageBody(children: [
+    return PageBody(title: 'پیکربندی', children: [
       if (empty)
         Card(
           child: ListTile(
@@ -83,7 +83,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
       Align(
         alignment: AlignmentDirectional.centerStart,
         child: TextButton.icon(
-          icon: const Icon(Icons.add),
+          icon: const Icon(Icons.add_rounded),
           label: const Text('وعده‌ی جدید'),
           onPressed: () {
             s.meals.add(MealDef('meal${s.meals.length + 1}', '', s.event?.startDate ?? '', {}, {}));
@@ -95,7 +95,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
       for (final x in s.sessions) _SessionRow(key: ObjectKey(x), session: x),
       Wrap(spacing: 8, children: [
         TextButton.icon(
-          icon: const Icon(Icons.add),
+          icon: const Icon(Icons.add_rounded),
           label: const Text('جلسه‌ی جدید'),
           onPressed: () {
             s.sessions.add(SessionDef(s.event?.startDate ?? '', '09:00', '', '', 'سالن اصلی', 'keynote'));
@@ -103,7 +103,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
           },
         ),
         TextButton.icon(
-          icon: const Icon(Icons.upload_file),
+          icon: const Icon(Icons.upload_file_rounded),
           label: const Text('ورود برنامه از اکسل (روز، شروع، پایان، عنوان، سالن، نوع)'),
           onPressed: () => _importSessions(s),
         ),
@@ -112,7 +112,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
       Align(
         alignment: AlignmentDirectional.centerStart,
         child: FilledButton.icon(
-          icon: const Icon(Icons.cloud_upload),
+          icon: const Icon(Icons.cloud_upload_rounded),
           onPressed: s.busy ? null : s.pushConfig,
           label: const Text('ذخیره روی سرور'),
         ),
@@ -153,7 +153,7 @@ class _CodeNameList extends StatelessWidget {
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.delete_outline),
+              icon: const Icon(Icons.delete_outline_rounded),
               tooltip: 'حذف از این فرم (روی سرور حذف نمی‌شود)',
               onPressed: () {
                 items.remove(it);
@@ -165,7 +165,7 @@ class _CodeNameList extends StatelessWidget {
       Align(
         alignment: AlignmentDirectional.centerStart,
         child: TextButton.icon(
-          icon: const Icon(Icons.add),
+          icon: const Icon(Icons.add_rounded),
           label: Text(addLabel),
           onPressed: () {
             items.add(CodeName('', ''));
@@ -217,7 +217,7 @@ class _MealEditor extends StatelessWidget {
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.delete_outline),
+              icon: const Icon(Icons.delete_outline_rounded),
               onPressed: () {
                 s.meals.remove(meal);
                 s.notify();
@@ -238,7 +238,7 @@ class _MealEditor extends StatelessWidget {
               ),
             for (final r in s.roles)
               FilterChip(
-                avatar: const Icon(Icons.person_outline, size: 16),
+                avatar: const Icon(Icons.person_outline_rounded, size: 16),
                 label: Text(r.name),
                 selected: meal.roles.contains(r.code),
                 onSelected: (v) {
@@ -303,7 +303,7 @@ class _SessionRow extends StatelessWidget {
           ),
         ),
         IconButton(
-          icon: const Icon(Icons.delete_outline),
+          icon: const Icon(Icons.delete_outline_rounded),
           onPressed: () {
             s.sessions.remove(session);
             s.notify();

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../excel_import.dart';
 import '../main.dart';
+import '../theme/widgets.dart';
+import '../theme/daftar.dart';
 import '../normalize.dart';
 import '../state.dart';
 
@@ -58,25 +60,24 @@ class _ImportScreenState extends State<ImportScreen> {
       byType[p.typeCode] = (byType[p.typeCode] ?? 0) + 1;
     }
 
-    return PageBody(children: [
+    return PageBody(title: 'شرکت‌کننده‌ها', children: [
       const SectionTitle('شرکت‌کننده‌های فعلی روی سرور'),
       Text(s.people.isEmpty
           ? 'هنوز کسی وارد نشده.'
           : [for (final e in byType.entries) '${s.typeName(e.key)}: ${faDigits(e.value)}'].join('   ·   ')),
       const SectionTitle('ورود از اکسل'),
-      const Text(
+      const Hint(
         'هر فایل یک نوع ثبت‌نام دارد (مثلاً خروجی سایت ثبت‌نام = ارائه‌دهنده، فرم شنونده‌ها = شرکت‌کننده). '
         'ورود دوباره‌ی همان فایل کسی را تکراری نمی‌کند و کارت چاپ‌شده‌اش را عوض نمی‌کند؛ شناسه‌ی هر نفر از ایمیل، '
         'یا اگر نبود موبایل، یا اگر نبود نام ساخته می‌شود.',
-        style: TextStyle(color: Colors.grey),
       ),
       const SizedBox(height: 12),
       Row(children: [
-        FilledButton.tonalIcon(onPressed: _pick, icon: const Icon(Icons.folder_open), label: const Text('انتخاب فایل (xlsx یا csv)')),
+        OutlinedButton.icon(onPressed: _pick, icon: const Icon(Icons.folder_open_rounded), label: const Text('انتخاب فایل (xlsx یا csv)')),
         const SizedBox(width: 12),
         if (_fileName != null) Expanded(child: Text(_fileName!, overflow: TextOverflow.ellipsis)),
       ]),
-      if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red))),
+      if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Notice(tone: NoticeTone.stop, text: _error!)),
       if (_tables.length > 1) ...[
         const SizedBox(height: 12),
         DropdownButtonFormField<SheetTable>(
@@ -133,7 +134,10 @@ class _ImportScreenState extends State<ImportScreen> {
           ),
         ),
         if (s.types.isEmpty)
-          const Text('اول در «پیکربندی» انواع ثبت‌نام را بسازید و ذخیره کنید.', style: TextStyle(color: Colors.orange)),
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Notice(tone: NoticeTone.wait, text: 'اول در «پیکربندی» انواع ثبت‌نام را بسازید و ذخیره کنید.'),
+          ),
         const SizedBox(height: 12),
         Align(
           alignment: AlignmentDirectional.centerStart,
@@ -149,10 +153,23 @@ class _ImportScreenState extends State<ImportScreen> {
             '${faDigits(_preview!.updated)} به‌روزرسانی. ${faDigits(_preview!.problems.length)} مورد مشکل.'),
         const SizedBox(height: 8),
         if (_preview!.problems.isNotEmpty)
+          // ردیف‌های مشکل‌دار: پس‌زمینه‌ی wait-soft با آیکن هشدار.
           Container(
-            constraints: const BoxConstraints(maxHeight: 140),
-            child: ListView(shrinkWrap: true, children: [
-              for (final p in _preview!.problems) Text(p, style: const TextStyle(color: Colors.orange, fontSize: 13)),
+            constraints: const BoxConstraints(maxHeight: 180),
+            decoration: BoxDecoration(
+              color: DaftarColors.of(context).waitSoft,
+              borderRadius: BorderRadius.circular(DaftarSize.radiusXs),
+            ),
+            child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(DaftarSize.space3), children: [
+              for (final p in _preview!.problems)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.warning_rounded, size: 16, color: DaftarColors.of(context).wait),
+                    const SizedBox(width: DaftarSize.space2),
+                    Expanded(child: Text(p, style: Theme.of(context).textTheme.bodySmall)),
+                  ]),
+                ),
             ]),
           ),
         const SizedBox(height: 8),
@@ -191,7 +208,7 @@ class _ImportScreenState extends State<ImportScreen> {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: FilledButton.icon(
-            icon: const Icon(Icons.cloud_upload),
+            icon: const Icon(Icons.cloud_upload_rounded),
             onPressed: s.busy || _preview!.people.isEmpty
                 ? null
                 : () async {

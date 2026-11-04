@@ -175,7 +175,7 @@ class CardTemplate {
   double nameX = 50;
   double nameY = 70;
   double nameSize = 16;
-  String nameColor = '000000';
+  String nameColor = '10141A';
   bool showRole = true;
   double qrX = 50;
   double qrY = 45;

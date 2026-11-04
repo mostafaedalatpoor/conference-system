@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../main.dart';
+import '../theme/widgets.dart';
 import '../state.dart';
 
 class StaffScreen extends StatefulWidget {
@@ -35,12 +36,10 @@ class _StaffScreenState extends State<StaffScreen> {
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     final anyNewPin = s.staff.any((x) => x.newPin.isNotEmpty);
-    return PageBody(children: [
-      const SectionTitle('نیروهای اجرایی'),
-      const Text(
+    return PageBody(title: 'نیروها', children: [
+      const Hint(
         'هر نیرو با کد رویداد و PIN خودش وارد اپ گوشی می‌شود. PIN بعد از ذخیره فقط به‌صورت رمزشده روی سرور می‌ماند؛ '
         'اگر فراموش شد، PIN تازه بدهید. نیرویی که از لیست حذف شود، گوشی‌هایش هم باطل می‌شوند.',
-        style: TextStyle(color: Colors.grey),
       ),
       const SizedBox(height: 12),
       for (final st in s.staff)
@@ -74,7 +73,7 @@ class _StaffScreenState extends State<StaffScreen> {
             _Flag('پذیرایی', st.canServe, (v) => setState(() => st.canServe = v)),
             _Flag('مدیر', st.isAdmin, (v) => setState(() => st.isAdmin = v)),
             IconButton(
-              icon: const Icon(Icons.delete_outline),
+              icon: const Icon(Icons.delete_outline_rounded),
               onPressed: () {
                 s.staff.remove(st);
                 s.notify();
@@ -84,7 +83,7 @@ class _StaffScreenState extends State<StaffScreen> {
         ),
       Wrap(spacing: 8, children: [
         TextButton.icon(
-          icon: const Icon(Icons.add),
+          icon: const Icon(Icons.add_rounded),
           label: const Text('نیروی جدید'),
           onPressed: () {
             s.staff.add(StaffDef(''));
@@ -92,7 +91,7 @@ class _StaffScreenState extends State<StaffScreen> {
           },
         ),
         TextButton.icon(
-          icon: const Icon(Icons.casino_outlined),
+          icon: const Icon(Icons.casino_rounded),
           label: const Text('PIN تصادفی برای کسانی که ندارند'),
           onPressed: () => _randomPins(s),
         ),
@@ -100,14 +99,16 @@ class _StaffScreenState extends State<StaffScreen> {
       if (anyNewPin)
         const Padding(
           padding: EdgeInsets.only(top: 8),
-          child: Text('PINها را قبل از ذخیره یادداشت کنید و به هر نیرو بدهید؛ بعد از ذخیره دیگر نمایش داده نمی‌شوند.',
-              style: TextStyle(color: Colors.orange)),
+          child: Notice(
+            tone: NoticeTone.wait,
+            text: 'PINها را قبل از ذخیره یادداشت کنید و به هر نیرو بدهید؛ بعد از ذخیره دیگر نمایش داده نمی‌شوند.',
+          ),
         ),
       const SizedBox(height: 16),
       Align(
         alignment: AlignmentDirectional.centerStart,
         child: FilledButton.icon(
-          icon: const Icon(Icons.cloud_upload),
+          icon: const Icon(Icons.cloud_upload_rounded),
           onPressed: s.busy
               ? null
               : () async {
@@ -118,7 +119,7 @@ class _StaffScreenState extends State<StaffScreen> {
         ),
       ),
       const SizedBox(height: 8),
-      const Text('«مدیر» یعنی آن نیرو در اپ گوشی می‌تواند پذیرش اشتباه را لغو کند.', style: TextStyle(color: Colors.grey)),
+      const Hint('«مدیر» یعنی آن نیرو در اپ گوشی می‌تواند پذیرش اشتباه را لغو کند.'),
     ]);
   }
 }

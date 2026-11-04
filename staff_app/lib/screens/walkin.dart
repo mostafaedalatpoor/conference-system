@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../models.dart';
 import '../normalize.dart';
+import '../theme/daftar.dart';
+import '../theme/widgets.dart';
 import 'scanner.dart';
 
 /// ثبت‌نام در محل: نام و موبایل، بعد وصل‌کردن یک کارت رزرو.
@@ -20,9 +22,16 @@ class _WalkinScreenState extends State<WalkinScreen> {
   final _mobile = TextEditingController();
   final _email = TextEditingController();
   final _serial = TextEditingController();
+  final _firstFocus = FocusNode();
+  final _lastFocus = FocusNode();
+  final _mobileFocus = FocusNode();
+  final _emailFocus = FocusNode();
+  final _serialFocus = FocusNode();
   int? _typeId;
   PassCard? _card;
-  String? _error;
+
+  // خطای هر فیلد زیر همان فیلد نمایش داده می‌شود.
+  String? _firstError, _lastError, _typeError, _cardError;
 
   @override
   void initState() {
@@ -34,6 +43,17 @@ class _WalkinScreenState extends State<WalkinScreen> {
     } else if (parts.isNotEmpty) {
       _mobile.text = widget.initialName;
     }
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_first, _last, _mobile, _email, _serial]) {
+      c.dispose();
+    }
+    for (final f in [_firstFocus, _lastFocus, _mobileFocus, _emailFocus, _serialFocus]) {
+      f.dispose();
+    }
+    super.dispose();
   }
 
   @override
@@ -52,30 +72,35 @@ class _WalkinScreenState extends State<WalkinScreen> {
     setState(() {
       if (c == null) {
         _card = null;
-        _error = 'این کارت در لیست نیست. اگر کارت تازه است، از «وضعیت» لیست را دوباره بگیرید.';
+        _cardError = 'این کارت در لیست نیست. اگر کارت تازه است، از «وضعیت» لیست را دوباره بگیرید.';
       } else if (!c.isReserve) {
         _card = null;
-        _error = 'این کارت رزرو نیست؛ مال ${store.attendeeForToken(token)?.fullName ?? 'شخص دیگری'} است.';
+        _cardError = 'این کارت رزرو نیست؛ مال ${store.attendeeForToken(token)?.fullName ?? 'شخص دیگری'} است.';
       } else if (store.cardOwner.containsKey(token)) {
         _card = null;
-        _error = 'این کارت رزرو قبلاً به ${store.attendeeForToken(token)?.fullName ?? 'کسی'} وصل شده.';
+        _cardError = 'این کارت رزرو قبلاً به ${store.attendeeForToken(token)?.fullName ?? 'کسی'} وصل شده.';
       } else {
         _card = c;
         _serial.text = faDigits(c.serial);
-        _error = null;
+        _cardError = null;
       }
     });
   }
 
+  /// شماره‌ی روی کارت رزرو «R5001» چاپ می‌شود؛ R، r و ر اول شماره نادیده گرفته می‌شود.
   void _setCardFromSerial(String s) {
     final store = StoreScope.read(context);
-    final n = int.tryParse(latinDigits(s.trim()));
-    if (n == null) return;
+    final cleaned = latinDigits(s.trim()).replaceFirst(RegExp(r'^[Rrر]\s*'), '');
+    final n = int.tryParse(cleaned);
+    if (n == null) {
+      setState(() => _cardError = 'شماره‌ی روی کارت را بنویسید، مثلاً ۵۰۰۱.');
+      return;
+    }
     final match = store.cards.values.where((c) => c.isReserve && c.serial == n);
     if (match.isEmpty) {
       setState(() {
         _card = null;
-        _error = 'کارت رزرو با این شماره پیدا نشد.';
+        _cardError = 'کارت رزرو با شماره‌ی ${faDigits(n)} پیدا نشد.';
       });
     } else {
       _setCardFromToken(match.first.token);
@@ -89,18 +114,18 @@ class _WalkinScreenState extends State<WalkinScreen> {
 
   Future<void> _save() async {
     final store = StoreScope.read(context);
-    if (_first.text.trim().isEmpty || _last.text.trim().isEmpty) {
-      setState(() => _error = 'نام و نام خانوادگی لازم است.');
-      return;
-    }
-    if (_typeId == null) {
-      setState(() => _error = 'نوع ثبت‌نامی تعریف نشده است.');
-      return;
-    }
-    if (_card == null) {
-      setState(() => _error = 'یک کارت رزرو اسکن کنید یا شماره‌اش را بنویسید.');
-      return;
-    }
+    setState(() {
+      _firstError = _first.text.trim().isEmpty ? 'نام را بنویسید.' : null;
+      _lastError = _last.text.trim().isEmpty ? 'نام خانوادگی را بنویسید.' : null;
+      _typeError = _typeId == null ? 'نوع ثبت‌نامی تعریف نشده است؛ از مدیر بخواهید.' : null;
+      if (_card == null) _cardError ??= 'یک کارت رزرو اسکن کنید یا شماره‌اش را بنویسید.';
+    });
+    // فوکوس خودکار روی اولین فیلد مشکل‌دار.
+    if (_firstError != null) return _firstFocus.requestFocus();
+    if (_lastError != null) return _lastFocus.requestFocus();
+    if (_typeError != null) return;
+    if (_card == null) return _serialFocus.requestFocus();
+
     final dup = store.findByMobile(_mobile.text);
     if (dup != null) {
       final go = await showDialog<bool>(
@@ -127,92 +152,166 @@ class _WalkinScreenState extends State<WalkinScreen> {
     if (!mounted) return;
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('${a.fullName} ثبت و پذیرش شد — کارت رزرو شماره‌ی ${faDigits(_card!.serial)}'),
+      content: Text('${a.fullName} ثبت و پذیرش شد — کارت رزرو ${faDigits(_card!.serial)}'),
     ));
   }
 
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
     final free = store.freeReserveCards.length;
+    const gap = SizedBox(height: DaftarSize.space4);
+
     return Scaffold(
       appBar: AppBar(title: const Text('ثبت‌نام در محل')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(DaftarSize.space4),
         children: [
-          TextField(controller: _first, decoration: const InputDecoration(labelText: 'نام')),
-          const SizedBox(height: 10),
-          TextField(controller: _last, decoration: const InputDecoration(labelText: 'نام خانوادگی')),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _mobile,
-            decoration: const InputDecoration(labelText: 'موبایل'),
-            keyboardType: TextInputType.phone,
-            textDirection: TextDirection.ltr,
+          DaftarField(
+            label: 'نام',
+            error: _firstError,
+            child: TextField(
+              controller: _first,
+              focusNode: _firstFocus,
+              autofocus: _first.text.isEmpty,
+              textInputAction: TextInputAction.next,
+              onChanged: (_) => _firstError == null ? null : setState(() => _firstError = null),
+              onSubmitted: (_) => _lastFocus.requestFocus(),
+            ),
           ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _email,
-            decoration: const InputDecoration(labelText: 'ایمیل (اختیاری)'),
-            keyboardType: TextInputType.emailAddress,
-            textDirection: TextDirection.ltr,
+          gap,
+          DaftarField(
+            label: 'نام خانوادگی',
+            error: _lastError,
+            child: TextField(
+              controller: _last,
+              focusNode: _lastFocus,
+              textInputAction: TextInputAction.next,
+              onChanged: (_) => _lastError == null ? null : setState(() => _lastError = null),
+              onSubmitted: (_) => _mobileFocus.requestFocus(),
+            ),
           ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<int>(
-            value: _typeId,
-            decoration: const InputDecoration(labelText: 'نوع ثبت‌نام'),
-            items: [for (final t in store.types) DropdownMenuItem(value: t.id, child: Text(t.name))],
-            onChanged: (v) => setState(() => _typeId = v),
+          gap,
+          DaftarField(
+            label: 'موبایل',
+            optional: true,
+            child: TextField(
+              controller: _mobile,
+              focusNode: _mobileFocus,
+              keyboardType: TextInputType.phone,
+              textDirection: TextDirection.ltr,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _emailFocus.requestFocus(),
+            ),
           ),
-          const SizedBox(height: 20),
-          Text('کارت رزرو (${faDigits(free)} کارت آزاد مانده)', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _serial,
-                  decoration: const InputDecoration(labelText: 'شماره‌ی روی کارت'),
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: _setCardFromSerial,
-                  onChanged: (_) {
-                    if (_card != null) setState(() => _card = null);
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.outlined(
-                tooltip: 'انتخاب با شماره',
-                onPressed: () => _setCardFromSerial(_serial.text),
-                icon: const Icon(Icons.check),
-              ),
-              const SizedBox(width: 4),
-              FilledButton.tonalIcon(
-                onPressed: _scan,
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('اسکن'),
-              ),
-            ],
+          gap,
+          DaftarField(
+            label: 'ایمیل',
+            optional: true,
+            child: TextField(
+              controller: _email,
+              focusNode: _emailFocus,
+              keyboardType: TextInputType.emailAddress,
+              textDirection: TextDirection.ltr,
+              autocorrect: false,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _serialFocus.requestFocus(),
+            ),
           ),
+          gap,
+          DaftarField(
+            label: 'نوع ثبت‌نام',
+            error: _typeError,
+            child: store.types.length <= 3 && store.types.isNotEmpty
+                ? SegmentedButton<int>(
+                    showSelectedIcon: false,
+                    segments: [for (final t in store.types) ButtonSegment(value: t.id, label: Text(t.name))],
+                    selected: {if (_typeId != null) _typeId!},
+                    onSelectionChanged: (v) => setState(() => _typeId = v.first),
+                  )
+                : DropdownButtonFormField<int>(
+                    initialValue: _typeId,
+                    items: [for (final t in store.types) DropdownMenuItem(value: t.id, child: Text(t.name))],
+                    onChanged: (v) => setState(() => _typeId = v),
+                  ),
+          ),
+          const SizedBox(height: DaftarSize.space5),
+          Row(children: [
+            Expanded(child: Text('کارت رزرو', style: theme.textTheme.titleMedium)),
+            Text('${faDigits(free)} کارت آزاد',
+                style: theme.textTheme.bodySmall?.copyWith(color: free == 0 ? x.stop : x.inkMuted)),
+          ]),
+          const SizedBox(height: DaftarSize.space2),
           if (_card != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text('کارت شماره‌ی ${faDigits(_card!.serial)} آماده‌ی وصل‌شدن است.',
-                  style: const TextStyle(color: Colors.green)),
+            // خانه‌ی پر: پلاک شماره‌ی کارت درشت با تیک.
+            Container(
+              padding: const EdgeInsets.all(DaftarSize.space4),
+              decoration: BoxDecoration(
+                color: x.goSoft,
+                borderRadius: BorderRadius.circular(DaftarSize.radiusMd),
+              ),
+              child: Row(children: [
+                Icon(Icons.check_circle_rounded, color: x.go, size: 32),
+                const SizedBox(width: DaftarSize.space3),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('کارت رزرو وصل می‌شود', style: theme.textTheme.bodySmall?.copyWith(color: x.ink)),
+                    Text('R${faDigits(_card!.serial)}',
+                        style: theme.textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w800, fontFeatures: tabularFigures)),
+                  ]),
+                ),
+                TextButton(
+                  onPressed: () => setState(() {
+                    _card = null;
+                    _serial.clear();
+                  }),
+                  child: const Text('تعویض'),
+                ),
+              ]),
+            )
+          else
+            DaftarField(
+              label: 'شماره‌ی روی کارت',
+              error: _cardError,
+              helper: 'کارت را اسکن کنید یا شماره را بنویسید (R5001 یا 5001).',
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _serial,
+                      focusNode: _serialFocus,
+                      keyboardType: TextInputType.number,
+                      textDirection: TextDirection.ltr,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: _setCardFromSerial,
+                      onChanged: (_) => _cardError == null ? null : setState(() => _cardError = null),
+                      decoration: InputDecoration(
+                        suffixIcon: IconButton(
+                          tooltip: 'انتخاب با شماره',
+                          onPressed: () => _setCardFromSerial(_serial.text),
+                          icon: const Icon(Icons.check_rounded),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: DaftarSize.space2),
+                  OutlinedButton.icon(
+                    onPressed: _scan,
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                    label: const Text('اسکن'),
+                  ),
+                ],
+              ),
             ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
-          const SizedBox(height: 24),
-          FilledButton(
+          const SizedBox(height: DaftarSize.space6),
+          FilledButton.icon(
+            style: daftarGoStyle(context),
+            icon: const Icon(Icons.how_to_reg_rounded),
+            label: const Text('ثبت، پذیرش و تحویل کارت'),
             onPressed: _save,
-            child: const Padding(
-              padding: EdgeInsets.all(14),
-              child: Text('ثبت، پذیرش و تحویل کارت', style: TextStyle(fontSize: 16)),
-            ),
           ),
         ],
       ),

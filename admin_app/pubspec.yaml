@@ -32,5 +32,9 @@ flutter:
     - family: Vazirmatn
       fonts:
         - asset: assets/fonts/Vazirmatn-Regular.ttf
+        - asset: assets/fonts/Vazirmatn-SemiBold.ttf
+          weight: 600
         - asset: assets/fonts/Vazirmatn-Bold.ttf
           weight: 700
+        - asset: assets/fonts/Vazirmatn-ExtraBold.ttf
+          weight: 800

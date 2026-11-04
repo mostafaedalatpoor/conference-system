@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../main.dart';
+import '../state.dart';
+import '../theme/daftar.dart';
+import '../theme/widgets.dart';
 
 class ConnectScreen extends StatefulWidget {
   const ConnectScreen({super.key});
@@ -42,7 +45,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     _fillFromEvent();
-    return PageBody(children: [
+    return PageBody(title: 'اتصال و رویداد', children: [
       const SectionTitle('اتصال به سایت'),
       TextField(controller: _server, decoration: const InputDecoration(labelText: 'آدرس سایت'), textDirection: TextDirection.ltr),
       const SizedBox(height: 8),
@@ -134,11 +137,58 @@ class _ConnectScreenState extends State<ConnectScreen> {
           const SizedBox(width: 12),
           if (s.event != null)
             OutlinedButton(
-              onPressed: s.busy ? null : () => s.setLocked(!s.event!.locked),
+              onPressed: s.busy
+                  ? null
+                  : () async {
+                      if (!s.event!.locked) return s.setLocked(true);
+                      if (await _confirmUnlock(context, s.event!) == true) await s.setLocked(false);
+                    },
               child: Text(s.event!.locked ? 'برداشتن قفل آدرس پایه' : 'قفل آدرس پایه'),
             ),
         ]),
       ],
     ]);
   }
+}
+
+/// برداشتن قفل آدرس پایه کار خطرناکی است: QR همه‌ی کارت‌های چاپ‌شده به این آدرس وابسته است.
+/// برای تأیید، تایپ کد رویداد لازم است.
+Future<bool?> _confirmUnlock(BuildContext context, EventInfo e) {
+  final code = TextEditingController();
+  return showDialog<bool>(
+    context: context,
+    builder: (c) => StatefulBuilder(
+      builder: (c, setState) => AlertDialog(
+        title: const Text('برداشتن قفل آدرس پایه'),
+        content: SizedBox(
+          width: 440,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Notice(
+              tone: NoticeTone.stop,
+              text: 'اگر بعد از چاپ کارت‌ها آدرس پایه عوض شود، QR همه‌ی کارت‌های چاپ‌شده دیگر کار نمی‌کند '
+                  'و باید دوباره چاپ شوند.',
+            ),
+            const SizedBox(height: DaftarSize.space4),
+            DaftarField(
+              label: 'برای تأیید، کد رویداد را بنویسید: ${e.code}',
+              child: TextField(
+                controller: code,
+                autofocus: true,
+                textDirection: TextDirection.ltr,
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
+          FilledButton(
+            style: daftarDangerStyle(c),
+            onPressed: code.text.trim() == e.code ? () => Navigator.pop(c, true) : null,
+            child: const Text('قفل را بردار'),
+          ),
+        ],
+      ),
+    ),
+  );
 }

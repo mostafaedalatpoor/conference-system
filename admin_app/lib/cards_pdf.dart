@@ -9,15 +9,19 @@ import 'state.dart';
 
 class PdfFonts {
   final pw.Font regular;
+  final pw.Font semiBold;
   final pw.Font bold;
-  PdfFonts(this.regular, this.bold);
+  final pw.Font extraBold;
+  PdfFonts(this.regular, this.semiBold, this.bold, this.extraBold);
 
   static Future<PdfFonts> load() async {
-    final r = await rootBundle.load('assets/fonts/Vazirmatn-Regular.ttf');
-    final b = await rootBundle.load('assets/fonts/Vazirmatn-Bold.ttf');
-    return PdfFonts(pw.Font.ttf(r), pw.Font.ttf(b));
+    Future<pw.Font> f(String w) async => pw.Font.ttf(await rootBundle.load('assets/fonts/Vazirmatn-$w.ttf'));
+    return PdfFonts(await f('Regular'), await f('SemiBold'), await f('Bold'), await f('ExtraBold'));
   }
 }
+
+/// رنگ متن کارت چاپی (ink سامانه‌ی طراحی).
+const _cardInk = PdfColor.fromInt(0xFF10141A);
 
 /// PDF چاپخانه: برای هر کارت یک صفحه‌ی رو (طرح + نام) و بعد یک صفحه‌ی پشت (طرح + QR).
 /// کارت‌های رزرو در انتها می‌آیند، بدون نام.
@@ -69,12 +73,12 @@ Future<Uint8List> buildCardsPdf({
                   textDirection: pw.TextDirection.rtl,
                   textAlign: pw.TextAlign.center,
                   maxLines: 2,
-                  style: pw.TextStyle(font: fonts.bold, fontSize: t.nameSize, color: color)),
+                  style: pw.TextStyle(font: fonts.extraBold, fontSize: t.nameSize, color: color)),
               if (subtitle != null && subtitle.isNotEmpty)
                 pw.Text(subtitle,
                     textDirection: pw.TextDirection.rtl,
                     textAlign: pw.TextAlign.center,
-                    style: pw.TextStyle(font: fonts.regular, fontSize: t.nameSize * 0.62, color: color)),
+                    style: pw.TextStyle(font: fonts.semiBold, fontSize: t.nameSize * 9 / 16, color: color)),
             ]),
           ),
       ]),
@@ -112,7 +116,7 @@ Future<Uint8List> buildCardsPdf({
               width: size * 2,
               child: pw.Text(serialLabel,
                   textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(font: fonts.regular, fontSize: 7, color: PdfColors.grey800)),
+                  style: pw.TextStyle(font: fonts.semiBold, fontSize: 8, color: _cardInk)),
             ),
           ),
       ]),

@@ -29,6 +29,15 @@ jobs:
           channel: stable
           cache: true
 
+      - name: فونت وزیرمتن (OFL)
+        run: |
+          mkdir -p assets/fonts
+          for w in Regular SemiBold ExtraBold; do
+            curl -fsSL -o "assets/fonts/Vazirmatn-$w.ttf" \
+              "https://raw.githubusercontent.com/rastikerdar/vazirmatn/master/fonts/ttf/Vazirmatn-$w.ttf"
+          done
+          ls -la assets/fonts
+
       - name: ساخت پوشه‌ی اندروید
         run: |
           flutter create --org ir.newvisionteam --project-name conference_staff --platforms=android .
@@ -69,7 +78,7 @@ jobs:
       - name: فونت وزیرمتن (OFL)
         run: |
           mkdir -p assets/fonts
-          for w in Regular Bold; do
+          for w in Regular SemiBold Bold ExtraBold; do
             curl -fsSL -o "assets/fonts/Vazirmatn-$w.ttf" \
               "https://raw.githubusercontent.com/rastikerdar/vazirmatn/master/fonts/ttf/Vazirmatn-$w.ttf"
           done

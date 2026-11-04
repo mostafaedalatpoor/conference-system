@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../normalize.dart';
+import '../theme/daftar.dart';
+import '../theme/widgets.dart';
 
 /// صفحه‌ی تمام‌صفحه‌ی اسکن؛ با اولین QR معتبر، توکن کارت را برمی‌گرداند.
 class ScannerPage extends StatefulWidget {
@@ -47,20 +49,23 @@ class _ScannerPageState extends State<ScannerPage> {
       appBar: AppBar(
         title: Text(widget.title),
         actions: [
-          IconButton(icon: const Icon(Icons.flash_on), onPressed: () => _controller.toggleTorch()),
+          IconButton(
+            tooltip: 'چراغ‌قوه',
+            icon: const Icon(Icons.flashlight_on_rounded),
+            onPressed: () => _controller.toggleTorch(),
+          ),
         ],
       ),
+      backgroundColor: DaftarColors.of(context).camera,
       body: Stack(
         children: [
           MobileScanner(controller: _controller, onDetect: _onDetect),
           if (_hint != null)
             Positioned(
-              left: 16,
-              right: 16,
-              bottom: 32,
-              child: Card(
-                child: Padding(padding: const EdgeInsets.all(12), child: Text(_hint!, textAlign: TextAlign.center)),
-              ),
+              left: DaftarSize.space4,
+              right: DaftarSize.space4,
+              bottom: DaftarSize.space6,
+              child: Notice(tone: NoticeTone.wait, text: _hint!),
             ),
         ],
       ),

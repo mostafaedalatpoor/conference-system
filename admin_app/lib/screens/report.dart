@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../main.dart';
 import '../normalize.dart';
+import '../theme/daftar.dart';
+import '../theme/widgets.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -15,6 +17,8 @@ class ReportScreen extends StatefulWidget {
 class _ReportScreenState extends State<ReportScreen> {
   Timer? _timer;
   bool _auto = false;
+  Object? _seenReport;
+  DateTime? _updatedAt;
 
   @override
   void initState() {
@@ -44,23 +48,57 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     final r = s.report;
-    return PageBody(children: [
+    final x = DaftarColors.of(context);
+    if (!identical(r, _seenReport)) {
+      _seenReport = r;
+      _updatedAt = r == null ? null : DateTime.now();
+    }
+    final flagged = r == null ? 0 : (r['flagged'] as List).length;
+    return PageBody(title: 'گزارش زنده', children: [
       Row(children: [
-        FilledButton.tonalIcon(onPressed: s.busy ? null : s.loadReport, icon: const Icon(Icons.refresh), label: const Text('به‌روزرسانی')),
-        const SizedBox(width: 16),
+        OutlinedButton.icon(
+          onPressed: s.busy ? null : s.loadReport,
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('به‌روزرسانی'),
+        ),
+        const SizedBox(width: DaftarSize.space4),
         Switch(value: _auto, onChanged: _setAuto),
+        const SizedBox(width: DaftarSize.space2),
         const Text('هر ۳۰ ثانیه'),
+        const Spacer(),
+        if (_updatedAt != null)
+          Text('آخرین به‌روزرسانی ${hm(_updatedAt!)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
       ]),
       if (r == null)
-        const Padding(padding: EdgeInsets.all(24), child: Text('گزارشی گرفته نشده.'))
+        EmptyState(
+          icon: Icons.insights_rounded,
+          title: 'گزارشی گرفته نشده',
+          action: FilledButton(onPressed: s.busy ? null : s.loadReport, child: const Text('به‌روزرسانی')),
+        )
       else ...[
         const SectionTitle('خلاصه'),
-        Wrap(spacing: 12, runSpacing: 12, children: [
-          _Tile('پذیرش‌شده', '${faDigits(r['totals']['checked_in'])} از ${faDigits(r['totals']['attendees'])}'),
-          _Tile('ثبت‌نام در محل', faDigits(r['totals']['walkins'])),
-          _Tile('کارت رزرو آزاد', faDigits(r['totals']['reserve_cards_free'])),
-          _Tile('موارد مشکوک', faDigits((r['flagged'] as List).length)),
-        ]),
+        LayoutBuilder(builder: (context, c) {
+          final cols = c.maxWidth >= 760 ? 4 : 2;
+          final w = (c.maxWidth - DaftarSize.space3 * (cols - 1)) / cols;
+          return Wrap(spacing: DaftarSize.space3, runSpacing: DaftarSize.space3, children: [
+            StatTile(
+              width: w,
+              label: 'پذیرش‌شده',
+              value: faDigits(r['totals']['checked_in']),
+              of: faDigits(r['totals']['attendees']),
+            ),
+            StatTile(width: w, label: 'ثبت‌نام در محل', value: faDigits(r['totals']['walkins'])),
+            StatTile(width: w, label: 'کارت رزرو آزاد', value: faDigits(r['totals']['reserve_cards_free'])),
+            StatTile(
+              width: w,
+              label: 'موارد مشکوک',
+              value: faDigits(flagged),
+              attention: flagged > 0,
+              line: flagged > 0 ? 'فهرست در پایین صفحه' : 'موردی نیست',
+            ),
+          ]);
+        }),
         const SectionTitle('بر اساس نوع ثبت‌نام'),
         DataTable(columns: const [
           DataColumn(label: Text('نوع')),
@@ -92,19 +130,19 @@ class _ReportScreenState extends State<ReportScreen> {
             ]),
         ]),
         const SectionTitle('موارد مشکوک'),
-        if ((r['flagged'] as List).isEmpty) const Text('موردی نیست.'),
+        if ((r['flagged'] as List).isEmpty) const Hint('موردی نیست.'),
         for (final f in r['flagged'] as List)
           ListTile(
             dense: true,
-            leading: const Icon(Icons.warning_amber, color: Colors.orange),
+            leading: Icon(Icons.warning_rounded, color: x.wait),
             title: Text('${f['flag_label']} — ${(f['name'] as String?)?.isNotEmpty == true ? f['name'] : 'بدون نام'}'),
-            subtitle: Text('ساعت ${_time(f['device_time'] as String?)}${f['staff'] != null ? ' · ${f['staff']}' : ''}'),
+            subtitle: Text('ساعت ${_time(f['device_time'] as String?)}${f['staff'] != null ? '، ${f['staff']}' : ''}'),
           ),
         const SectionTitle('گوشی‌ها'),
         for (final d in r['devices'] as List)
           ListTile(
             dense: true,
-            leading: Icon(d['revoked'] == true ? Icons.phonelink_erase : Icons.smartphone),
+            leading: Icon(d['revoked'] == true ? Icons.phonelink_erase_rounded : Icons.smartphone_rounded),
             title: Text('${d['staff'] ?? ''} — ${d['label'] ?? ''}'),
             subtitle: Text('آخرین همگام‌سازی: ${_time(d['last_sync_at'] as String?)}${d['revoked'] == true ? ' (باطل‌شده)' : ''}'),
           ),
@@ -113,23 +151,56 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 }
 
-class _Tile extends StatelessWidget {
+/// کاشی عدد: برچسب کوچک، عدد درشت td-display و خط توضیح.
+/// «موارد مشکوک» وقتی بیش از صفر است پس‌زمینه‌ی wait-soft می‌گیرد.
+class StatTile extends StatelessWidget {
   final String label;
   final String value;
-  const _Tile(this.label, this.value);
+  final String? of;
+  final String? line;
+  final bool attention;
+  final double width;
+  const StatTile({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.width,
+    this.of,
+    this.line,
+    this.attention = false,
+  });
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: 190,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
-          const SizedBox(height: 4),
-          Text(value, style: Theme.of(context).textTheme.headlineSmall),
+  Widget build(BuildContext context) {
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    return Container(
+      width: width,
+      padding: const EdgeInsets.all(DaftarSize.space4),
+      decoration: BoxDecoration(
+        color: attention ? x.waitSoft : x.surface,
+        border: Border.all(color: attention ? x.waitSoft : x.line),
+        borderRadius: BorderRadius.circular(DaftarSize.radiusMd),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          if (attention) ...[Icon(Icons.warning_rounded, size: 16, color: x.wait), const SizedBox(width: 4)],
+          Text(label, style: theme.textTheme.labelLarge?.copyWith(color: attention ? x.ink : x.inkMuted)),
         ]),
-      );
+        const SizedBox(height: DaftarSize.space1),
+        Text.rich(
+          TextSpan(children: [
+            TextSpan(text: value),
+            if (of != null)
+              TextSpan(
+                text: ' از $of',
+                style: theme.textTheme.titleMedium?.copyWith(color: x.inkMuted, fontWeight: FontWeight.w600),
+              ),
+          ]),
+          style: theme.textTheme.displaySmall,
+        ),
+        if (line != null) Text(line!, style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+      ]),
+    );
+  }
 }

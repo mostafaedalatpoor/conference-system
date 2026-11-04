@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'screens/home.dart';
 import 'screens/setup.dart';
 import 'store.dart';
+import 'theme/daftar.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +29,6 @@ class StaffApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final seed = const Color(0xFF1F5FBF);
     return MaterialApp(
       title: 'نیروهای کنفرانس',
       debugShowCheckedModeBanner: false,
@@ -39,8 +39,10 @@ class StaffApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true, brightness: Brightness.light),
-      darkTheme: ThemeData(colorSchemeSeed: seed, useMaterial3: true, brightness: Brightness.dark),
+      theme: daftarTheme(Brightness.light),
+      darkTheme: daftarTheme(Brightness.dark),
+      // بزرگ‌نمایی متن سیستم تا ۱٫۳ برابر؛ بالاتر از آن چیدمان صفحه‌ی اسکن و شیت می‌شکند.
+      builder: (context, child) => MediaQuery.withClampedTextScaling(maxScaleFactor: 1.3, child: child!),
       home: const _Root(),
     );
   }
