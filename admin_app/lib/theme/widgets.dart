@@ -223,3 +223,70 @@ Future<void> verdictHaptic(bool ok) async {
   await Future<void>.delayed(const Duration(milliseconds: 120));
   await HapticFeedback.heavyImpact();
 }
+
+/// خط سازنده پایین صفحه‌ی ورود: کوچک‌ترین متن صفحه، با ink-muted.
+class MakerLine extends StatelessWidget {
+  final String team;
+  const MakerLine({super.key, required this.team});
+
+  @override
+  Widget build(BuildContext context) {
+    final x = DaftarColors.of(context);
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(color: x.inkMuted);
+    return Text.rich(
+      TextSpan(children: [
+        const TextSpan(text: 'ساخته‌ی '),
+        TextSpan(text: team, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ]),
+      textAlign: TextAlign.center,
+      style: style,
+    );
+  }
+}
+
+/// کارت «درباره»: نام اپ، نسخه، سازنده و وب‌سایت. فقط جاهایی که کار جاری نیست.
+class AboutCard extends StatelessWidget {
+  final String appName;
+  final String appNameLatin;
+  final String version;
+  final String maker;
+  final String website;
+  const AboutCard({
+    super.key,
+    required this.appName,
+    required this.appNameLatin,
+    required this.version,
+    required this.maker,
+    required this.website,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(DaftarSize.space4),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Image.asset('assets/brand/logo.png', width: 40, height: 40, semanticLabel: 'لوگوی رویدادیار'),
+          const SizedBox(width: DaftarSize.space3),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(appName, style: theme.textTheme.titleMedium),
+              Text('$appNameLatin، نسخه‌ی ${version.replaceAllMapped(RegExp(r'\d'), (m) => '۰۱۲۳۴۵۶۷۸۹'[int.parse(m[0]!)])}',
+                  textDirection: TextDirection.rtl,
+                  style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
+              const SizedBox(height: DaftarSize.space2),
+              Text(maker, style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+              SelectableText(
+                website,
+                textDirection: TextDirection.ltr,
+                style: theme.textTheme.bodySmall?.copyWith(color: x.stamp),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}

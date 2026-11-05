@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
+import '../brand.dart';
 import '../main.dart';
 import '../normalize.dart';
 import '../theme/daftar.dart';
@@ -82,10 +83,10 @@ class _SetupScreenState extends State<SetupScreen> {
             Padding(
               padding: const EdgeInsets.only(top: DaftarSize.space3, bottom: DaftarSize.space5),
               child: Column(children: [
-                Image.asset('assets/brand/logo.png', width: 88, height: 88, semanticLabel: 'لوگوی رویداد یار'),
+                Image.asset('assets/brand/logo.png', width: 88, height: 88, semanticLabel: 'لوگوی رویدادیار'),
                 const SizedBox(height: DaftarSize.space2),
-                Text('رویداد یار', style: theme.textTheme.titleLarge),
-                Text('Roydadyar', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+                Text(appName, style: theme.textTheme.titleLarge),
+                Text(appNameLatin, style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
               ]),
             ),
             if (store.needsLogin) ...[
@@ -186,6 +187,9 @@ class _SetupScreenState extends State<SetupScreen> {
               tone: NoticeTone.info,
               text: 'بعد از ورود، کل لیست روی گوشی ذخیره می‌شود و اپ بدون اینترنت هم کار می‌کند.',
             ),
+            const SizedBox(height: DaftarSize.space6),
+            const MakerLine(team: makerTeam),
+            const SizedBox(height: DaftarSize.space4),
           ],
         ),
       ),

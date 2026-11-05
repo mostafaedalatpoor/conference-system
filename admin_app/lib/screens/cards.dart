@@ -1,12 +1,15 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'dart:ui' as ui;
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../cards_pdf.dart';
 import '../main.dart';
 import '../theme/daftar.dart';
+import '../theme/widgets.dart';
 import '../normalize.dart';
 import '../state.dart';
 
@@ -17,9 +20,13 @@ class CardsScreen extends StatefulWidget {
   State<CardsScreen> createState() => _CardsScreenState();
 }
 
+/// روی موبایل PDF نهایی همه‌ی کارت‌ها و انتخاب تصویر طرح «روی ویندوز» است (ScreenAdminMobileCards).
+bool get isMobilePlatform => Platform.isAndroid || Platform.isIOS;
+
 class _CardsScreenState extends State<CardsScreen> {
   final _reserveCount = TextEditingController();
   int _rev = 0;
+  bool _longName = false;
 
   Future<void> _pickImage(AdminState s, bool front) async {
     final r = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['png', 'jpg', 'jpeg']);
@@ -67,22 +74,46 @@ class _CardsScreenState extends State<CardsScreen> {
   }
 
   Future<void> _saveBytes(AdminState s, String name, Uint8List bytes) async {
-    final path = await FilePicker.platform.saveFile(dialogTitle: 'ذخیره‌ی PDF', fileName: name, type: FileType.custom, allowedExtensions: ['pdf']);
-    if (path == null) return;
-    await File(path.toLowerCase().endsWith('.pdf') ? path : '$path.pdf').writeAsBytes(bytes);
+    String? path;
+    if (isMobilePlatform) {
+      // اندروید پنجره‌ی «ذخیره در مسیر» ویندوز را ندارد؛ انتخاب‌گر سیستم خودش فایل را می‌نویسد.
+      path = await FilePicker.platform.saveFile(
+        dialogTitle: 'ذخیره‌ی PDF',
+        fileName: name,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        bytes: bytes,
+      );
+      if (path == null) return;
+    } else {
+      path = await FilePicker.platform.saveFile(
+        dialogTitle: 'ذخیره‌ی PDF',
+        fileName: name,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+      if (path == null) return;
+      path = path.toLowerCase().endsWith('.pdf') ? path : '$path.pdf';
+      await File(path).writeAsBytes(bytes);
+    }
     s.message = 'ذخیره شد: $path';
     s.messageIsError = false;
     s.notify();
   }
 
-  Future<void> _generateCards(AdminState s) async {
-    if (!await _askSize(s)) return;
+  bool _checkBase(AdminState s) {
     if (s.event?.baseUrl.isEmpty ?? true) {
       s.message = 'آدرس پایه‌ی رویداد خالی است.';
       s.messageIsError = true;
       s.notify();
-      return;
+      return false;
     }
+    return true;
+  }
+
+  Future<void> _generateCards(AdminState s) async {
+    if (!await _askSize(s)) return;
+    if (!_checkBase(s)) return;
     final bytes = await s.run('', () async {
       final fonts = await PdfFonts.load();
       return buildCardsPdf(
@@ -99,25 +130,56 @@ class _CardsScreenState extends State<CardsScreen> {
     if (!(s.event?.locked ?? true)) await s.setLocked(true);
   }
 
+  /// PDF فقط کارت‌های رزرو آزاد: سبک، روی موبایل هم شدنی.
+  Future<void> _generateReserves(AdminState s) async {
+    if (!_checkBase(s)) return;
+    final bytes = await s.run('', () async {
+      final fonts = await PdfFonts.load();
+      return buildCardsPdf(
+        s: s,
+        fonts: fonts,
+        people: const [],
+        reserves: s.reserveCards.where((r) => !r.used).toList(),
+        frontImage: await _read(s.template.frontImage),
+        backImage: await _read(s.template.backImage),
+      );
+    });
+    if (bytes == null || !mounted) return;
+    await _saveBytes(s, 'reserve-cards-${s.eventCode}.pdf', bytes);
+  }
+
   Future<void> _generateLists(AdminState s) async {
     final bytes = await s.run('', () async => buildPaperListsPdf(s: s, fonts: await PdfFonts.load()));
     if (bytes == null || !mounted) return;
     await _saveBytes(s, 'lists-${s.eventCode}.pdf', bytes);
   }
 
-  Widget _num(String label, double value, void Function(double) on, {double width = 130}) => SizedBox(
-        width: width,
-        child: TextFormField(
-          key: ValueKey('$label-$_rev'),
-          initialValue: value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1),
-          decoration: InputDecoration(labelText: label, isDense: true),
-          keyboardType: TextInputType.number,
-          onChanged: (v) {
-            final d = double.tryParse(latinDigits(v));
-            if (d != null) setState(() => on(d));
-          },
-        ),
-      );
+  Widget _num(String label, double value, void Function(double) on, {double width = 130, double step = 0}) {
+    final field = TextFormField(
+      key: ValueKey('$label-$_rev'),
+      initialValue: value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1),
+      decoration: InputDecoration(labelText: label, isDense: true),
+      keyboardType: TextInputType.number,
+      onChanged: (v) {
+        final d = double.tryParse(latinDigits(v));
+        if (d != null) setState(() => on(d));
+      },
+    );
+    if (step == 0) return SizedBox(width: width, child: field);
+    // جابه‌جایی جزئی با گام ثابت؛ روی موبایل دقیق‌تر از کشیدن با انگشت است.
+    void nudge(double d) => setState(() {
+          on(double.parse((value + d).toStringAsFixed(1)));
+          _rev++;
+        });
+    return SizedBox(
+      width: width + 88,
+      child: Row(children: [
+        IconButton(tooltip: 'کم', onPressed: () => nudge(-step), icon: const Icon(Icons.remove_rounded)),
+        Expanded(child: field),
+        IconButton(tooltip: 'زیاد', onPressed: () => nudge(step), icon: const Icon(Icons.add_rounded)),
+      ]),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -125,18 +187,41 @@ class _CardsScreenState extends State<CardsScreen> {
     final t = s.template;
     final free = s.reserveCards.where((r) => !r.used).length;
     final people = s.sortedPeople;
+    final mobile = isMobilePlatform;
+    final locked = s.event?.locked ?? false;
     if (_reserveCount.text.isEmpty) {
       _reserveCount.text = '${(people.length / 10).ceil().clamp(1, 1000)}';
     }
+    final longest = people.isEmpty
+        ? null
+        : people.reduce((a, b) => a.displayName.length >= b.displayName.length ? a : b);
+
+    Widget onWindows(String label, String reason) => Opacity(
+          opacity: .7,
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            OutlinedButton.icon(onPressed: null, icon: const Icon(Icons.desktop_windows_rounded), label: Text(label)),
+            const SizedBox(width: DaftarSize.space2),
+            const DaftarTag('روی ویندوز', kind: TagKind.outline),
+            const SizedBox(width: DaftarSize.space2),
+            Flexible(child: Hint(reason)),
+          ]),
+        );
 
     return PageBody(title: 'کارت‌ها', children: [
+      if (locked)
+        const Padding(
+          padding: EdgeInsets.only(bottom: DaftarSize.space2),
+          child: Notice(
+            tone: NoticeTone.wait,
+            text: 'کارت‌ها چاپ شده‌اند. تغییر قالب فقط روی کارت‌های رزرو جدید اثر دارد.',
+          ),
+        ),
       const SectionTitle('کارت‌های رزرو (برای ثبت‌نام در محل)'),
       Text('${faDigits(s.reserveCards.length)} کارت رزرو ساخته شده؛ ${faDigits(free)} هنوز آزاد است. '
           'پیشنهاد: حدود ۱۰٪ ثبت‌نامی‌ها (${faDigits((people.length / 10).ceil())} کارت).'),
       const SizedBox(height: 8),
-      Row(children: [
+      Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
         SizedBox(width: 120, child: TextField(controller: _reserveCount, decoration: const InputDecoration(labelText: 'تعداد', isDense: true))),
-        const SizedBox(width: 12),
         OutlinedButton(
           onPressed: s.busy
               ? null
@@ -148,26 +233,29 @@ class _CardsScreenState extends State<CardsScreen> {
         ),
       ]),
       const SectionTitle('قالب کارت'),
-      Wrap(spacing: 12, runSpacing: 8, children: [
-        OutlinedButton.icon(
-          icon: const Icon(Icons.image_rounded),
-          label: Text(t.frontImage.isEmpty ? 'طرح روی کارت' : 'روی: ${t.frontImage.split(Platform.pathSeparator).last}'),
-          onPressed: () => _pickImage(s, true),
-        ),
-        OutlinedButton.icon(
-          icon: const Icon(Icons.image_rounded),
-          label: Text(t.backImage.isEmpty ? 'طرح پشت کارت' : 'پشت: ${t.backImage.split(Platform.pathSeparator).last}'),
-          onPressed: () => _pickImage(s, false),
-        ),
-      ]),
+      if (mobile)
+        onWindows('انتخاب طرح روی و پشت', 'تصویر طرح و ویرایش کامل با موس روی اپ ویندوز است.')
+      else
+        Wrap(spacing: 12, runSpacing: 8, children: [
+          OutlinedButton.icon(
+            icon: const Icon(Icons.image_rounded),
+            label: Text(t.frontImage.isEmpty ? 'طرح روی کارت' : 'روی: ${t.frontImage.split(Platform.pathSeparator).last}'),
+            onPressed: () => _pickImage(s, true),
+          ),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.image_rounded),
+            label: Text(t.backImage.isEmpty ? 'طرح پشت کارت' : 'پشت: ${t.backImage.split(Platform.pathSeparator).last}'),
+            onPressed: () => _pickImage(s, false),
+          ),
+        ]),
       const SizedBox(height: 8),
       const Hint('طرح‌ها PNG یا JPG، با حاشیه‌ی اضافه‌ی ۳ میلی‌متر از هر طرف و ۳۰۰ DPI باشند '
           '(برای ۸۵×۵۵ میلی‌متر فایل ۹۱×۶۱ میلی‌متر، حدود ۱۰۷۵×۷۲۰ پیکسل). متن مهم دست‌کم ۴ میلی‌متر داخل لبه‌ی برش باشد.'),
       const SizedBox(height: 12),
       Wrap(spacing: 12, runSpacing: 12, children: [
-        _num('مرکز نام: افقی ٪', t.nameX, (v) => t.nameX = v),
-        _num('مرکز نام: عمودی ٪', t.nameY, (v) => t.nameY = v),
-        _num('اندازه‌ی نام (pt)', t.nameSize, (v) => t.nameSize = v),
+        _num('مرکز نام: افقی ٪', t.nameX, (v) => t.nameX = v, step: 1),
+        _num('مرکز نام: عمودی ٪', t.nameY, (v) => t.nameY = v, step: 1),
+        _num('اندازه‌ی نام (pt)', t.nameSize, (v) => t.nameSize = v, step: 0.5),
         SizedBox(
           width: 130,
           child: TextFormField(
@@ -184,22 +272,49 @@ class _CardsScreenState extends State<CardsScreen> {
       ]),
       const SizedBox(height: 12),
       Wrap(spacing: 12, runSpacing: 12, children: [
-        _num('مرکز QR: افقی ٪', t.qrX, (v) => t.qrX = v),
-        _num('مرکز QR: عمودی ٪', t.qrY, (v) => t.qrY = v),
-        _num('اندازه‌ی QR (mm)', t.qrSizeMm, (v) => t.qrSizeMm = v),
+        _num('مرکز QR: افقی ٪', t.qrX, (v) => t.qrX = v, step: 1),
+        _num('مرکز QR: عمودی ٪', t.qrY, (v) => t.qrY = v, step: 1),
+        _num('اندازه‌ی QR (mm)', t.qrSizeMm, (v) => t.qrSizeMm = v, step: 0.5),
         Row(mainAxisSize: MainAxisSize.min, children: [
           Checkbox(value: t.showSerial, onChanged: (v) => setState(() => t.showSerial = v ?? true)),
           const Text('شماره‌ی کارت زیر QR'),
         ]),
       ]),
+      if (t.qrSizeMm < s.minQrMm)
+        Padding(
+          padding: const EdgeInsets.only(top: DaftarSize.space2),
+          child: Notice(
+            tone: NoticeTone.wait,
+            text: 'QR کوچک است؛ گوشی‌های قدیمی از فاصله نمی‌خوانند. کمینه برای '
+                '${s.settings.qrBehavior == 'vcard' ? 'کارت ویزیت' : 'لینک'} ${faDigits(s.minQrMm.toStringAsFixed(0))} میلی‌متر است.',
+          ),
+        ),
       const SectionTitle('پیش‌نمایش'),
-      _Preview(s: s, person: people.isEmpty ? null : people.first),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        value: _longName,
+        onChanged: longest == null ? null : (v) => setState(() => _longName = v),
+        title: const Text('آزمون نام بلند'),
+        subtitle: Text(longest == null ? 'هنوز کسی وارد نشده.' : 'طولانی‌ترین نام لیست: ${longest.displayName}'),
+      ),
+      _Preview(s: s, person: _longName ? longest : (people.isEmpty ? null : people.first)),
+      const SectionTitle('بررسی پیش از چاپ'),
+      _Preflight(s: s, longest: longest),
       const SizedBox(height: 20),
-      Wrap(spacing: 12, runSpacing: 12, children: [
-        FilledButton.icon(
-          icon: const Icon(Icons.picture_as_pdf_rounded),
-          onPressed: s.busy || people.isEmpty ? null : () => _generateCards(s),
-          label: Text('ساخت PDF کارت‌ها (${faDigits(people.length)} نفر + ${faDigits(free)} رزرو)'),
+      Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        if (mobile)
+          onWindows('PDF همه‌ی کارت‌ها برای چاپخانه',
+              '${faDigits((people.length + free) * 2)} صفحه با طرح؛ برای گوشی سنگین است.')
+        else
+          FilledButton.icon(
+            icon: const Icon(Icons.picture_as_pdf_rounded),
+            onPressed: s.busy || people.isEmpty ? null : () => _generateCards(s),
+            label: Text('ساخت PDF کارت‌ها (${faDigits(people.length)} نفر + ${faDigits(free)} رزرو)'),
+          ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.style_rounded),
+          onPressed: s.busy || free == 0 ? null : () => _generateReserves(s),
+          label: Text('PDF کارت‌های رزرو آزاد (${faDigits(free)})'),
         ),
         OutlinedButton.icon(
           icon: const Icon(Icons.list_alt_rounded),
@@ -209,32 +324,150 @@ class _CardsScreenState extends State<CardsScreen> {
         TextButton(onPressed: () => s.save(), child: const Text('ذخیره‌ی تنظیمات قالب')),
       ]),
       const SizedBox(height: 8),
-      const Hint(
+      Hint(
         'PDF کارت‌ها برای هر کارت یک صفحه‌ی رو و پشت‌سرش یک صفحه‌ی پشت دارد (چاپ دورو)، به ترتیب الفبایی نام خانوادگی. '
-        'بعد از ساخت PDF، آدرس پایه قفل می‌شود تا لینک QR کارت‌های چاپ‌شده عوض نشود.',
+        'بعد از ساخت PDF، آدرس پایه قفل می‌شود تا لینک QR کارت‌های چاپ‌شده عوض نشود. '
+        'قالب فعلاً روی همین دستگاه ذخیره می‌شود${mobile ? '' : '، نه روی سرور'}.',
       ),
     ]);
   }
 }
 
-/// پیش‌نمایش تقریبی جای نام و QR روی کارت.
+/// بررسی پیش از چاپ: جاشدن نام‌ها در ناحیه‌ی امن، اندازه و جای QR، کیفیت تصویر طرح.
+class _Preflight extends StatelessWidget {
+  final AdminState s;
+  final Person? longest;
+  const _Preflight({required this.s, required this.longest});
+
+  static const _safe = 4.0; // ناحیه‌ی امن، میلی‌متر
+  static const _ptPerMm = 72 / 25.4;
+
+  static final _sizes = <String, Future<(int, int)?>>{};
+
+  // تصویر هر مسیر یک بار خوانده می‌شود، نه با هر تغییر فیلد.
+  Future<(int, int)?> _imageSize(String path) => _sizes.putIfAbsent(path, () => _readSize(path));
+
+  Future<(int, int)?> _readSize(String path) async {
+    if (path.isEmpty) return null;
+    final f = File(path);
+    if (!await f.exists()) return null;
+    final codec = await ui.instantiateImageCodec(await f.readAsBytes());
+    final frame = await codec.getNextFrame();
+    return (frame.image.width, frame.image.height);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = s.template;
+    final checks = <(bool?, String)>[]; // true خوب، false مشکل، null هشدار
+
+    // ۱. جاشدن طولانی‌ترین نام در ناحیه‌ی امن.
+    if (longest != null) {
+      final cx = t.widthMm * t.nameX / 100;
+      final availMm = 2 * [cx - _safe, t.widthMm - cx - _safe].reduce((a, b) => a < b ? a : b);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: longest!.displayName,
+          style: TextStyle(fontFamily: 'Vazirmatn', fontSize: t.nameSize, fontWeight: FontWeight.w800),
+        ),
+        textDirection: TextDirection.rtl,
+        maxLines: 1,
+      )..layout();
+      final widthMm = tp.width / _ptPerMm;
+      if (availMm <= 0) {
+        checks.add((false, 'مرکز نام بیرون از ناحیه‌ی امن است.'));
+      } else if (widthMm <= availMm) {
+        checks.add((true, 'همه‌ی نام‌ها در یک خط و داخل ناحیه‌ی امن جا می‌شوند.'));
+      } else if (widthMm <= availMm * 2) {
+        checks.add((null, 'طولانی‌ترین نام («${longest!.displayName}») دو خطی چاپ می‌شود.'));
+      } else {
+        checks.add((false, 'طولانی‌ترین نام حتی در دو خط جا نمی‌شود؛ اندازه‌ی نام را کم کنید.'));
+      }
+    }
+
+    // ۲. اندازه‌ی QR.
+    checks.add(t.qrSizeMm >= s.minQrMm
+        ? (true, 'اندازه‌ی QR ${faDigits(t.qrSizeMm.toStringAsFixed(0))} میلی‌متر؛ کافی است.')
+        : (false, 'QR کمتر از ${faDigits(s.minQrMm.toStringAsFixed(0))} میلی‌متر است.'));
+
+    // ۳. QR با حاشیه‌ی سکوت و خط‌های زیرش داخل ناحیه‌ی امن.
+    final qx = t.widthMm * t.qrX / 100, qy = t.heightMm * t.qrY / 100, half = t.qrSizeMm / 2 + 3;
+    final below = t.showSerial ? 8.0 : 4.0;
+    final inside = qx - half >= _safe &&
+        qx + half <= t.widthMm - _safe &&
+        qy - half >= _safe &&
+        qy + half + below <= t.heightMm - _safe;
+    checks.add(inside
+        ? (true, 'QR و حاشیه‌ی سکوتش داخل ناحیه‌ی امن است.')
+        : (false, 'QR یا خط‌های زیرش از ناحیه‌ی امن بیرون زده؛ جایش یا اندازه‌اش را عوض کنید.'));
+
+    return FutureBuilder<List<(int, int)?>>(
+      future: Future.wait([_imageSize(t.frontImage), _imageSize(t.backImage)]),
+      builder: (context, snap) {
+        final all = [...checks];
+        final sizes = snap.data;
+        if (sizes != null) {
+          for (final (label, size) in [('روی', sizes[0]), ('پشت', sizes[1])]) {
+            if (size == null) continue;
+            final dpi = size.$1 / ((t.widthMm + 6) / 25.4);
+            all.add(dpi >= 290
+                ? (true, 'تصویر $label: ${faDigits(dpi.round())} dpi.')
+                : (dpi >= 150
+                    ? (null, 'تصویر $label: ${faDigits(dpi.round())} dpi؛ برای چاپ تیز ۳۰۰ لازم است.')
+                    : (false, 'تصویر $label: ${faDigits(dpi.round())} dpi؛ چاپ تار می‌شود.')));
+          }
+        }
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          for (final (ok, text) in all)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(
+                  ok == true ? Icons.check_circle_rounded : (ok == null ? Icons.warning_rounded : Icons.error_rounded),
+                  size: 18,
+                  color: ok == true
+                      ? DaftarColors.of(context).go
+                      : (ok == null ? DaftarColors.of(context).wait : DaftarColors.of(context).stop),
+                ),
+                const SizedBox(width: DaftarSize.space2),
+                Expanded(child: Text(text)),
+              ]),
+            ),
+        ]);
+      },
+    );
+  }
+}
+
+/// پیش‌نمایش جای نام و QR روی کارت، با خط برش و ناحیه‌ی امن ۴ میلی‌متری.
 class _Preview extends StatelessWidget {
   final AdminState s;
   final Person? person;
   const _Preview({required this.s, required this.person});
 
-  Widget _side(String imagePath, List<Widget> overlay) {
+  Widget _side(BuildContext context, double width, String imagePath, List<Widget> overlay) {
     final t = s.template;
+    final x = DaftarColors.of(context);
+    final pxPerMm = width / t.widthMm;
     return SizedBox(
-      width: 340,
+      width: width,
       child: AspectRatio(
         aspectRatio: t.widthMm / t.heightMm,
         child: LayoutBuilder(builder: (context, c) {
           return Container(
-            decoration: BoxDecoration(border: Border.all(color: DaftarColors.of(context).lineStrong), color: Colors.white),
+            decoration: BoxDecoration(border: Border.all(color: x.lineStrong), color: Colors.white),
             child: Stack(children: [
               if (imagePath.isNotEmpty && File(imagePath).existsSync())
                 Positioned.fill(child: Image.file(File(imagePath), fit: BoxFit.cover)),
+              // ناحیه‌ی امن (نقطه‌چین در طراحی؛ اینجا خط نازک)
+              Positioned.fill(
+                child: Padding(
+                  padding: EdgeInsets.all(4 * pxPerMm),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(border: Border.all(color: x.stamp.withValues(alpha: .5), width: 1)),
+                  ),
+                ),
+              ),
               ...overlay.map((w) => w is _At ? w.build2(c.biggest) : w),
             ]),
           );
@@ -252,22 +485,48 @@ class _Preview extends StatelessWidget {
     } catch (_) {
       color = const Color(0xFF10141A);
     }
-    final scale = 340 / (t.widthMm * 72 / 25.4); // pt → پیکسل پیش‌نمایش
-    return Wrap(spacing: 16, runSpacing: 16, children: [
-      _side(t.frontImage, [
-        _At(t.nameX, t.nameY, Text(person?.displayName ?? 'نام نمونه',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: t.nameSize * scale, fontWeight: FontWeight.w800, color: color, letterSpacing: 0))),
-      ]),
-      _side(t.backImage, [
-        _At(t.qrX, t.qrY, Container(
-          width: 340 * t.qrSizeMm / t.widthMm,
-          height: 340 * t.qrSizeMm / t.widthMm,
-          color: Colors.white,
-          child: const FittedBox(child: Icon(Icons.qr_code_2_rounded)),
-        )),
-      ]),
-    ]);
+    return LayoutBuilder(builder: (context, c) {
+      final width = c.maxWidth < 340 ? c.maxWidth : 340.0;
+      final scale = width / (t.widthMm * 72 / 25.4); // pt → پیکسل پیش‌نمایش
+      final role = person == null ? '' : s.roleName(person!.roleCode);
+      return Wrap(spacing: 16, runSpacing: 16, children: [
+        _side(context, width, t.frontImage, [
+          _At(
+            t.nameX,
+            t.nameY,
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4 * width / t.widthMm),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(person?.displayName ?? 'نام نمونه',
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    style: TextStyle(fontSize: t.nameSize * scale, fontWeight: FontWeight.w800, color: color, letterSpacing: 0)),
+                if (t.showRole && role.isNotEmpty)
+                  Text(role,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: t.nameSize * 9 / 16 * scale, fontWeight: FontWeight.w600, color: color)),
+              ]),
+            ),
+          ),
+        ]),
+        _side(context, width, t.backImage, [
+          _At(t.qrX, t.qrY, Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              padding: EdgeInsets.all(3 * width / t.widthMm),
+              color: Colors.white,
+              child: SizedBox(
+                width: width * t.qrSizeMm / t.widthMm,
+                height: width * t.qrSizeMm / t.widthMm,
+                child: const FittedBox(child: Icon(Icons.qr_code_2_rounded, color: Colors.black)),
+              ),
+            ),
+            if (t.showSerial)
+              Text('۲۱۳', style: TextStyle(fontSize: 8 * scale, color: const Color(0xFF10141A))),
+            Text(s.qrHint(reserve: false), style: TextStyle(fontSize: 7 * scale, color: const Color(0xFF10141A))),
+          ])),
+        ]),
+      ]);
+    });
   }
 }
 

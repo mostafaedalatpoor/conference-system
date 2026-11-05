@@ -8,7 +8,10 @@ import '../theme/daftar.dart';
 import '../theme/widgets.dart';
 
 class ReportScreen extends StatefulWidget {
-  const ReportScreen({super.key});
+  /// روی موبایل («امروز») گزارش خودکار هر ۳۰ ثانیه به‌روز می‌شود.
+  final bool autoRefresh;
+  final String title;
+  const ReportScreen({super.key, this.autoRefresh = false, this.title = 'گزارش زنده'});
 
   @override
   State<ReportScreen> createState() => _ReportScreenState();
@@ -23,7 +26,10 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => StateScope.read(context).loadReport());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      StateScope.read(context).loadReport();
+      if (widget.autoRefresh) _setAuto(true);
+    });
   }
 
   @override
@@ -54,8 +60,8 @@ class _ReportScreenState extends State<ReportScreen> {
       _updatedAt = r == null ? null : DateTime.now();
     }
     final flagged = r == null ? 0 : (r['flagged'] as List).length;
-    return PageBody(title: 'گزارش زنده', children: [
-      Row(children: [
+    return PageBody(title: widget.title, children: [
+      Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, crossAxisAlignment: WrapCrossAlignment.center, children: [
         OutlinedButton.icon(
           onPressed: s.busy ? null : s.loadReport,
           icon: const Icon(Icons.refresh_rounded),
@@ -65,7 +71,7 @@ class _ReportScreenState extends State<ReportScreen> {
         Switch(value: _auto, onChanged: _setAuto),
         const SizedBox(width: DaftarSize.space2),
         const Text('هر ۳۰ ثانیه'),
-        const Spacer(),
+        const SizedBox(width: DaftarSize.space4),
         if (_updatedAt != null)
           Text('آخرین به‌روزرسانی ${hm(_updatedAt!)}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
@@ -139,13 +145,7 @@ class _ReportScreenState extends State<ReportScreen> {
             subtitle: Text('ساعت ${_time(f['device_time'] as String?)}${f['staff'] != null ? '، ${f['staff']}' : ''}'),
           ),
         const SectionTitle('گوشی‌ها'),
-        for (final d in r['devices'] as List)
-          ListTile(
-            dense: true,
-            leading: Icon(d['revoked'] == true ? Icons.phonelink_erase_rounded : Icons.smartphone_rounded),
-            title: Text('${d['staff'] ?? ''} — ${d['label'] ?? ''}'),
-            subtitle: Text('آخرین همگام‌سازی: ${_time(d['last_sync_at'] as String?)}${d['revoked'] == true ? ' (باطل‌شده)' : ''}'),
-          ),
+        for (final d in r['devices'] as List) DeviceRow(device: (d as Map).cast<String, dynamic>()),
       ],
     ]);
   }
@@ -201,6 +201,62 @@ class StatTile extends StatelessWidget {
         ),
         if (line != null) Text(line!, style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
       ]),
+    );
+  }
+}
+
+
+/// زمان نسبی فارسی: «همین الان»، «۲ دقیقه پیش»، «۳ ساعت پیش».
+String relativeTime(DateTime t) {
+  final d = DateTime.now().difference(t.toLocal());
+  if (d.inMinutes < 1) return 'همین الان';
+  if (d.inMinutes < 60) return '${faDigits(d.inMinutes)} دقیقه پیش';
+  if (d.inHours < 24) return '${faDigits(d.inHours)} ساعت پیش';
+  return '${faDigits(d.inDays)} روز پیش';
+}
+
+/// ردیف یک گوشی یا رایانه‌ی نیرو. بیش از ۱۰ دقیقه بی‌خبر = احتمالاً آفلاین و کارهایش هنوز نرسیده.
+class DeviceRow extends StatelessWidget {
+  final Map<String, dynamic> device;
+  const DeviceRow({super.key, required this.device});
+
+  @override
+  Widget build(BuildContext context) {
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    final revoked = device['revoked'] == true;
+    final last = DateTime.tryParse('${device['last_sync_at'] ?? ''}');
+    final silent = last == null ? null : DateTime.now().difference(last.toLocal()).inMinutes;
+    final stale = !revoked && silent != null && silent > 10;
+    final label = '${device['label'] ?? ''}'.trim();
+    final staff = '${device['staff'] ?? ''}'.trim();
+    final line2 = [
+      if (staff.isNotEmpty) staff,
+      last == null ? 'هنوز همگام نشده' : (stale ? '${faDigits(silent)} دقیقه بی‌خبر' : relativeTime(last)),
+    ].join('، ');
+    return Opacity(
+      opacity: revoked ? .55 : 1,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: DaftarSize.space2),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
+        child: Row(children: [
+          Icon(revoked ? Icons.phonelink_erase_rounded : Icons.smartphone_rounded, color: x.inkMuted),
+          const SizedBox(width: DaftarSize.space3),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label.isEmpty ? 'دستگاه بی‌نام' : label, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+              Row(children: [
+                if (stale) ...[Icon(Icons.warning_rounded, size: 14, color: x.wait), const SizedBox(width: 4)],
+                Flexible(
+                  child: Text(line2,
+                      style: theme.textTheme.bodySmall?.copyWith(color: stale ? x.wait : x.inkMuted, fontFeatures: tabularFigures)),
+                ),
+              ]),
+            ]),
+          ),
+          if (revoked) const DaftarTag('باطل‌شده', kind: TagKind.outline),
+        ]),
+      ),
     );
   }
 }

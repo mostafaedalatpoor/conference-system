@@ -224,6 +224,61 @@ class ImportResult {
   ImportResult(this.people, this.problems, this.updated, this.created);
 }
 
+/// تنظیم‌های رویداد که هم اپ نیروها و هم صفحه‌ی عمومی به آن نیاز دارند.
+/// به سرور با پیکربندی فرستاده می‌شود (کلید `settings`) و یک نسخه هم روی همین رایانه می‌ماند.
+class EventSettings {
+  /// IdentifyMode: scan = کارت QR با اسکن، card = کارت بدون اسکن، none = بدون کارت.
+  String identifyMode = 'scan';
+
+  /// QrBehavior: person = صفحه‌ی فرد، redirect = انتقال به یک آدرس، vcard = کارت ویزیت.
+  String qrBehavior = 'person';
+  String redirectUrl = '';
+
+  /// فیلدهای تماس مجاز در vCard و دکمه‌ی «ذخیره در مخاطبین». موبایل پیش‌فرض خاموش.
+  bool shareName = true;
+  bool shareOrg = true;
+  bool shareEmail = false;
+  bool shareMobile = false;
+  bool shareCountry = false;
+
+  /// خط «ساخته‌شده با رویدادیار» در صفحه‌ی عمومی.
+  bool showMakerCredit = true;
+
+  Map<String, dynamic> toJson() => {
+        'identify_mode': identifyMode,
+        'qr_behavior': qrBehavior,
+        'qr_redirect_url': redirectUrl,
+        'contact_fields': {
+          'name': shareName,
+          'organization': shareOrg,
+          'email': shareEmail,
+          'mobile': shareMobile,
+          'country': shareCountry,
+        },
+        'show_maker_credit': showMakerCredit,
+      };
+
+  void load(Map<String, dynamic> j) {
+    String pick(String k, List<String> allowed, String def) {
+      final v = j[k]?.toString();
+      return allowed.contains(v) ? v! : def;
+    }
+
+    identifyMode = pick('identify_mode', ['scan', 'card', 'none'], identifyMode);
+    qrBehavior = pick('qr_behavior', ['person', 'redirect', 'vcard'], qrBehavior);
+    redirectUrl = (j['qr_redirect_url'] ?? redirectUrl).toString();
+    final c = ((j['contact_fields'] as Map?) ?? {}).cast<String, dynamic>();
+    shareName = c['name'] as bool? ?? shareName;
+    shareOrg = c['organization'] as bool? ?? shareOrg;
+    shareEmail = c['email'] as bool? ?? shareEmail;
+    shareMobile = c['mobile'] as bool? ?? shareMobile;
+    shareCountry = c['country'] as bool? ?? shareCountry;
+    showMakerCredit = j['show_maker_credit'] as bool? ?? showMakerCredit;
+  }
+
+  bool get usesCards => identifyMode != 'none';
+}
+
 class AdminState extends ChangeNotifier {
   String server = 'https://newvisionteam.ir';
   String apiKey = '';
@@ -243,6 +298,8 @@ class AdminState extends ChangeNotifier {
   Map<String, dynamic>? report;
 
   final CardTemplate template = CardTemplate();
+  EventSettings settings = EventSettings();
+  Map<String, dynamic> _settingsByEvent = {};
 
   bool busy = false;
   String? message;
@@ -272,6 +329,10 @@ class AdminState extends ChangeNotifier {
           staff = (staffByEvent[eventCode] as List).map((e) => StaffDef.fromJson((e as Map).cast<String, dynamic>())).toList();
         }
         _staffByEvent = staffByEvent;
+        _settingsByEvent = ((j['settings'] as Map?) ?? {}).cast<String, dynamic>();
+        if (eventCode != null && _settingsByEvent[eventCode] is Map) {
+          settings.load((_settingsByEvent[eventCode] as Map).cast<String, dynamic>());
+        }
       }
     } catch (_) {}
     notifyListeners();
@@ -281,6 +342,7 @@ class AdminState extends ChangeNotifier {
 
   Future<void> save() async {
     if (eventCode != null) _staffByEvent[eventCode!] = staff.map((s) => s.toJson()).toList();
+    if (eventCode != null) _settingsByEvent[eventCode!] = settings.toJson();
     final f = await _file();
     await f.parent.create(recursive: true);
     await f.writeAsString(jsonEncode({
@@ -289,6 +351,7 @@ class AdminState extends ChangeNotifier {
       'event_code': eventCode,
       'template': template.toJson(),
       'staff': _staffByEvent,
+      'settings': _settingsByEvent,
     }));
   }
 
@@ -442,6 +505,12 @@ class AdminState extends ChangeNotifier {
     for (final s in saved) {
       if (!staff.any((x) => x.name == s.name)) staff.add(s);
     }
+    // تنظیم‌های رویداد: اگر سرور دارد از سرور، وگرنه نسخه‌ی محلی همین رویداد.
+    settings = EventSettings();
+    final local = _settingsByEvent[code];
+    if (local is Map) settings.load(local.cast<String, dynamic>());
+    final remote = (s['settings'] as Map?) ?? ((s['event'] as Map?)?['settings'] as Map?);
+    if (remote != null) settings.load(remote.cast<String, dynamic>());
     report = null;
   }
 
@@ -455,9 +524,11 @@ class AdminState extends ChangeNotifier {
             for (var i = 0; i < meals.length; i++) {...meals[i].toJson(), 'sort': i},
           ],
           'sessions': sessions.map((s) => s.toJson()).toList(),
+          'settings': settings.toJson(),
         }) as Map)
             .cast<String, dynamic>();
         final errors = (r['errors'] as List?) ?? [];
+        await save();
         await _loadEvent(eventCode!);
         if (errors.isNotEmpty) throw ApiException('partial', 'بعضی ردیف‌ها ذخیره نشدند: ${jsonEncode(errors)}', 200);
       });
@@ -607,6 +678,44 @@ class AdminState extends ChangeNotifier {
     return '$base/c/$token';
   }
 
+  /// محتوای QR یک نفر بسته به QrBehavior. کارت‌های رزرو همیشه لینک‌اند چون موقع چاپ صاحب ندارند.
+  String qrDataFor(Person p) => settings.qrBehavior == 'vcard' ? vcardFor(p) : qrUrl(p.token!);
+
+  /// vCard 3.0 با UTF-8. نام در N، سازمان در ORG، نقش کنفرانس در NOTE، TITLE خالی.
+  /// URL اجباری است چون اپ نیروها توکن را از همین فیلد می‌خواند.
+  String vcardFor(Person p) {
+    String esc(String v) => v.replaceAll(r'\', r'\\').replaceAll(',', r'\,').replaceAll(';', r'\;').replaceAll('\n', r'\n');
+    final st = settings;
+    final role = roleName(p.roleCode);
+    final lines = <String>[
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      if (st.shareName) 'N:${esc(p.lastName)};${esc(p.firstName)};;${esc(p.title)};',
+      'FN:${esc(st.shareName ? p.displayName : (p.organization.isNotEmpty ? p.organization : 'شرکت‌کننده'))}',
+      if (st.shareOrg && p.organization.isNotEmpty) 'ORG:${esc(p.organization)}',
+      if (st.shareEmail && p.email.isNotEmpty) 'EMAIL;TYPE=INTERNET:${esc(p.email)}',
+      if (st.shareMobile && p.mobile.isNotEmpty) 'TEL;TYPE=CELL:${esc(p.mobile)}',
+      if (st.shareCountry && p.country.isNotEmpty) 'ADR:;;;;;;${esc(p.country)}',
+      'NOTE:${esc([if (role.isNotEmpty) role, event?.name ?? ''].where((x) => x.isNotEmpty).join(' · '))}',
+      'URL:${qrUrl(p.token!)}',
+      'END:VCARD',
+    ];
+    return lines.join('\r\n');
+  }
+
+  /// خط ۷pt زیر QR که می‌گوید اسکن با دوربین معمولی چه می‌کند.
+  String qrHint({required bool reserve}) {
+    if (reserve) return 'اسکن کنید: صفحه‌ی من';
+    return switch (settings.qrBehavior) {
+      'vcard' => 'اسکن کنید: ذخیره در مخاطبین',
+      'redirect' => settings.redirectUrl.trim().isEmpty ? 'اسکن کنید: صفحه‌ی من' : 'اسکن کنید: سایت رویداد',
+      _ => 'اسکن کنید: صفحه‌ی من',
+    };
+  }
+
+  /// کمینه‌ی اندازه‌ی چاپ QR: لینک ۲۲mm، کارت ویزیت (پرتراکم‌تر) ۳۰mm.
+  double get minQrMm => settings.qrBehavior == 'vcard' ? 30 : 22;
+
   /// کارت‌ها به ترتیب الفبایی نام خانوادگی، همان ترتیبی که روز پذیرش دنبالشان می‌گردند.
   List<Person> get sortedPeople {
     final l = people.values.where((p) => p.token != null && p.source != 'walkin').toList();
@@ -626,4 +735,12 @@ class AdminState extends ChangeNotifier {
   Future<void> loadReport() => run('', () async {
         report = (await api.get('/admin/events/$eventCode/report') as Map).cast<String, dynamic>();
       });
+
+  /// تاریخچه‌ی یک نفر (PersonTimeline): پذیرش، وعده‌ها و موارد مشکوک به ترتیب زمان.
+  /// نیازمند مسیر `GET /admin/events/{code}/attendees/{id}/timeline` در افزونه.
+  Future<List<Map<String, dynamic>>> loadTimeline(String attendeeId) async {
+    final r = await api.get('/admin/events/$eventCode/attendees/$attendeeId/timeline');
+    final list = r is Map ? (r['events'] as List? ?? const []) : (r as List);
+    return list.map((e) => (e as Map).cast<String, dynamic>()).toList();
+  }
 }

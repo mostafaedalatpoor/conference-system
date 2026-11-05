@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../brand.dart';
 import '../main.dart';
 import '../normalize.dart';
 import '../theme/daftar.dart';
 import 'checkin.dart';
 import 'meal.dart';
 import 'status.dart';
+import 'walkin.dart';
+import '../widgets/scan_input.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
     final attention = store.pending.isNotEmpty || store.rejected.isNotEmpty;
     final statusIcon = Badge(
       isLabelVisible: attention,
@@ -36,56 +41,104 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: x.wait,
       child: const Icon(Icons.insights_rounded),
     );
-    final tabs = <({Widget page, NavigationDestination dest, String? title})>[
+    final tabs = <({Widget page, String label, Widget icon, String? title})>[
       if (store.canCheckin)
         (
           page: CheckinScreen(query: _checkinQuery),
-          dest: const NavigationDestination(icon: Icon(Icons.how_to_reg_rounded), label: 'پذیرش'),
+          label: 'پذیرش',
+          icon: const Icon(Icons.how_to_reg_rounded),
           title: null,
         ),
       if (store.canServe)
         (
           page: const MealScreen(),
-          dest: const NavigationDestination(icon: Icon(Icons.restaurant_rounded), label: 'پذیرایی'),
+          label: 'پذیرایی',
+          icon: const Icon(Icons.restaurant_rounded),
           // نام وعده‌ی جاری همیشه در نوار بالا دیده می‌شود.
           title: store.selectedMeal == null ? 'پذیرایی' : 'پذیرایی — ${store.selectedMeal!.name}',
         ),
-      (
-        page: const StatusScreen(),
-        dest: NavigationDestination(icon: statusIcon, label: 'وضعیت'),
-        title: 'وضعیت',
-      ),
+      (page: const StatusScreen(), label: 'وضعیت', icon: statusIcon, title: 'وضعیت'),
     ];
     final i = _index.clamp(0, tabs.length - 1);
     final statusIndex = tabs.length - 1;
-    final title = tabs[i].title ?? (store.eventName.isEmpty ? 'کنفرانس' : store.eventName);
+    final title = tabs[i].title ?? (store.eventName.isEmpty ? appName : store.eventName);
+    // از ۶۰۰px به بالا (ویندوز، تبلت): ناوبری سه‌گزینه‌ای بالا با F1 تا F3 به‌جای نوار پایین.
+    final wide = MediaQuery.sizeOf(context).width >= 600;
     // اگر نیرو فقط یک تب کاری دارد، نوار پایین حذف می‌شود و «وضعیت» از نشانگر همگام‌سازی باز می‌شود.
     final showNav = tabs.length > 2;
+    void go(int v) {
+      if (v < tabs.length) setState(() => _index = v);
+    }
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: i == statusIndex && tabs.length == 2
-            ? IconButton(
-                tooltip: 'برگشت',
-                icon: const BackButtonIcon(),
-                onPressed: () => setState(() => _index = 0),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.f1): () => go(0),
+        const SingleActivator(LogicalKeyboardKey.f2): () => go(1),
+        const SingleActivator(LogicalKeyboardKey.f3): () => go(2),
+        const SingleActivator(LogicalKeyboardKey.f4): () => ScanFocus.request(),
+        const SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
+          if (!store.canCheckin) return;
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => WalkinScreen(initialName: _checkinQuery.text.trim()),
+          ));
+        },
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: i == statusIndex && tabs.length == 2
+              ? IconButton(
+                  tooltip: 'برگشت',
+                  icon: const BackButtonIcon(),
+                  onPressed: () => setState(() => _index = 0),
+                )
+              : null,
+          title: Text(title, overflow: TextOverflow.ellipsis),
+          actions: [
+            SyncPill(onOpenStatus: () => setState(() => _index = statusIndex)),
+            const SizedBox(width: DaftarSize.space2),
+          ],
+          bottom: wide && showNav
+              ? PreferredSize(
+                  preferredSize: const Size.fromHeight(56),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space2),
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: SegmentedButton<int>(
+                        showSelectedIcon: false,
+                        segments: [
+                          for (var k = 0; k < tabs.length; k++)
+                            ButtonSegment(
+                              value: k,
+                              icon: tabs[k].icon,
+                              label: Row(mainAxisSize: MainAxisSize.min, children: [
+                                Text(tabs[k].label),
+                                const SizedBox(width: DaftarSize.space2),
+                                Text('F${k + 1}',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: k == i ? x.onAction.withValues(alpha: .7) : x.inkMuted,
+                                    )),
+                              ]),
+                            ),
+                        ],
+                        selected: {i},
+                        onSelectionChanged: (v) => go(v.first),
+                      ),
+                    ),
+                  ),
+                )
+              : null,
+        ),
+        // فقط صفحه‌ی فعال ساخته می‌شود تا دوربین پذیرایی در پس‌زمینه روشن نماند.
+        body: KeyedSubtree(key: ValueKey(i), child: tabs[i].page),
+        bottomNavigationBar: showNav && !wide
+            ? NavigationBar(
+                selectedIndex: i,
+                onDestinationSelected: go,
+                destinations: [for (final t in tabs) NavigationDestination(icon: t.icon, label: t.label)],
               )
             : null,
-        title: Text(title, overflow: TextOverflow.ellipsis),
-        actions: [
-          SyncPill(onOpenStatus: () => setState(() => _index = statusIndex)),
-          const SizedBox(width: DaftarSize.space2),
-        ],
       ),
-      // فقط صفحه‌ی فعال ساخته می‌شود تا دوربین پذیرایی در پس‌زمینه روشن نماند.
-      body: KeyedSubtree(key: ValueKey(i), child: tabs[i].page),
-      bottomNavigationBar: showNav
-          ? NavigationBar(
-              selectedIndex: i,
-              onDestinationSelected: (v) => setState(() => _index = v),
-              destinations: [for (final t in tabs) t.dest],
-            )
-          : null,
     );
   }
 }

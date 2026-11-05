@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'screens/home.dart';
 import 'screens/setup.dart';
+import 'brand.dart';
 import 'store.dart';
 import 'theme/daftar.dart';
 
@@ -30,7 +31,7 @@ class StaffApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'رویداد یار',
+      title: appName,
       debugShowCheckedModeBanner: false,
       locale: const Locale('fa'),
       supportedLocales: const [Locale('fa'), Locale('en')],

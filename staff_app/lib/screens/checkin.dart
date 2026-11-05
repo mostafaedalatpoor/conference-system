@@ -7,14 +7,21 @@ import '../normalize.dart';
 import '../store.dart';
 import '../theme/daftar.dart';
 import '../theme/widgets.dart';
+import '../widgets/scan_input.dart';
 import 'scanner.dart';
 import 'walkin.dart';
 
+/// عرض‌های چیدمان (bp-medium، bp-expanded).
+const bpMedium = 600.0;
+const bpExpanded = 1024.0;
+
 /// پذیرش: جستجوی زنده ← تیک ← تحویل کارت ← نفر بعدی.
+/// زیر ۱۰۲۴px باتم‌شیت؛ از ۱۰۲۴px به بالا (ویندوز) پنل جزئیات ثابت ۴۴۰px و کار با صفحه‌کلید.
 class CheckinScreen extends StatefulWidget {
   /// متن جستجو بالادستی نگه داشته می‌شود تا با تعویض تب از بین نرود.
   final TextEditingController? query;
-  const CheckinScreen({super.key, this.query});
+  final FocusNode? focusNode;
+  const CheckinScreen({super.key, this.query, this.focusNode});
 
   @override
   State<CheckinScreen> createState() => _CheckinScreenState();
@@ -22,138 +29,289 @@ class CheckinScreen extends StatefulWidget {
 
 class _CheckinScreenState extends State<CheckinScreen> {
   late final TextEditingController _q = widget.query ?? TextEditingController();
-  final _focus = FocusNode();
+  late final FocusNode _focus = widget.focusNode ?? FocusNode();
+  int _selected = 0;
+
+  /// پنل دسکتاپ: فردی که نمایش داده می‌شود و اینکه همین الان پذیرش شده یا نه.
+  String? _paneId;
+  bool _paneDone = false;
 
   @override
   void dispose() {
     if (widget.query == null) _q.dispose();
-    _focus.dispose();
+    if (widget.focusNode == null) _focus.dispose();
     super.dispose();
   }
 
   /// «نفر بعدی»: جستجو پاک و دوباره فوکوس می‌شود.
   void _next() {
-    setState(_q.clear);
+    setState(() {
+      _q.clear();
+      _selected = 0;
+      _paneId = null;
+      _paneDone = false;
+    });
     _focus.requestFocus();
   }
 
-  void _open(Attendee a) => showAttendeeSheet(context, a, onNext: _next);
+  bool get _wide => MediaQuery.sizeOf(context).width >= bpExpanded;
+
+  void _open(Attendee a) {
+    if (_wide) {
+      setState(() {
+        _paneId = a.id;
+        _paneDone = false;
+      });
+      _focus.requestFocus();
+    } else {
+      showAttendeeSheet(context, a, onNext: _next);
+    }
+  }
+
+  void _notFound(String token) {
+    final store = StoreScope.read(context);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(store.cards.containsKey(token) ? 'این کارت رزرو هنوز به کسی وصل نشده.' : 'این کارت در لیست نیست.'),
+    ));
+  }
 
   Future<void> _scanToFind() async {
     final store = StoreScope.read(context);
     final token = await ScannerPage.scan(context);
     if (token == null || !mounted) return;
     final a = store.attendeeForToken(token);
+    if (a == null) return _notFound(token);
+    _open(a);
+  }
+
+  /// اسکن با بارکدخوان (ویندوز).
+  bool _onWedgeScan(String raw) {
+    final store = StoreScope.read(context);
+    final token = tokenFromScan(raw);
+    if (token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('این QR مال کارت کنفرانس نیست.')));
+      return false;
+    }
+    final a = store.attendeeForToken(token);
     if (a == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(store.cards.containsKey(token) ? 'این کارت رزرو هنوز به کسی وصل نشده.' : 'این کارت در لیست نیست.'),
-      ));
-      return;
+      _notFound(token);
+      return true;
     }
     _open(a);
+    return true;
   }
 
   void _walkin() => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => WalkinScreen(initialName: _q.text.trim()),
       ));
 
+  /// نتایج جستجو؛ شماره‌ی کارت («۲۱۳» یا «R5001») هم پیدا می‌شود.
+  List<Attendee> _results(AppStore store) {
+    final out = store.search(_q.text);
+    final n = int.tryParse(latinDigits(_q.text.trim()).replaceFirst(RegExp(r'^[Rrر]\s*'), ''));
+    if (n != null && store.usesCards) {
+      for (final c in store.cards.values) {
+        if (c.serial != n) continue;
+        final a = store.attendeeForToken(c.token);
+        if (a != null && !out.contains(a)) out.insert(0, a);
+      }
+    }
+    return out;
+  }
+
+  /// Enter در دسکتاپ: تیک پذیرش نفر انتخاب‌شده؛ در حالت «انجام شد»، نفر بعدی.
+  void _enter(AppStore store, List<Attendee> results) {
+    if (!_wide) {
+      if (results.length == 1) _open(results.first);
+      return;
+    }
+    final a = _paneId != null ? store.attendees[_paneId] : (results.isEmpty ? null : results[_selected.clamp(0, results.length - 1)]);
+    if (a == null) return;
+    if (_paneDone || store.checkins[a.id] != null && _paneId == a.id) return _next();
+    if (store.checkins[a.id] != null) {
+      setState(() => _paneId = a.id);
+      return;
+    }
+    store.checkin(a);
+    HapticFeedback.lightImpact();
+    setState(() {
+      _paneId = a.id;
+      _paneDone = true;
+    });
+    _focus.requestFocus();
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent e, List<Attendee> results) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
+    if (e.logicalKey == LogicalKeyboardKey.escape) {
+      _next();
+      return KeyEventResult.handled;
+    }
+    if (!_wide || results.isEmpty) return KeyEventResult.ignored;
+    if (e.logicalKey == LogicalKeyboardKey.arrowDown || e.logicalKey == LogicalKeyboardKey.arrowUp) {
+      final d = e.logicalKey == LogicalKeyboardKey.arrowDown ? 1 : -1;
+      setState(() {
+        _selected = (_selected + d).clamp(0, results.length - 1);
+        _paneId = null;
+        _paneDone = false;
+      });
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final q = _q.text.trim();
-    final results = store.search(_q.text);
+    final results = _results(store);
     final x = DaftarColors.of(context);
+    final wide = _wide;
+    final desk = !AppStore.hasCamera;
+    final selected = results.isEmpty ? null : results[_selected.clamp(0, results.length - 1)];
+    final paneAttendee = _paneId != null ? store.attendees[_paneId] : (q.isEmpty ? null : selected);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space3, DaftarSize.space4, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _q,
-                  focusNode: _focus,
-                  autofocus: true,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    hintText: 'نام، نام خانوادگی یا موبایل',
-                    suffixIcon: _q.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'پاک کردن',
-                            icon: const Icon(Icons.close_rounded),
-                            onPressed: _next,
-                          ),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: (_) {
-                    if (results.length == 1) _open(results.first);
-                  },
+    final search = Padding(
+      padding: const EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space3, DaftarSize.space4, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ScanInputField(
+              controller: _q,
+              focusNode: _focus,
+              scanEnabled: store.scanEnabled && desk,
+              hint: store.usesCards ? 'نام، موبایل یا شماره‌ی کارت' : 'نام، نام خانوادگی یا موبایل',
+              onChanged: (_) => setState(() {
+                _selected = 0;
+                if (!_paneDone) _paneId = null;
+              }),
+              onSubmitted: (_) => _enter(store, results),
+              onScan: _onWedgeScan,
+            ),
+          ),
+          if (store.cameraScan) ...[
+            const SizedBox(width: DaftarSize.space2),
+            Tooltip(
+              message: 'اسکن کارت',
+              child: SizedBox.square(
+                dimension: DaftarSize.tapLg,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size.square(56)),
+                  onPressed: _scanToFind,
+                  child: const Icon(Icons.qr_code_scanner_rounded, semanticLabel: 'اسکن کارت'),
                 ),
               ),
-              const SizedBox(width: DaftarSize.space2),
-              Tooltip(
-                message: 'اسکن کارت',
-                child: SizedBox.square(
-                  dimension: DaftarSize.tapLg,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size.square(56)),
-                    onPressed: _scanToFind,
-                    child: const Icon(Icons.qr_code_scanner_rounded, semanticLabel: 'اسکن کارت'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space3, DaftarSize.space4, DaftarSize.space2),
-          child: Meter(
-            label: 'پذیرش‌شده',
-            value: store.checkins.length,
-            total: store.attendees.length,
-            format: faDigits,
-          ),
-        ),
-        Divider(color: x.line),
-        Expanded(
-          child: q.isEmpty
-              ? _Recent(onOpen: _open)
-              : results.isEmpty
-                  ? SingleChildScrollView(
-                      child: EmptyState(
-                        icon: Icons.person_search_rounded,
-                        title: 'کسی با «$q» پیدا نشد',
-                        hint: 'املای دیگر یا شماره‌ی موبایل را امتحان کنید.',
-                        action: OutlinedButton.icon(
-                          icon: const Icon(Icons.person_add_rounded),
-                          label: const Text('ثبت‌نام در محل'),
-                          onPressed: _walkin,
-                        ),
-                      ),
-                    )
-                  : ListView(
-                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                      children: [
-                        for (final a in results) AttendeeRow(a: a, query: q, onTap: () => _open(a)),
-                        Padding(
-                          padding: const EdgeInsets.all(DaftarSize.space4),
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.person_add_rounded),
-                            label: const Text('پیدا نشد؟ ثبت‌نام در محل'),
-                            onPressed: _walkin,
-                          ),
-                        ),
-                      ],
-                    ),
-        ),
-      ],
+            ),
+          ],
+        ],
+      ),
     );
+
+    final list = q.isEmpty
+        ? _Recent(onOpen: _open)
+        : results.isEmpty
+            ? SingleChildScrollView(
+                child: EmptyState(
+                  icon: Icons.person_search_rounded,
+                  title: 'کسی با «$q» پیدا نشد',
+                  hint: 'املای دیگر یا شماره‌ی موبایل را امتحان کنید.',
+                  action: OutlinedButton.icon(
+                    icon: const Icon(Icons.person_add_rounded),
+                    label: const Text('ثبت‌نام در محل'),
+                    onPressed: _walkin,
+                  ),
+                ),
+              )
+            : ListView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                children: [
+                  for (var i = 0; i < results.length; i++)
+                    AttendeeRow(
+                      a: results[i],
+                      query: q,
+                      selected: wide && (paneAttendee?.id == results[i].id),
+                      onTap: () {
+                        setState(() => _selected = i);
+                        _open(results[i]);
+                      },
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.all(DaftarSize.space4),
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.person_add_rounded),
+                      label: const Text('پیدا نشد؟ ثبت‌نام در محل'),
+                      onPressed: _walkin,
+                    ),
+                  ),
+                ],
+              );
+
+    final column = Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (n, e) => _onKey(n, e, results),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          search,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space3, DaftarSize.space4, DaftarSize.space2),
+            child: Meter(
+              label: 'پذیرش‌شده',
+              value: store.checkins.length,
+              total: store.attendees.length,
+              format: faDigits,
+            ),
+          ),
+          Divider(color: x.line),
+          Expanded(child: list),
+          if (wide)
+            Container(
+              padding: const EdgeInsets.all(DaftarSize.space3),
+              decoration: BoxDecoration(border: Border(top: BorderSide(color: x.line))),
+              child: KeyHints([
+                ('Enter', 'تیک پذیرش / نفر بعدی'),
+                ('↑ ↓', 'انتخاب'),
+                ('Esc', 'پاک کردن'),
+                ('Ctrl+N', 'ثبت‌نام در محل'),
+                if (store.scanEnabled && desk) ('F4', 'ورودی اسکن'),
+              ]),
+            ),
+        ],
+      ),
+    );
+
+    if (!wide) return column;
+    return Row(children: [
+      Expanded(child: column),
+      Container(
+        width: 440,
+        decoration: BoxDecoration(
+          color: x.surface,
+          border: BorderDirectional(start: BorderSide(color: x.line)),
+        ),
+        child: paneAttendee == null
+            ? const Center(
+                child: EmptyState(
+                  icon: Icons.badge_rounded,
+                  title: 'کسی انتخاب نشده',
+                  hint: 'نام را بنویسید یا کارت را اسکن کنید؛ Enter تیک پذیرش می‌زند.',
+                ),
+              )
+            : SingleChildScrollView(
+                padding: const EdgeInsets.only(top: DaftarSize.space5),
+                child: AttendeePanel(
+                  key: ValueKey(paneAttendee.id),
+                  attendeeId: paneAttendee.id,
+                  done: _paneDone,
+                  onCheckin: () => _enter(store, results),
+                  onNext: _next,
+                  enterHints: true,
+                ),
+              ),
+      ),
+    ]);
   }
 }
 
@@ -174,10 +332,12 @@ class _Recent extends StatelessWidget {
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
-        const EmptyState(
+        EmptyState(
           icon: Icons.search_rounded,
           title: 'چند حرف از نام یا موبایل را بنویسید',
-          hint: 'یا کارت را با دکمه‌ی کنار جستجو اسکن کنید.',
+          hint: store.cameraScan
+              ? 'یا کارت را با دکمه‌ی کنار جستجو اسکن کنید.'
+              : (store.scanEnabled ? 'اگر بارکدخوان وصل است، کارت را اسکن کنید.' : null),
         ),
         if (mine.isNotEmpty) ...[
           Padding(
@@ -205,7 +365,8 @@ class AttendeeRow extends StatelessWidget {
   final Attendee a;
   final String query;
   final VoidCallback onTap;
-  const AttendeeRow({super.key, required this.a, required this.onTap, this.query = ''});
+  final bool selected;
+  const AttendeeRow({super.key, required this.a, required this.onTap, this.query = '', this.selected = false});
 
   @override
   Widget build(BuildContext context) {
@@ -220,7 +381,7 @@ class AttendeeRow extends StatelessWidget {
     ].where((s) => s.isNotEmpty).join(' · ');
 
     return Material(
-      color: x.surface,
+      color: selected ? x.stampSoft : x.surface,
       child: InkWell(
         onTap: onTap,
         child: Container(
@@ -229,8 +390,10 @@ class AttendeeRow extends StatelessWidget {
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
           child: Row(
             children: [
-              _LetterBox(letter: batchLetter(a), done: state != null),
-              const SizedBox(width: DaftarSize.space3),
+              if (store.usesCards) ...[
+                _LetterBox(letter: batchLetter(a), done: state != null),
+                const SizedBox(width: DaftarSize.space3),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -356,23 +519,57 @@ class _AttendeeSheet extends StatefulWidget {
 class _AttendeeSheetState extends State<_AttendeeSheet> {
   bool _done = false;
 
-  void _checkin(AppStore store, Attendee a) {
-    store.checkin(a);
-    HapticFeedback.lightImpact();
-    setState(() => _done = true);
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: AttendeePanel(
+        attendeeId: widget.attendeeId,
+        done: _done,
+        onCheckin: () {
+          final store = StoreScope.read(context);
+          final a = store.attendees[widget.attendeeId];
+          if (a == null) return;
+          store.checkin(a);
+          HapticFeedback.lightImpact();
+          setState(() => _done = true);
+        },
+        onNext: () => Navigator.of(context).pop(true),
+      ),
+    );
   }
+}
+
+/// محتوای پذیرش یک نفر؛ در موبایل داخل باتم‌شیت و در ویندوز در پنل ثابت کنار فهرست.
+class AttendeePanel extends StatelessWidget {
+  final String attendeeId;
+  final bool done;
+  final VoidCallback onCheckin;
+  final VoidCallback onNext;
+
+  /// در ویندوز کنار دکمه‌ها نوشته می‌شود که Enter همان کار را می‌کند.
+  final bool enterHints;
+  const AttendeePanel({
+    super.key,
+    required this.attendeeId,
+    required this.done,
+    required this.onCheckin,
+    required this.onNext,
+    this.enterHints = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final a = store.attendees[widget.attendeeId];
+    final a = store.attendees[attendeeId];
     if (a == null) return const SizedBox.shrink();
     final state = store.checkins[a.id];
-    final card = store.cardOf(a.id);
+    final cards = store.usesCards;
+    final card = cards ? store.cardOf(a.id) : null;
     final theme = Theme.of(context);
     final x = DaftarColors.of(context);
     final letter = batchLetter(a);
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final enter = enterHints ? ' (Enter)' : '';
 
     final tags = [
       store.typeName(a.registrationTypeId),
@@ -387,7 +584,7 @@ class _AttendeeSheetState extends State<_AttendeeSheet> {
     ].where((d) => d.$2.isNotEmpty);
 
     final Widget body;
-    if (_done) {
+    if (done) {
       body = Column(
         key: const ValueKey('done'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -395,16 +592,20 @@ class _AttendeeSheetState extends State<_AttendeeSheet> {
           Notice(
             tone: NoticeTone.go,
             title: 'پذیرش شد',
-            text: card == null ? 'کارت این نفر در لیست نیست.' : 'کارت را از دسته‌ی «$letter» بدهید.',
+            text: !cards
+                ? 'خوش آمدید.'
+                : (card == null ? 'کارت این نفر در لیست نیست.' : 'کارت را از دسته‌ی «$letter» بدهید.'),
           ),
-          const SizedBox(height: DaftarSize.space4),
-          _CardPlate(letter: letter, serial: card?.serial, large: true),
+          if (cards) ...[
+            const SizedBox(height: DaftarSize.space4),
+            _CardPlate(letter: letter, serial: card?.serial, large: true),
+          ],
           const SizedBox(height: DaftarSize.space5),
           FilledButton.icon(
             style: daftarWideStyle(context, xl: true),
             icon: const Icon(Icons.arrow_back_rounded),
-            label: const Text('نفر بعدی'),
-            onPressed: () => Navigator.of(context).pop(true),
+            label: Text('نفر بعدی$enter'),
+            onPressed: onNext,
           ),
         ],
       );
@@ -420,15 +621,17 @@ class _AttendeeSheetState extends State<_AttendeeSheet> {
             title: 'قبلاً پذیرش شده',
             text: ['ساعت ${hm(state.at)}', if (by != null) 'نیرو: $by'].join('، '),
           ),
-          const SizedBox(height: DaftarSize.space2),
-          Text('کارت گم‌شده دوباره صادر نمی‌شود.', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
-          const SizedBox(height: DaftarSize.space4),
-          _CardPlate(letter: letter, serial: card?.serial),
+          if (cards) ...[
+            const SizedBox(height: DaftarSize.space2),
+            Text('کارت گم‌شده دوباره صادر نمی‌شود.', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+            const SizedBox(height: DaftarSize.space4),
+            _CardPlate(letter: letter, serial: card?.serial),
+          ],
           const SizedBox(height: DaftarSize.space5),
           FilledButton(
             style: daftarWideStyle(context),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('نفر بعدی'),
+            onPressed: onNext,
+            child: Text('نفر بعدی$enter'),
           ),
           if (store.isAdmin) ...[
             const SizedBox(height: DaftarSize.space2),
@@ -453,19 +656,21 @@ class _AttendeeSheetState extends State<_AttendeeSheet> {
         key: const ValueKey('ready'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _CardPlate(letter: letter, serial: card?.serial),
-          const SizedBox(height: DaftarSize.space5),
+          if (cards) ...[
+            _CardPlate(letter: letter, serial: card?.serial),
+            const SizedBox(height: DaftarSize.space5),
+          ],
           FilledButton.icon(
             style: daftarGoStyle(context),
             icon: const Icon(Icons.check_rounded),
-            label: const Text('تیک پذیرش'),
-            onPressed: () => _checkin(store, a),
+            label: Text('تیک پذیرش$enter'),
+            onPressed: onCheckin,
           ),
         ],
       );
     }
 
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(DaftarSize.space5, 0, DaftarSize.space5, DaftarSize.space5),
       child: Column(
         mainAxisSize: MainAxisSize.min,

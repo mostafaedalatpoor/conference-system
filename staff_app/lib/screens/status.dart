@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../errors.dart';
+import '../brand.dart';
 import '../main.dart';
 import '../normalize.dart';
 import '../theme/daftar.dart';
@@ -188,6 +189,14 @@ class _StatusScreenState extends State<StatusScreen> {
           style: TextButton.styleFrom(foregroundColor: x.stop),
           onPressed: _logout,
           child: const Text('خروج از این رویداد'),
+        ),
+        const SizedBox(height: DaftarSize.space4),
+        const AboutCard(
+          appName: appName,
+          appNameLatin: appNameLatin,
+          version: appVersion,
+          maker: makerFull,
+          website: makerWebsite,
         ),
       ],
     );

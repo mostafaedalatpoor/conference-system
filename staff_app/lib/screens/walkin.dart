@@ -90,6 +90,9 @@ class _WalkinScreenState extends State<WalkinScreen> {
   /// شماره‌ی روی کارت رزرو «R5001» چاپ می‌شود؛ R، r و ر اول شماره نادیده گرفته می‌شود.
   void _setCardFromSerial(String s) {
     final store = StoreScope.read(context);
+    // بارکدخوان روی ویندوز همین فیلد را پر می‌کند: اگر لینک کارت است، همان را بخوان.
+    final scanned = tokenFromScan(latinizeLayout(s));
+    if (scanned != null) return _setCardFromToken(scanned);
     final cleaned = latinDigits(s.trim()).replaceFirst(RegExp(r'^[Rrر]\s*'), '');
     final n = int.tryParse(cleaned);
     if (n == null) {
@@ -118,13 +121,17 @@ class _WalkinScreenState extends State<WalkinScreen> {
       _firstError = _first.text.trim().isEmpty ? 'نام را بنویسید.' : null;
       _lastError = _last.text.trim().isEmpty ? 'نام خانوادگی را بنویسید.' : null;
       _typeError = _typeId == null ? 'نوع ثبت‌نامی تعریف نشده است؛ از مدیر بخواهید.' : null;
-      if (_card == null) _cardError ??= 'یک کارت رزرو اسکن کنید یا شماره‌اش را بنویسید.';
+      if (_card == null && store.usesCards) {
+        _cardError ??= store.cameraScan
+            ? 'یک کارت رزرو اسکن کنید یا شماره‌اش را بنویسید.'
+            : 'شماره‌ی کارت رزرو را بنویسید.';
+      }
     });
     // فوکوس خودکار روی اولین فیلد مشکل‌دار.
     if (_firstError != null) return _firstFocus.requestFocus();
     if (_lastError != null) return _lastFocus.requestFocus();
     if (_typeError != null) return;
-    if (_card == null) return _serialFocus.requestFocus();
+    if (_card == null && store.usesCards) return _serialFocus.requestFocus();
 
     final dup = store.findByMobile(_mobile.text);
     if (dup != null) {
@@ -147,12 +154,14 @@ class _WalkinScreenState extends State<WalkinScreen> {
       mobile: _mobile.text,
       email: _email.text,
       registrationTypeId: _typeId!,
-      card: _card!,
+      card: store.usesCards ? _card : null,
     );
     if (!mounted) return;
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('${a.fullName} ثبت و پذیرش شد — کارت رزرو ${faDigits(_card!.serial)}'),
+      content: Text(_card == null || !store.usesCards
+          ? '${a.fullName} ثبت و پذیرش شد.'
+          : '${a.fullName} ثبت و پذیرش شد — کارت رزرو ${faDigits(_card!.serial)}'),
     ));
   }
 
@@ -167,7 +176,10 @@ class _WalkinScreenState extends State<WalkinScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('ثبت‌نام در محل')),
       body: ListView(
-        padding: const EdgeInsets.all(DaftarSize.space4),
+        padding: EdgeInsets.symmetric(
+          horizontal: ((MediaQuery.sizeOf(context).width - 560) / 2).clamp(DaftarSize.space4, double.infinity),
+          vertical: DaftarSize.space4,
+        ),
         children: [
           DaftarField(
             label: 'نام',
@@ -237,6 +249,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
                     onChanged: (v) => setState(() => _typeId = v),
                   ),
           ),
+          if (store.usesCards) ...[
           const SizedBox(height: DaftarSize.space5),
           Row(children: [
             Expanded(child: Text('کارت رزرو', style: theme.textTheme.titleMedium)),
@@ -276,7 +289,9 @@ class _WalkinScreenState extends State<WalkinScreen> {
             DaftarField(
               label: 'شماره‌ی روی کارت',
               error: _cardError,
-              helper: 'کارت را اسکن کنید یا شماره را بنویسید (R5001 یا 5001).',
+              helper: store.cameraScan
+                  ? 'کارت را اسکن کنید یا شماره را بنویسید (R5001 یا 5001).'
+                  : 'شماره‌ی روی کارت را بنویسید (R5001 یا 5001).',
               child: Row(
                 children: [
                   Expanded(
@@ -297,20 +312,23 @@ class _WalkinScreenState extends State<WalkinScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: DaftarSize.space2),
-                  OutlinedButton.icon(
-                    onPressed: _scan,
-                    icon: const Icon(Icons.qr_code_scanner_rounded),
-                    label: const Text('اسکن'),
-                  ),
+                  if (store.cameraScan) ...[
+                    const SizedBox(width: DaftarSize.space2),
+                    OutlinedButton.icon(
+                      onPressed: _scan,
+                      icon: const Icon(Icons.qr_code_scanner_rounded),
+                      label: const Text('اسکن'),
+                    ),
+                  ],
                 ],
               ),
             ),
+          ],
           const SizedBox(height: DaftarSize.space6),
           FilledButton.icon(
             style: daftarGoStyle(context),
             icon: const Icon(Icons.how_to_reg_rounded),
-            label: const Text('ثبت، پذیرش و تحویل کارت'),
+            label: Text(store.usesCards ? 'ثبت، پذیرش و تحویل کارت' : 'ثبت و پذیرش'),
             onPressed: _save,
           ),
         ],

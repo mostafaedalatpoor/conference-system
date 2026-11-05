@@ -12,3 +12,5 @@ admin_app/windows/
 admin_app/test/
 admin_app/assets/fonts/*.ttf
 staff_app/assets/fonts/*.ttf
+staff_app/windows/
+admin_app/android/

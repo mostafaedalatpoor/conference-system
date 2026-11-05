@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import 'brand.dart';
 import 'normalize.dart';
 import 'state.dart';
 
@@ -41,7 +42,12 @@ Future<Uint8List> buildCardsPdf({
   final back = backImage == null ? null : pw.MemoryImage(backImage);
   final color = PdfColor.fromHex(t.nameColor.startsWith('#') ? t.nameColor : '#${t.nameColor}');
 
-  final doc = pw.Document(title: 'کارت‌های ${s.event?.name ?? ''}');
+  // سازنده فقط در مشخصات فایل می‌آید، نه روی کارت.
+  final doc = pw.Document(
+    title: 'کارت‌های ${s.event?.name ?? ''}',
+    creator: '$productLatin $appVersion',
+    producer: '$productLatin — NewVisionteam ($makerWebsite)',
+  );
 
   pw.Widget bg(pw.MemoryImage? img) =>
       img == null ? pw.Container(color: PdfColors.white) : pw.Image(img, fit: pw.BoxFit.cover, width: w, height: h);
@@ -85,25 +91,27 @@ Future<Uint8List> buildCardsPdf({
     ));
   }
 
-  void backPage(String token, String serialLabel) {
+  void backPage(String qrData, String serialLabel, String hint) {
     final size = t.qrSizeMm * PdfPageFormat.mm;
     final cx = w * t.qrX / 100;
     final cy = h * t.qrY / 100;
+    const quiet = 3 * PdfPageFormat.mm;
     doc.addPage(pw.Page(
       pageFormat: format,
       build: (_) => pw.Stack(children: [
         pw.Positioned(left: 0, top: 0, right: 0, bottom: 0, child: bg(back)),
+        // QR سیاه روی سفید خالص با حاشیه‌ی سکوت حدود ۳ میلی‌متر (۴ ماژول) دورش.
         pw.Positioned(
-          left: cx - size / 2,
-          top: cy - size / 2,
+          left: cx - size / 2 - quiet,
+          top: cy - size / 2 - quiet,
           child: pw.Container(
             color: PdfColors.white,
-            padding: pw.EdgeInsets.all(size * 0.06),
+            padding: pw.EdgeInsets.all(quiet),
             child: pw.BarcodeWidget(
               barcode: pw.Barcode.qrCode(),
-              data: s.qrUrl(token),
-              width: size * 0.88,
-              height: size * 0.88,
+              data: qrData,
+              width: size,
+              height: size,
               drawText: false,
             ),
           ),
@@ -111,7 +119,7 @@ Future<Uint8List> buildCardsPdf({
         if (t.showSerial)
           pw.Positioned(
             left: cx - size,
-            top: cy + size / 2 + 2,
+            top: cy + size / 2 + quiet,
             child: pw.SizedBox(
               width: size * 2,
               child: pw.Text(serialLabel,
@@ -119,6 +127,18 @@ Future<Uint8List> buildCardsPdf({
                   style: pw.TextStyle(font: fonts.semiBold, fontSize: 8, color: _cardInk)),
             ),
           ),
+        // خط راهنمای زیر QR: اسکن با دوربین معمولی چه می‌کند (۷pt).
+        pw.Positioned(
+          left: cx - size,
+          top: cy + size / 2 + quiet + (t.showSerial ? 10 : 0),
+          child: pw.SizedBox(
+            width: size * 2,
+            child: pw.Text(hint,
+                textDirection: pw.TextDirection.rtl,
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(font: fonts.regular, fontSize: 7, color: _cardInk)),
+          ),
+        ),
       ]),
     ));
   }
@@ -126,18 +146,22 @@ Future<Uint8List> buildCardsPdf({
   for (final p in people) {
     final role = t.showRole ? s.roleName(p.roleCode) : '';
     frontPage(p.displayName, role.isNotEmpty ? role : null);
-    backPage(p.token!, faDigits(p.serial ?? ''));
+    backPage(s.qrDataFor(p), faDigits(p.serial ?? ''), s.qrHint(reserve: false));
   }
   for (final r in reserves) {
     frontPage(null, null);
-    backPage(r.token, 'R${faDigits(r.serial)}');
+    backPage(s.qrUrl(r.token), 'R${faDigits(r.serial)}', s.qrHint(reserve: true));
   }
   return doc.save();
 }
 
 /// لیست پشتیبان کاغذی: پذیرش الفبایی، و برای هر وعده لیست کسانی که حق دارند.
 Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts fonts}) async {
-  final doc = pw.Document(title: 'لیست پشتیبان ${s.event?.name ?? ''}');
+  final doc = pw.Document(
+    title: 'لیست پشتیبان ${s.event?.name ?? ''}',
+    creator: '$productLatin $appVersion',
+    producer: '$productLatin — NewVisionteam ($makerWebsite)',
+  );
   final people = s.sortedPeople;
   final rtl = pw.TextDirection.rtl;
 
@@ -173,8 +197,20 @@ Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts f
 
   final theme = pw.PageTheme(pageFormat: PdfPageFormat.a4, margin: const pw.EdgeInsets.all(28), textDirection: rtl);
 
+  // پانویس هر صفحه کنار شماره‌ی صفحه: «رویدادیار · newvisionteam.ir».
+  pw.Widget footer(pw.Context c) => pw.Padding(
+        padding: const pw.EdgeInsets.only(top: 8),
+        child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+          pw.Text('صفحه‌ی ${faDigits(c.pageNumber)} از ${faDigits(c.pagesCount)}',
+              textDirection: rtl, style: pw.TextStyle(font: fonts.regular, fontSize: 8, color: PdfColors.grey700)),
+          pw.Text('$productName · $makerWebsite',
+              textDirection: rtl, style: pw.TextStyle(font: fonts.regular, fontSize: 8, color: PdfColors.grey700)),
+        ]),
+      );
+
   doc.addPage(pw.MultiPage(
     pageTheme: theme,
+    footer: footer,
     build: (_) => [
       title('لیست پذیرش — ${s.event?.name ?? ''}'),
       table(
@@ -203,6 +239,7 @@ Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts f
     final entitled = people.where((p) => m.types.contains(p.typeCode) || (p.roleCode != null && m.roles.contains(p.roleCode))).toList();
     doc.addPage(pw.MultiPage(
       pageTheme: theme,
+      footer: footer,
       build: (_) => [
         title('${m.name} — ${faDigits(entitled.length)} نفر'),
         table(

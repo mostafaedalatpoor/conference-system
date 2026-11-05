@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../main.dart';
@@ -9,6 +10,7 @@ import '../normalize.dart';
 import '../store.dart';
 import '../theme/daftar.dart';
 import '../theme/widgets.dart';
+import '../widgets/scan_input.dart';
 
 /// پذیرایی: اسکن پشت‌سرهم کارت‌ها برای وعده‌ی جاری.
 /// اگر فرد حق وعده را داشته باشد و هنوز نگرفته باشد، تحویل همان لحظه ثبت می‌شود.
@@ -26,6 +28,7 @@ class _Result {
   final String title;
   final String detail;
   final int seq;
+  final DateTime at = DateTime.now();
   _Result(this.kind, this.title, this.detail, this.seq);
 }
 
@@ -57,12 +60,23 @@ class _MealScreenState extends State<MealScreen> {
   /// وعده‌ی روز دیگری که نیرو در همین اجرای اپ عمداً تأیید کرده.
   static int? _confirmedOtherDay;
 
-  final _controller = MobileScannerController(detectionSpeed: DetectionSpeed.normal);
+  // دوربین فقط روی گوشی و فقط وقتی لازم است ساخته می‌شود؛ ویندوز پلاگین دوربین ندارد.
+  MobileScannerController? _cam;
+  MobileScannerController get _controller =>
+      _cam ??= MobileScannerController(detectionSpeed: DetectionSpeed.normal);
   _Result? _result;
   String? _lastToken;
   DateTime _lastAt = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _clear;
   int _seq = 0;
+
+  /// ۸ نتیجه‌ی آخر برای جواب‌دادن به «من را زدی؟» (ویندوز).
+  final List<_Result> _recent = [];
+
+  // جستجوی نام (صفحه‌ی اصلی پذیرایی وقتی دوربین یا اسکن نیست)
+  final _q = TextEditingController();
+  final _focus = FocusNode();
+  int _selected = 0;
 
   @override
   void initState() {
@@ -73,7 +87,9 @@ class _MealScreenState extends State<MealScreen> {
   @override
   void dispose() {
     _clear?.cancel();
-    _controller.dispose();
+    _cam?.dispose();
+    _q.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -111,7 +127,12 @@ class _MealScreenState extends State<MealScreen> {
   void _show(_Kind kind, String title, String detail) {
     _clear?.cancel();
     _seq++;
-    setState(() => _result = _Result(kind, title, detail, _seq));
+    final r = _Result(kind, title, detail, _seq);
+    setState(() {
+      _result = r;
+      _recent.insert(0, r);
+      if (_recent.length > 8) _recent.removeLast();
+    });
     verdictHaptic(kind == _Kind.ok);
     _clear = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _result = null);
@@ -161,6 +182,67 @@ class _MealScreenState extends State<MealScreen> {
     }
   }
 
+  /// بارکدخوان روی ویندوز: همان منطق اسکن دوربین.
+  bool _onWedgeScan(String raw) {
+    final store = StoreScope.read(context);
+    final meal = store.selectedMeal;
+    if (meal == null) return false;
+    final token = tokenFromScan(raw);
+    if (token == null) {
+      _show(_Kind.unknown, 'QR ناشناخته', 'این کد مال کارت کنفرانس نیست.');
+      return false;
+    }
+    final a = store.attendeeForToken(token);
+    if (a == null) {
+      _show(_Kind.invalid, 'کارت نامعتبر',
+          store.cards.containsKey(token) ? 'کارت رزرو به کسی وصل نشده.' : 'این کارت در لیست نیست.');
+      return true;
+    }
+    _evaluate(store, a, meal);
+    return true;
+  }
+
+  /// لمس یا Enter روی یک نام: مجاز ← تأیید «تحویل شد»؛ گرفته یا شامل نیست ← فقط نتیجه.
+  Future<void> _pickByName(Attendee a) async {
+    final store = StoreScope.read(context);
+    final meal = store.selectedMeal;
+    if (meal == null) return;
+    if (store.checkMeal(a, meal).verdict == MealVerdict.ok) {
+      final ok = await confirmMealDelivery(context, a, meal);
+      if (!ok || !mounted) {
+        _focus.requestFocus();
+        return;
+      }
+    }
+    _evaluate(store, a, meal);
+    setState(() {
+      _q.clear();
+      _selected = 0;
+    });
+    _focus.requestFocus();
+  }
+
+  KeyEventResult _onKey(KeyEvent e, int count) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
+    if (e.logicalKey == LogicalKeyboardKey.escape) {
+      setState(() {
+        _q.clear();
+        _selected = 0;
+      });
+      return KeyEventResult.handled;
+    }
+    if (count == 0) return KeyEventResult.ignored;
+    if (e.logicalKey == LogicalKeyboardKey.arrowDown) {
+      setState(() => _selected = (_selected + 1).clamp(0, count - 1));
+      return KeyEventResult.handled;
+    }
+    if (e.logicalKey == LogicalKeyboardKey.arrowUp) {
+      setState(() => _selected = (_selected - 1).clamp(0, count - 1));
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   /// جستجوی نام: لمس یک نام فقط نتیجه را نشان می‌دهد؛ ثبت با دکمه‌ی «تحویل شد».
   Future<void> _searchByName() async {
     final store = StoreScope.read(context);
@@ -172,6 +254,118 @@ class _MealScreenState extends State<MealScreen> {
     if (a == null || !mounted) return;
     _lastToken = null;
     _evaluate(store, a, meal);
+  }
+
+  /// پذیرایی با جستجوی نام (ScreenMealByName)؛ روی ویندوز با بارکدخوان و ستون «اسکن‌های اخیر» (ScreenDeskMeal).
+  Widget _byNameBody(AppStore store, Meal meal) {
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    final q = _q.text.trim();
+    final results = q.isEmpty ? <Attendee>[] : store.search(_q.text, limit: 30);
+    final wide = MediaQuery.sizeOf(context).width >= 1024;
+    final desk = !AppStore.hasCamera;
+    final sel = results.isEmpty ? 0 : _selected.clamp(0, results.length - 1);
+
+    final main = Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (_, e) => _onKey(e, results.length),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space3),
+          child: ScanInputField(
+            controller: _q,
+            focusNode: _focus,
+            scanEnabled: store.scanEnabled && desk,
+            hint: 'نام، نام خانوادگی یا موبایل',
+            onChanged: (_) => setState(() => _selected = 0),
+            onSubmitted: (_) {
+              if (results.isNotEmpty) _pickByName(results[sel]);
+            },
+            onScan: _onWedgeScan,
+          ),
+        ),
+        if (_result != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space3),
+            child: ScanResultCard(
+              key: ValueKey(_result!.seq),
+              kind: _result!.kind.index,
+              title: _result!.title,
+              detail: _result!.detail,
+              seq: _result!.seq,
+              large: wide,
+            ),
+          ),
+        Divider(color: x.line),
+        Expanded(
+          child: q.isEmpty
+              ? SingleChildScrollView(
+                  child: EmptyState(
+                    icon: Icons.search_rounded,
+                    title: 'چند حرف از نام یا موبایل را بنویسید',
+                    hint: store.scanEnabled && desk
+                        ? 'اگر بارکدخوان وصل است، کارت را اسکن کنید.'
+                        : 'هر ردیف می‌گوید این نفر برای «${meal.name}» مجاز است یا نه.',
+                  ),
+                )
+              : results.isEmpty
+                  ? SingleChildScrollView(
+                      child: EmptyState(icon: Icons.person_search_rounded, title: 'کسی با «$q» پیدا نشد'))
+                  : MealByNameList(
+                      meal: meal,
+                      results: results,
+                      selected: wide ? sel : null,
+                      onTap: _pickByName,
+                    ),
+        ),
+        if (wide)
+          Container(
+            padding: const EdgeInsets.all(DaftarSize.space3),
+            decoration: BoxDecoration(border: Border(top: BorderSide(color: x.line))),
+            child: KeyHints([
+              ('Enter', 'انتخاب و تحویل'),
+              ('↑ ↓', 'جابه‌جایی'),
+              ('Esc', 'پاک کردن'),
+              if (store.scanEnabled && desk) ('F4', 'ورودی اسکن'),
+            ]),
+          ),
+      ]),
+    );
+    if (!wide) return main;
+    return Row(children: [
+      Expanded(child: main),
+      Container(
+        width: 320,
+        decoration: BoxDecoration(color: x.surface, border: BorderDirectional(start: BorderSide(color: x.line))),
+        child: ListView(padding: const EdgeInsets.all(DaftarSize.space4), children: [
+          Text('اسکن‌های اخیر', style: theme.textTheme.titleMedium),
+          const SizedBox(height: DaftarSize.space2),
+          if (_recent.isEmpty)
+            Text('هنوز کسی ثبت نشده.', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+          for (final r in _recent)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: DaftarSize.space2),
+              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(
+                  r.kind == _Kind.ok ? Icons.check_circle_rounded : (r.kind == _Kind.unknown ? Icons.help_rounded : Icons.cancel_rounded),
+                  size: 20,
+                  color: r.kind == _Kind.ok ? x.go : (r.kind == _Kind.unknown ? x.inkMuted : x.stop),
+                ),
+                const SizedBox(width: DaftarSize.space2),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(r.detail.split('\n').first, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                    Text(r.title, style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+                  ]),
+                ),
+                Text(hm(r.at), style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
+              ]),
+            ),
+        ]),
+      ),
+    ]);
   }
 
   @override
@@ -215,6 +409,9 @@ class _MealScreenState extends State<MealScreen> {
               format: faDigits,
             ),
           ),
+        if (meal != null && !store.cameraScan)
+          Expanded(child: _byNameBody(store, meal))
+        else
         Expanded(
           child: meal == null
               ? SingleChildScrollView(
@@ -280,7 +477,7 @@ class _MealScreenState extends State<MealScreen> {
                   ),
                 ),
         ),
-        if (meal != null)
+        if (meal != null && store.cameraScan)
           Padding(
             padding: const EdgeInsets.all(DaftarSize.space3),
             child: Row(
@@ -380,7 +577,17 @@ class ScanResultCard extends StatelessWidget {
   final String title;
   final String detail;
   final int seq;
-  const ScanResultCard({super.key, required this.kind, required this.title, required this.detail, required this.seq});
+
+  /// ویندوز: td-verdict ۴۴ و td-name ۲۸، از پشت میز و دو متری خوانا.
+  final bool large;
+  const ScanResultCard({
+    super.key,
+    required this.kind,
+    required this.title,
+    required this.detail,
+    required this.seq,
+    this.large = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -419,8 +626,16 @@ class ScanResultCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(title, style: theme.textTheme.displayMedium?.copyWith(color: fg)),
-                        Text(detail, style: theme.textTheme.titleMedium?.copyWith(color: fg)),
+                        Text(
+                          title,
+                          style: theme.textTheme.displayMedium
+                              ?.copyWith(color: fg, fontSize: large ? 44 : null, height: large ? 56 / 44 : null),
+                        ),
+                        Text(
+                          detail,
+                          style: (large ? theme.textTheme.headlineSmall : theme.textTheme.titleMedium)
+                              ?.copyWith(color: fg, fontSize: large ? 28 : null, height: large ? 40 / 28 : null),
+                        ),
                       ],
                     ),
                   ),
@@ -485,8 +700,118 @@ class _CameraError extends StatelessWidget {
   }
 }
 
-/// جستجوی تمام‌صفحه‌ی نام در پذیرایی. هر ردیف وضعیت آن فرد را برای این وعده نشان می‌دهد
-/// و لمس، پیش از ثبت، تأیید «تحویل شد» می‌خواهد.
+/// تأیید تحویل وعده: روی موبایل باتم‌شیت، روی صفحه‌ی پهن دیالوگ که Enter آن را تأیید می‌کند.
+Future<bool> confirmMealDelivery(BuildContext context, Attendee a, Meal meal) async {
+  final store = StoreScope.read(context);
+  final x = DaftarColors.of(context);
+  final wide = MediaQuery.sizeOf(context).width >= 600;
+  Widget content(BuildContext c) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(a.displayName, style: Theme.of(c).textTheme.headlineSmall),
+          const SizedBox(height: DaftarSize.space1),
+          Text('${meal.name}، ${store.typeName(a.registrationTypeId)}',
+              style: Theme.of(c).textTheme.bodyMedium?.copyWith(color: x.inkMuted)),
+          const SizedBox(height: DaftarSize.space3),
+          const Notice(tone: NoticeTone.go, text: 'مجاز است و هنوز نگرفته.'),
+          const SizedBox(height: DaftarSize.space5),
+          FilledButton.icon(
+            autofocus: true,
+            style: daftarGoStyle(c),
+            icon: const Icon(Icons.check_rounded),
+            label: Text(wide ? 'تحویل شد (Enter)' : 'تحویل شد'),
+            onPressed: () => Navigator.pop(c, true),
+          ),
+          const SizedBox(height: DaftarSize.space2),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: Text(wide ? 'انصراف (Esc)' : 'انصراف')),
+        ],
+      );
+  final bool? ok;
+  if (wide) {
+    ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(padding: const EdgeInsets.all(DaftarSize.space5), child: content(c)),
+        ),
+      ),
+    );
+  } else {
+    ok = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (c) => Padding(
+        padding: const EdgeInsets.fromLTRB(DaftarSize.space5, 0, DaftarSize.space5, DaftarSize.space5),
+        child: content(c),
+      ),
+    );
+  }
+  return ok == true;
+}
+
+/// فهرست نام‌ها با وضعیت هر نفر برای وعده‌ی جاری: «مجاز»، «گرفته ۱۲:۴۰»، «شامل نیست».
+class MealByNameList extends StatelessWidget {
+  final Meal meal;
+  final List<Attendee> results;
+  final int? selected;
+  final void Function(Attendee) onTap;
+  const MealByNameList({super.key, required this.meal, required this.results, required this.onTap, this.selected});
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      children: [
+        for (var i = 0; i < results.length; i++)
+          Builder(builder: (context) {
+            final a = results[i];
+            final c = store.checkMeal(a, meal);
+            final (label, color, icon) = switch (c.verdict) {
+              MealVerdict.ok => ('مجاز', x.go, Icons.check_circle_rounded),
+              MealVerdict.duplicate => ('گرفته، ${hm(c.previousAt!)}', x.stop, Icons.history_rounded),
+              MealVerdict.notEntitled => ('شامل نیست', x.stop, Icons.do_not_disturb_on_rounded),
+            };
+            return Material(
+              color: selected == i ? x.stampSoft : x.surface,
+              child: InkWell(
+                onTap: () => onTap(a),
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: DaftarSize.tapXl),
+                  padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space4, vertical: DaftarSize.space2),
+                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
+                  child: Row(children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(a.displayName, style: theme.textTheme.titleMedium),
+                          Text(store.typeName(a.registrationTypeId),
+                              style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+                        ],
+                      ),
+                    ),
+                    Icon(icon, size: 18, color: color),
+                    const SizedBox(width: DaftarSize.space1),
+                    Text(label, style: theme.textTheme.bodySmall?.copyWith(color: color, fontWeight: FontWeight.w700)),
+                  ]),
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+}
+
+/// جستجوی تمام‌صفحه‌ی نام در پذیرایی با دوربین («کارت همراهش نیست؟»).
+/// لمس، پیش از ثبت، تأیید «تحویل شد» می‌خواهد.
 class _PickAttendeePage extends StatefulWidget {
   final Meal meal;
   const _PickAttendeePage({required this.meal});
@@ -504,52 +829,21 @@ class _PickAttendeePageState extends State<_PickAttendeePage> {
     super.dispose();
   }
 
-  Future<void> _confirm(Attendee a) async {
+  Future<void> _pick(Attendee a) async {
     final store = StoreScope.read(context);
-    final c = store.checkMeal(a, widget.meal);
-    if (c.verdict != MealVerdict.ok) {
-      Navigator.of(context).pop(a);
+    if (store.checkMeal(a, widget.meal).verdict == MealVerdict.ok &&
+        !await confirmMealDelivery(context, a, widget.meal)) {
       return;
     }
-    final x = DaftarColors.of(context);
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (c) => Padding(
-        padding: const EdgeInsets.fromLTRB(DaftarSize.space5, 0, DaftarSize.space5, DaftarSize.space5),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(a.displayName, style: Theme.of(c).textTheme.headlineSmall),
-            const SizedBox(height: DaftarSize.space1),
-            Text('${widget.meal.name} · ${store.typeName(a.registrationTypeId)}',
-                style: Theme.of(c).textTheme.bodyMedium?.copyWith(color: x.inkMuted)),
-            const SizedBox(height: DaftarSize.space3),
-            const Notice(tone: NoticeTone.go, text: 'مجاز است و هنوز نگرفته.'),
-            const SizedBox(height: DaftarSize.space5),
-            FilledButton.icon(
-              style: daftarGoStyle(c),
-              icon: const Icon(Icons.check_rounded),
-              label: const Text('تحویل شد'),
-              onPressed: () => Navigator.pop(c, true),
-            ),
-            const SizedBox(height: DaftarSize.space2),
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
-          ],
-        ),
-      ),
-    );
-    if (ok == true && mounted) Navigator.of(context).pop(a);
+    if (mounted) Navigator.of(context).pop(a);
   }
 
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final x = DaftarColors.of(context);
-    final theme = Theme.of(context);
-    final results = _q.text.trim().isEmpty ? <Attendee>[] : store.search(_q.text, limit: 30);
+    final q = _q.text.trim();
+    final results = q.isEmpty ? <Attendee>[] : store.search(_q.text, limit: 30);
     return Scaffold(
       appBar: AppBar(title: Text('جستجوی نام — ${widget.meal.name}')),
       body: Column(
@@ -572,55 +866,11 @@ class _PickAttendeePageState extends State<_PickAttendeePage> {
           ),
           Divider(color: x.line),
           Expanded(
-            child: _q.text.trim().isEmpty
+            child: q.isEmpty
                 ? const EmptyState(icon: Icons.search_rounded, title: 'چند حرف از نام یا موبایل را بنویسید')
                 : results.isEmpty
-                    ? EmptyState(icon: Icons.person_search_rounded, title: 'کسی با «${_q.text.trim()}» پیدا نشد')
-                    : ListView(
-                        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                        children: [
-                          for (final a in results)
-                            Builder(builder: (context) {
-                              final c = store.checkMeal(a, widget.meal);
-                              final (label, color, icon) = switch (c.verdict) {
-                                MealVerdict.ok => ('مجاز', x.go, Icons.check_circle_rounded),
-                                MealVerdict.duplicate =>
-                                  ('گرفته، ${hm(c.previousAt!)}', x.stop, Icons.history_rounded),
-                                MealVerdict.notEntitled => ('شامل نیست', x.stop, Icons.do_not_disturb_on_rounded),
-                              };
-                              return Material(
-                                color: x.surface,
-                                child: InkWell(
-                                  onTap: () => _confirm(a),
-                                  child: Container(
-                                    constraints: const BoxConstraints(minHeight: DaftarSize.tapXl),
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: DaftarSize.space4, vertical: DaftarSize.space2),
-                                    decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
-                                    child: Row(children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(a.displayName, style: theme.textTheme.titleMedium),
-                                            Text(store.typeName(a.registrationTypeId),
-                                                style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
-                                          ],
-                                        ),
-                                      ),
-                                      Icon(icon, size: 18, color: color),
-                                      const SizedBox(width: DaftarSize.space1),
-                                      Text(label,
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(color: color, fontWeight: FontWeight.w700)),
-                                    ]),
-                                  ),
-                                ),
-                              );
-                            }),
-                        ],
-                      ),
+                    ? EmptyState(icon: Icons.person_search_rounded, title: 'کسی با «$q» پیدا نشد')
+                    : MealByNameList(meal: widget.meal, results: results, onTap: _pick),
           ),
         ],
       ),

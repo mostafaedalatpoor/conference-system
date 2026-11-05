@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../excel_import.dart';
 import '../main.dart';
+import '../theme/daftar.dart';
+import '../theme/widgets.dart';
 import '../state.dart';
 
 /// انواع ثبت‌نام، نقش‌ها، وعده‌ها و برنامه.
@@ -74,6 +76,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
             trailing: FilledButton(onPressed: () => _fillDefaults(s), child: const Text('پر کن')),
           ),
         ),
+      _EventSettingsEditor(s: s),
       const SectionTitle('انواع ثبت‌نام'),
       _CodeNameList(items: s.types, onChanged: s.notify, addLabel: 'نوع جدید'),
       const SectionTitle('نقش‌ها'),
@@ -188,7 +191,9 @@ class _MealEditor extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
+          LayoutBuilder(builder: (context, c) {
+            final narrow = c.maxWidth < 560;
+            final children = <Widget>[
             SizedBox(
               width: 140,
               child: TextFormField(
@@ -199,7 +204,8 @@ class _MealEditor extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Expanded(
+            SizedBox(
+              width: narrow ? c.maxWidth - 140 - 12 - 4 : c.maxWidth - 140 - 150 - 24 - 64,
               child: TextFormField(
                 initialValue: meal.name,
                 decoration: const InputDecoration(labelText: 'نام وعده', isDense: true),
@@ -223,7 +229,9 @@ class _MealEditor extends StatelessWidget {
                 s.notify();
               },
             ),
-          ]),
+            ];
+            return Wrap(spacing: 0, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: children);
+          }),
           const SizedBox(height: 8),
           Wrap(spacing: 6, runSpacing: 6, children: [
             const Text('حق دارند:  '),
@@ -279,6 +287,44 @@ class _SessionRow extends StatelessWidget {
       return w == null ? Expanded(child: field) : SizedBox(width: w, child: field);
     }
 
+    if (MediaQuery.sizeOf(context).width < 720) {
+      // گوشی: عنوان یک خط کامل، بقیه زیرش.
+      Widget g(String label, String init, void Function(String) on, double w, {bool ltr = false}) => SizedBox(
+            width: w,
+            child: TextFormField(
+              initialValue: init,
+              decoration: InputDecoration(labelText: label, isDense: true),
+              textDirection: ltr ? TextDirection.ltr : null,
+              onChanged: (v) => on(v.trim()),
+            ),
+          );
+      return Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              f('عنوان', session.title, (v) => session.title = v),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded),
+                onPressed: () {
+                  s.sessions.remove(session);
+                  s.notify();
+                },
+              ),
+            ]),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              g('روز', session.day, (v) => session.day = v, 120, ltr: true),
+              g('شروع', session.start, (v) => session.start = v, 80, ltr: true),
+              g('پایان', session.end, (v) => session.end = v, 80, ltr: true),
+              g('سالن', session.hall, (v) => session.hall = v, 140),
+            ]),
+          ]),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(children: [
@@ -311,5 +357,169 @@ class _SessionRow extends StatelessWidget {
         ),
       ]),
     );
+  }
+}
+
+
+/// گزینه‌ی انتخابی بزرگ با عنوان و توضیح (برای تنظیم‌هایی که پیامد دارند).
+class _Choice extends StatelessWidget {
+  final bool selected;
+  final String title;
+  final String text;
+  final VoidCallback onTap;
+  const _Choice({required this.selected, required this.title, required this.text, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: DaftarSize.space2),
+      child: Material(
+        color: selected ? x.stampSoft : x.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(DaftarSize.radiusSm),
+          side: BorderSide(color: selected ? x.stamp : x.line, width: selected ? 2 : 1),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(DaftarSize.radiusSm),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(DaftarSize.space3),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(selected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+                  color: selected ? x.stamp : x.lineStrong, size: 20),
+              const SizedBox(width: DaftarSize.space3),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, style: theme.textTheme.labelLarge),
+                  Text(text, style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// IdentifyMode، QrBehavior و خط سازنده در صفحه‌ی عمومی.
+class _EventSettingsEditor extends StatelessWidget {
+  final AdminState s;
+  const _EventSettingsEditor({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    final st = s.settings;
+    final locked = s.event?.locked ?? false;
+    void set(void Function() f) {
+      f();
+      s.notify();
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SectionTitle('شناسایی در روز اجرا'),
+      const Hint('اسکن امکان است، نه شرط. اپ نیروها خودش را با این انتخاب تطبیق می‌دهد و هر کار همیشه با جستجوی نام هم شدنی است.'),
+      const SizedBox(height: DaftarSize.space2),
+      _Choice(
+        selected: st.identifyMode == 'scan',
+        title: 'کارت QR، با اسکن',
+        text: 'پذیرش با جستجوی نام یا اسکن؛ پذیرایی با دوربین گوشی یا بارکدخوان، و جستجوی نام.',
+        onTap: () => set(() => st.identifyMode = 'scan'),
+      ),
+      _Choice(
+        selected: st.identifyMode == 'card',
+        title: 'کارت، بدون اسکن',
+        text: 'دکمه‌ی اسکن و دوربین نمایش داده نمی‌شود؛ پذیرش با نام یا شماره‌ی کارت، پذیرایی با جستجوی نام.',
+        onTap: () => set(() => st.identifyMode = 'card'),
+      ),
+      _Choice(
+        selected: st.identifyMode == 'none',
+        title: 'بدون کارت',
+        text: 'همه‌چیز با جستجوی نام. ثبت‌نام در محل کارت نمی‌خواهد و مرحله‌ی «کارت‌ها» پنهان می‌شود.',
+        onTap: () => set(() => st.identifyMode = 'none'),
+      ),
+      if (locked && st.identifyMode == 'none')
+        const Padding(
+          padding: EdgeInsets.only(top: DaftarSize.space1),
+          child: Notice(
+            tone: NoticeTone.wait,
+            text: 'کارت‌ها چاپ شده‌اند. با «بدون کارت»، شماره‌ی کارت دیگر در اپ نیروها نمایش داده نمی‌شود.',
+          ),
+        ),
+      if (st.usesCards) ...[
+        const SectionTitle('QR روی کارت برای دیگران چه کند؟'),
+        const Hint('اپ نیروها در هر سه حالت فرد را می‌شناسد. این انتخاب فقط برای گوشی‌های دیگر (شرکت‌کننده، داور، اسپانسر) است.'),
+        const SizedBox(height: DaftarSize.space2),
+        _Choice(
+          selected: st.qrBehavior == 'person',
+          title: 'صفحه‌ی فرد (پیش‌فرض)',
+          text: 'نام، نقش، سازمان و برنامه. بعد از چاپ هم قابل تغییر است.',
+          onTap: () => set(() => st.qrBehavior = 'person'),
+        ),
+        _Choice(
+          selected: st.qrBehavior == 'redirect',
+          title: 'انتقال به یک آدرس',
+          text: 'مستقیم یک آدرس باز می‌شود، مثلاً سایت یا برنامه‌ی رویداد. بعد از چاپ هم قابل تغییر است.',
+          onTap: () => set(() => st.qrBehavior = 'redirect'),
+        ),
+        if (st.qrBehavior == 'redirect')
+          Padding(
+            padding: const EdgeInsets.only(bottom: DaftarSize.space2),
+            child: TextFormField(
+              initialValue: st.redirectUrl,
+              decoration: const InputDecoration(
+                labelText: 'آدرس مقصد',
+                helperText: 'اگر خالی یا خراب باشد، صفحه‌ی فرد نمایش داده می‌شود.',
+              ),
+              textDirection: TextDirection.ltr,
+              keyboardType: TextInputType.url,
+              onChanged: (v) => st.redirectUrl = v.trim(),
+            ),
+          ),
+        _Choice(
+          selected: st.qrBehavior == 'vcard',
+          title: 'کارت ویزیت (vCard)',
+          text: 'پنجره‌ی «افزودن به مخاطبین» گوشی، بدون اینترنت. با ساخت PDF قفل می‌شود و برگشت ندارد.',
+          onTap: locked ? () {} : () => set(() => st.qrBehavior = 'vcard'),
+        ),
+        if (st.qrBehavior == 'vcard')
+          const Padding(
+            padding: EdgeInsets.only(bottom: DaftarSize.space2),
+            child: Notice(
+              tone: NoticeTone.wait,
+              text: 'اطلاعات تماس روی کارت چاپ می‌شود و هر کسی با دوربین می‌خواندش؛ کارت گم‌شده هم دوباره صادر نمی‌شود. '
+                  'QR کارت ویزیت پرتراکم‌تر است و دست‌کم ۳۰ میلی‌متر چاپ می‌شود.',
+            ),
+          ),
+        if (st.qrBehavior != 'redirect') ...[
+          const SizedBox(height: DaftarSize.space2),
+          Text('اطلاعات تماسی که به اشتراک گذاشته می‌شود', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: DaftarSize.space2),
+          Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+            for (final (label, value, setter) in <(String, bool, void Function(bool))>[
+              ('نام و عنوان', st.shareName, (v) => st.shareName = v),
+              ('سازمان', st.shareOrg, (v) => st.shareOrg = v),
+              ('ایمیل', st.shareEmail, (v) => st.shareEmail = v),
+              ('موبایل', st.shareMobile, (v) => st.shareMobile = v),
+              ('کشور', st.shareCountry, (v) => st.shareCountry = v),
+            ])
+              FilterChip(label: Text(label), selected: value, onSelected: (v) => set(() => setter(v))),
+          ]),
+        ],
+      ],
+      const SectionTitle('صفحه‌ی عمومی'),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        value: st.showMakerCredit,
+        onChanged: (v) => set(() => st.showMakerCredit = v),
+        title: const Text('خط «ساخته‌شده با رویدادیار · نگاه جدید» زیر برنامه'),
+      ),
+      const Notice(
+        tone: NoticeTone.info,
+        text: 'این تنظیم‌ها با «ذخیره روی سرور» به گوشی‌ها و صفحه‌ی عمومی می‌رسد.',
+      ),
+    ]);
   }
 }

@@ -54,6 +54,18 @@ class AppStore extends ChangeNotifier {
 
   int? selectedMealId;
 
+  /// «شناسایی در روز اجرا» (IdentifyMode) از پیکربندی رویداد:
+  /// scan = کارت QR با اسکن، card = کارت بدون اسکن، none = بدون کارت.
+  String identifyMode = 'scan';
+
+  bool get scanEnabled => identifyMode == 'scan';
+  bool get usesCards => identifyMode != 'none';
+
+  /// دوربین فقط روی گوشی هست؛ روی ویندوز اسکن با بارکدخوان (ScanInput) است.
+  static bool get hasCamera => Platform.isAndroid || Platform.isIOS;
+
+  bool get cameraScan => scanEnabled && hasCamera;
+
   // وضعیت محاسبه‌شده
   Map<String, Attendee> attendees = {};
   Map<String, String> cardOwner = {}; // token → attendee id
@@ -132,6 +144,7 @@ class AppStore extends ChangeNotifier {
         'cursor': cursor,
         'last_sync_ok': lastSyncOk?.toIso8601String(),
         'selected_meal_id': selectedMealId,
+        'settings': {'identify_mode': identifyMode},
       };
 
   void _fromJson(Map<String, dynamic> j) {
@@ -170,6 +183,9 @@ class AppStore extends ChangeNotifier {
       eventName = (j['event_name'] as String?) ?? eventName;
       configVersion = (j['config_version'] as int?) ?? configVersion;
     }
+    final settings = ((j['settings'] as Map?) ?? (ev?['settings'] as Map?))?.cast<String, dynamic>();
+    final mode = settings?['identify_mode']?.toString();
+    identifyMode = const ['scan', 'card', 'none'].contains(mode) ? mode! : 'scan';
     types = _list(j['types'] ?? j['registration_types']).map(NamedItem.fromJson).toList();
     roles = _list(j['roles']).map(NamedItem.fromJson).toList();
     meals = _list(j['meals']).map(Meal.fromJson).toList();
@@ -338,7 +354,7 @@ class AppStore extends ChangeNotifier {
     required String mobile,
     required String email,
     required int registrationTypeId,
-    required PassCard card,
+    required PassCard? card,
   }) {
     final a = Attendee(
       id: _uuid.v4(),
@@ -349,7 +365,7 @@ class AppStore extends ChangeNotifier {
       registrationTypeId: registrationTypeId,
       source: 'walkin',
     );
-    _record('walkin_register', cardToken: card.token, attendeeId: a.id, payload: {
+    _record('walkin_register', cardToken: card?.token, attendeeId: a.id, payload: {
       'attendee': {
         'id': a.id,
         'first_name': a.firstName,
@@ -359,7 +375,7 @@ class AppStore extends ChangeNotifier {
         'registration_type_id': registrationTypeId,
       },
     });
-    _record('checkin', attendeeId: a.id, cardToken: card.token);
+    _record('checkin', attendeeId: a.id, cardToken: card?.token);
     return attendees[a.id] ?? a;
   }
 

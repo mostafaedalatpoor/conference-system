@@ -3,11 +3,15 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../main.dart';
+import '../theme/daftar.dart';
 import '../theme/widgets.dart';
+import 'report.dart';
 import '../state.dart';
 
 class StaffScreen extends StatefulWidget {
-  const StaffScreen({super.key});
+  /// روی موبایل، تب «نیروها» دستگاه‌ها را هم نشان می‌دهد.
+  final bool showDevices;
+  const StaffScreen({super.key, this.showDevices = false});
 
   @override
   State<StaffScreen> createState() => _StaffScreenState();
@@ -46,40 +50,58 @@ class _StaffScreenState extends State<StaffScreen> {
         Padding(
           key: ValueKey('${identityHashCode(st)}-$_rev'),
           padding: const EdgeInsets.only(bottom: 6),
-          child: Row(children: [
-            Expanded(
-              child: TextFormField(
-                initialValue: st.name,
-                decoration: const InputDecoration(labelText: 'نام', isDense: true),
-                onChanged: (v) => st.name = v.trim(),
+          child: LayoutBuilder(builder: (context, c) {
+            final name = TextFormField(
+              initialValue: st.name,
+              decoration: const InputDecoration(labelText: 'نام', isDense: true),
+              onChanged: (v) => st.name = v.trim(),
+            );
+            final pin = TextFormField(
+              initialValue: st.newPin,
+              decoration: InputDecoration(
+                labelText: st.hasPin ? 'PIN جدید (خالی = بدون تغییر)' : 'PIN (۴ تا ۸ رقم)',
+                isDense: true,
               ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 150,
-              child: TextFormField(
-                initialValue: st.newPin,
-                decoration: InputDecoration(
-                  labelText: st.hasPin ? 'PIN جدید (خالی = بدون تغییر)' : 'PIN (۴ تا ۸ رقم)',
-                  isDense: true,
-                ),
-                keyboardType: TextInputType.number,
-                textDirection: TextDirection.ltr,
-                onChanged: (v) => st.newPin = v.trim(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            _Flag('پذیرش', st.canCheckin, (v) => setState(() => st.canCheckin = v)),
-            _Flag('پذیرایی', st.canServe, (v) => setState(() => st.canServe = v)),
-            _Flag('مدیر', st.isAdmin, (v) => setState(() => st.isAdmin = v)),
-            IconButton(
+              keyboardType: TextInputType.number,
+              textDirection: TextDirection.ltr,
+              onChanged: (v) => st.newPin = v.trim(),
+            );
+            final flags = Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+              _Flag('پذیرش', st.canCheckin, (v) => setState(() => st.canCheckin = v)),
+              _Flag('پذیرایی', st.canServe, (v) => setState(() => st.canServe = v)),
+              _Flag('مدیر', st.isAdmin, (v) => setState(() => st.isAdmin = v)),
+            ]);
+            final delete = IconButton(
+              tooltip: 'حذف',
               icon: const Icon(Icons.delete_outline_rounded),
               onPressed: () {
                 s.staff.remove(st);
                 s.notify();
               },
-            ),
-          ]),
+            );
+            if (c.maxWidth >= 720) {
+              return Row(children: [
+                Expanded(child: name),
+                const SizedBox(width: 8),
+                SizedBox(width: 150, child: pin),
+                const SizedBox(width: 8),
+                flags,
+                delete,
+              ]);
+            }
+            // گوشی: هر نیرو یک کارت عمودی.
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(DaftarSize.space3),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Row(children: [Expanded(child: name), delete]),
+                  const SizedBox(height: DaftarSize.space2),
+                  pin,
+                  flags,
+                ]),
+              ),
+            );
+          }),
         ),
       Wrap(spacing: 8, children: [
         TextButton.icon(
@@ -120,6 +142,14 @@ class _StaffScreenState extends State<StaffScreen> {
       ),
       const SizedBox(height: 8),
       const Hint('«مدیر» یعنی آن نیرو در اپ گوشی می‌تواند پذیرش اشتباه را لغو کند.'),
+      if (widget.showDevices) ...[
+        const SectionTitle('دستگاه‌ها'),
+        if (s.report == null)
+          const Hint('برای دیدن دستگاه‌ها، تب «امروز» را باز کنید.')
+        else
+          for (final d in (s.report!['devices'] as List? ?? const []))
+            DeviceRow(device: (d as Map).cast<String, dynamic>()),
+      ],
     ]);
   }
 }

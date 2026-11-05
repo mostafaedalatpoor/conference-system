@@ -73,9 +73,47 @@ String hm(DateTime t) {
 
 final RegExp _tokenRe = RegExp(r'^[A-Za-z0-9_-]{16,64}$');
 
-/// توکن کارت از محتوای QR: لینک .../c/<token> یا ?c=<token> یا خود توکن.
+/// نقشه‌ی چیدمان صفحه‌کلید فارسی استاندارد به کلید لاتین متناظر.
+/// بارکدخوان مثل صفحه‌کلید تایپ می‌کند؛ اگر زبان ویندوز فارسی باشد «https» را «اففحس» می‌نویسد.
+const Map<String, String> _faLayout = {
+  // ردیف‌های بی‌Shift
+  'ض': 'q', 'ص': 'w', 'ث': 'e', 'ق': 'r', 'ف': 't', 'غ': 'y', 'ع': 'u', 'ه': 'i', 'خ': 'o', 'ح': 'p',
+  'ج': '[', 'چ': ']', 'ش': 'a', 'س': 's', 'ی': 'd', 'ب': 'f', 'ل': 'g', 'ا': 'h', 'ت': 'j', 'ن': 'k',
+  'م': 'l', 'ک': ';', 'گ': "'", 'ظ': 'z', 'ط': 'x', 'ز': 'c', 'ر': 'v', 'ذ': 'b', 'د': 'n', 'پ': 'm',
+  'و': ',', '؟': '?', '٫': '.', '،': ',', '؛': ';', '×': '*',
+  // با Shift (حروف بزرگ لاتین)؛ همه‌ی حالت‌ها برگشت‌پذیر نیستند
+  'ْ': 'Q', 'ٌ': 'W', 'ٍ': 'E', 'ً': 'R', 'ُ': 'T', 'ِ': 'Y', 'َ': 'U', 'ّ': 'I', 'ؤ': 'A', 'ئ': 'S',
+  'ي': 'D', 'إ': 'F', 'أ': 'G', 'آ': 'H', 'ة': 'J', '»': 'K', '«': 'L', 'ك': 'Z', 'ٓ': 'X', 'ژ': 'C',
+  'ٰ': 'V', 'ٔ': 'N', 'ء': 'M',
+};
+
+final RegExp _persianLetter = RegExp('[\u0600-\u06FF]');
+
+/// آیا متن حروف فارسی دارد (یعنی با چیدمان فارسی تایپ شده)؟
+bool hasPersianLetters(String s) => _persianLetter.hasMatch(s);
+
+/// حروفی که با چیدمان فارسی تایپ شده‌اند به کلید لاتین متناظر و ارقام فارسی به لاتین برمی‌گردند.
+String latinizeLayout(String s) {
+  final b = StringBuffer();
+  for (final rune in latinDigits(s).runes) {
+    final ch = String.fromCharCode(rune);
+    b.write(_faLayout[ch] ?? ch);
+  }
+  return b.toString();
+}
+
+/// توکن کارت از محتوای QR: لینک .../c/<token>، ?c=<token>، خود توکن،
+/// یا کارت ویزیت (vCard) که لینک /c/<token> در فیلد URL آن است.
 String? tokenFromScan(String raw) {
-  final s = raw.trim();
+  var s = raw.trim();
+  if (s.toUpperCase().startsWith('BEGIN:VCARD')) {
+    final line = s
+        .split(RegExp(r'\r?\n'))
+        .firstWhere((l) => RegExp(r'^URL[;:]', caseSensitive: false).hasMatch(l.trim()), orElse: () => '');
+    if (line.isEmpty) return null;
+    final i = line.indexOf(':');
+    s = line.substring(i + 1).trim();
+  }
   if (_tokenRe.hasMatch(s)) return s;
   final uri = Uri.tryParse(s);
   if (uri == null) return null;
