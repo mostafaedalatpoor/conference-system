@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:local_auth/local_auth.dart';
+import 'package:local_auth_platform_interface/local_auth_platform_interface.dart';
 
 import 'screens/cards.dart';
 import 'screens/config.dart';
@@ -382,7 +382,7 @@ class AppLock extends StatefulWidget {
 }
 
 class _AppLockState extends State<AppLock> with WidgetsBindingObserver {
-  final _auth = LocalAuthentication();
+  LocalAuthPlatform get _auth => LocalAuthPlatform.instance;
   bool _locked = Platform.isAndroid || Platform.isIOS;
   bool _busy = false;
   bool _unsupported = false;
@@ -428,6 +428,7 @@ class _AppLockState extends State<AppLock> with WidgetsBindingObserver {
       }
       final ok = await _auth.authenticate(
         localizedReason: 'برای باز کردن $appName، هویت خود را تأیید کنید.',
+        authMessages: const [],
         options: const AuthenticationOptions(biometricOnly: false, stickyAuth: true),
       );
       if (ok && mounted) setState(() => _locked = false);

@@ -17,8 +17,10 @@ dependencies:
   excel: ^4.0.6
   file_picker: '>=8.1.2 <11.0.0'
   pdf: ^3.11.1
-  # قفل اپ مدیریت روی گوشی با اثر انگشت یا رمز گوشی (M1)
-  local_auth: ^2.3.0
+  # قفل اپ مدیریت روی گوشی با اثر انگشت یا رمز گوشی (M1). فقط پیاده‌سازی اندروید،
+  # چون پلاگین ویندوزِ local_auth با MSVC تازه کامپایل نمی‌شود و روی ویندوز قفل لازم نیست.
+  local_auth_android: ^1.0.46
+  local_auth_platform_interface: ^1.0.10
 
 dev_dependencies:
   flutter_test:
