@@ -122,6 +122,12 @@ class Person {
   String? token;
   int? serial;
 
+  /// ستون «اشتراک اطلاعات تماس» اکسل: null = طبق تنظیم رویداد، false = فقط نام و سازمان.
+  bool? shareContact;
+
+  /// لینک شخصی (صفحه‌ی شخصی) برای دکمه‌ی صفحه‌ی عمومی.
+  String website;
+
   Person({
     required this.id,
     this.title = '',
@@ -137,6 +143,8 @@ class Person {
     this.source = 'import',
     this.token,
     this.serial,
+    this.shareContact,
+    this.website = '',
   });
 
   String get fullName => '$firstName $lastName'.trim();
@@ -156,6 +164,8 @@ class Person {
         'role': roleCode,
         'card_token': token,
         'card_serial': serial,
+        'share_contact': shareContact,
+        'website': website,
       };
 }
 
@@ -490,6 +500,8 @@ class AdminState extends ChangeNotifier {
         source: (a['source'] ?? 'import').toString(),
         token: card?['token']?.toString(),
         serial: card?['serial'] as int?,
+        shareContact: a['share_contact'] as bool?,
+        website: (a['website'] ?? '').toString(),
       );
     }
 
@@ -504,6 +516,12 @@ class AdminState extends ChangeNotifier {
     ];
     for (final s in saved) {
       if (!staff.any((x) => x.name == s.name)) staff.add(s);
+    }
+    // قالب کارت از سرور، اگر آنجا ذخیره شده؛ مسیر تصویرهای طرح همان محلی می‌ماند.
+    final serverTemplate = s['card_template'];
+    if (serverTemplate is Map) {
+      final local = template.toJson();
+      template.load({...local, ...serverTemplate.cast<String, dynamic>()});
     }
     // تنظیم‌های رویداد: اگر سرور دارد از سرور، وگرنه نسخه‌ی محلی همین رویداد.
     settings = EventSettings();
@@ -632,6 +650,8 @@ class AdminState extends ChangeNotifier {
         roleCode: roleCode,
         token: existing?.token ?? _randomToken(),
         serial: existing?.serial ?? serial++,
+        shareContact: shareFrom(cell(row, 'share_contact')) ?? existing?.shareContact,
+        website: cell(row, 'website').isNotEmpty ? cell(row, 'website') : (existing?.website ?? ''),
       );
       if (existing == null) {
         created++;
@@ -668,6 +688,26 @@ class AdminState extends ChangeNotifier {
         await _loadEvent(eventCode!);
       });
 
+  /// قالب کارت روی سرور تا اپ ویندوز و موبایل یک قالب ببینند (مسیر تصویرهای طرح محلی می‌ماند).
+  Future<void> saveTemplate() => run('قالب کارت ذخیره شد.', () async {
+        await save();
+        final j = template.toJson()
+          ..remove('front_image')
+          ..remove('back_image');
+        await api.post('/admin/events/$eventCode/card-template', {'template': j});
+      });
+
+  /// باطل‌کردن دسترسی یک دستگاه نیرو.
+  Future<void> revokeDevice(int id) => run('دستگاه باطل شد.', () async {
+        await api.post('/admin/devices/$id/revoke', {});
+        report = (await api.get('/admin/events/$eventCode/report') as Map).cast<String, dynamic>();
+      });
+
+  /// لغو پذیرش یک نفر از اپ مدیریت (در دفتر رخدادها ثبت می‌شود).
+  Future<void> undoCheckin(String attendeeId) => run('پذیرش لغو شد.', () async {
+        await api.post('/admin/events/$eventCode/attendees/$attendeeId/checkin-undo', {});
+      });
+
   Future<void> setLocked(bool locked) => run(locked ? 'آدرس پایه قفل شد.' : 'قفل آدرس پایه برداشته شد.', () async {
         await api.post('/admin/events/$eventCode/lock', {'locked': locked});
         await _loadEvent(eventCode!);
@@ -686,6 +726,7 @@ class AdminState extends ChangeNotifier {
   String vcardFor(Person p) {
     String esc(String v) => v.replaceAll(r'\', r'\\').replaceAll(',', r'\,').replaceAll(';', r'\;').replaceAll('\n', r'\n');
     final st = settings;
+    final no = p.shareContact == false; // «خیر» خود فرد: فقط نام و سازمان
     final role = roleName(p.roleCode);
     final lines = <String>[
       'BEGIN:VCARD',
@@ -693,9 +734,9 @@ class AdminState extends ChangeNotifier {
       if (st.shareName) 'N:${esc(p.lastName)};${esc(p.firstName)};;${esc(p.title)};',
       'FN:${esc(st.shareName ? p.displayName : (p.organization.isNotEmpty ? p.organization : 'شرکت‌کننده'))}',
       if (st.shareOrg && p.organization.isNotEmpty) 'ORG:${esc(p.organization)}',
-      if (st.shareEmail && p.email.isNotEmpty) 'EMAIL;TYPE=INTERNET:${esc(p.email)}',
-      if (st.shareMobile && p.mobile.isNotEmpty) 'TEL;TYPE=CELL:${esc(p.mobile)}',
-      if (st.shareCountry && p.country.isNotEmpty) 'ADR:;;;;;;${esc(p.country)}',
+      if (!no && st.shareEmail && p.email.isNotEmpty) 'EMAIL;TYPE=INTERNET:${esc(p.email)}',
+      if (!no && st.shareMobile && p.mobile.isNotEmpty) 'TEL;TYPE=CELL:${esc(p.mobile)}',
+      if (!no && st.shareCountry && p.country.isNotEmpty) 'ADR:;;;;;;${esc(p.country)}',
       'NOTE:${esc([if (role.isNotEmpty) role, event?.name ?? ''].where((x) => x.isNotEmpty).join(' · '))}',
       'URL:${qrUrl(p.token!)}',
       'END:VCARD',

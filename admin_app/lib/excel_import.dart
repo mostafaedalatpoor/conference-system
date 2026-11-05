@@ -25,6 +25,8 @@ const Map<String, String> fieldLabels = {
   'country': 'کشور',
   'presentation_kind': 'نوع ارائه (پوستر/شفاهی)',
   'role': 'نقش',
+  'share_contact': 'اشتراک اطلاعات تماس (بله/خیر)',
+  'website': 'صفحه‌ی شخصی (لینک)',
 };
 
 const Map<String, List<String>> _synonyms = {
@@ -38,7 +40,18 @@ const Map<String, List<String>> _synonyms = {
   'country': ['country', 'کشور'],
   'presentation_kind': ['presentation', 'presentation type', 'نوع ارائه', 'ارائه'],
   'role': ['role', 'نقش'],
+  'share_contact': ['share contact', 'اشتراک اطلاعات تماس', 'اشتراک تماس'],
+  'website': ['website', 'homepage', 'url', 'وب‌سایت', 'وبسایت', 'صفحه شخصی', 'صفحه‌ی شخصی'],
 };
+
+/// «بله/خیر» ستون اشتراک اطلاعات تماس؛ خالی یا نامفهوم = طبق تنظیم رویداد.
+bool? shareFrom(String v) {
+  final s = v.trim().toLowerCase();
+  if (s.isEmpty) return null;
+  if (['بله', 'آره', 'yes', 'y', 'true', '1', 'دارد'].contains(s)) return true;
+  if (['خیر', 'نه', 'no', 'n', 'false', '0', 'ندارد'].contains(s)) return false;
+  return null;
+}
 
 Future<List<SheetTable>> readTables(String fileName, Uint8List bytes) async {
   final lower = fileName.toLowerCase();

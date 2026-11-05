@@ -240,6 +240,34 @@ class _PersonPageState extends State<PersonPage> {
               ]);
             },
           ),
+          const SizedBox(height: DaftarSize.space5),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(DaftarSize.tapMin)),
+            onPressed: s.busy
+                ? null
+                : () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (c) => AlertDialog(
+                        title: const Text('لغو پذیرش'),
+                        content: Text('پذیرش ${p.fullName} لغو شود؟ در گزارش ثبت می‌شود و گوشی‌ها با همگام‌سازی بعدی می‌بینند.'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
+                          FilledButton(
+                            style: daftarDangerStyle(c),
+                            onPressed: () => Navigator.pop(c, true),
+                            child: const Text('لغو پذیرش'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (ok == true) {
+                      await s.undoCheckin(p.id);
+                      if (mounted) setState(_load);
+                    }
+                  },
+            child: const Text('لغو پذیرش'),
+          ),
           if (flagged.isNotEmpty) ...[
             const SectionTitle('موارد مشکوک در گزارش'),
             for (final f in flagged)

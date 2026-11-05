@@ -4,16 +4,33 @@ if (!defined('ABSPATH')) {
 }
 
 /*
- * پیشخوان وردپرس: «کنفرانس» با دو صفحه
+ * پیشخوان وردپرس: «رویدادیار» با دو صفحه
  * - داشبورد زنده: پذیرش، وعده‌ها، موارد مشکوک، گوشی‌ها، خروجی CSV
- * - تنظیمات: ساخت کلید API برای اپ مدیریت
+ * - تنظیمات: کلید API اپ مدیریت، کلیدهای گوشی مدیر، و «درباره»
  */
 
 add_action('admin_menu', function () {
-    add_menu_page('کنفرانس', 'کنفرانس', 'manage_options', 'cd-dashboard', 'cd_render_dashboard', 'dashicons-groups', 30);
-    add_submenu_page('cd-dashboard', 'داشبورد کنفرانس', 'داشبورد', 'manage_options', 'cd-dashboard', 'cd_render_dashboard');
-    add_submenu_page('cd-dashboard', 'تنظیمات کنفرانس', 'تنظیمات', 'manage_options', 'cd-settings', 'cd_render_settings');
+    add_menu_page('رویدادیار', 'رویدادیار', 'manage_options', 'cd-dashboard', 'cd_render_dashboard', 'dashicons-groups', 30);
+    add_submenu_page('cd-dashboard', 'داشبورد رویدادیار', 'داشبورد', 'manage_options', 'cd-dashboard', 'cd_render_dashboard');
+    add_submenu_page('cd-dashboard', 'تنظیمات رویدادیار', 'تنظیمات', 'manage_options', 'cd-settings', 'cd_render_settings');
 });
+
+/** پانویس پیشخوان فقط در صفحه‌های خود افزونه (MakerCredit). */
+add_filter('admin_footer_text', function ($text) {
+    $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+    if (strpos($page, 'cd-') !== 0) {
+        return $text;
+    }
+    return 'رویدادیار ' . esc_html(CD_VERSION) . ' · ساخته‌ی <a href="https://newvisionteam.ir" target="_blank" rel="noopener">تیم راهکارهای نرم‌افزاری نگاه جدید</a>';
+});
+
+/** لینک «پشتیبانی» در فهرست افزونه‌ها. */
+add_filter('plugin_row_meta', function ($links, $file) {
+    if ($file === plugin_basename(CD_DIR . 'conference-day.php')) {
+        $links[] = '<a href="https://newvisionteam.ir" target="_blank" rel="noopener">پشتیبانی</a>';
+    }
+    return $links;
+}, 10, 2);
 
 add_action('admin_post_cd_export_csv', function () {
     if (!current_user_can('manage_options')) {
@@ -57,7 +74,7 @@ function cd_render_dashboard() {
     $current = isset($_GET['event']) ? cd_get_event((int) $_GET['event']) : ($events[0] ?? null);
 
     echo '<div class="wrap" dir="rtl" style="text-align:right">';
-    echo '<h1>داشبورد کنفرانس</h1>';
+    echo '<h1>داشبورد رویدادیار</h1>';
 
     if (!$events) {
         echo '<p>هنوز رویدادی ثبت نشده است. رویداد را از اپ مدیریت بسازید.</p>';
@@ -179,8 +196,34 @@ function cd_render_settings() {
     }
     $has_key = (string) get_option('cd_admin_key_hash', '') !== '';
 
+    // کلیدهای جدای گوشی مدیر (M1): هر گوشی کلید خودش را دارد و جدا باطل می‌شود.
+    $mobile_keys = get_option('cd_mobile_keys', []);
+    if (!is_array($mobile_keys)) {
+        $mobile_keys = [];
+    }
+    $new_mobile_key = null;
+    if (isset($_POST['cd_new_mobile_key']) && check_admin_referer('cd_mobile_keys')) {
+        $label = cd_str(wp_unslash($_POST['cd_mobile_label'] ?? ''), 64);
+        $new_mobile_key = 'cdm_' . cd_random_token(32);
+        $mobile_keys[wp_generate_uuid4()] = [
+            'label' => $label !== '' ? $label : 'گوشی مدیر',
+            'hash' => hash('sha256', $new_mobile_key),
+            'created_at' => cd_now(),
+            'last_used' => null,
+            'revoked' => false,
+        ];
+        update_option('cd_mobile_keys', $mobile_keys, false);
+    }
+    if (isset($_POST['cd_revoke_mobile_key']) && check_admin_referer('cd_mobile_keys')) {
+        $id = sanitize_text_field(wp_unslash($_POST['cd_revoke_mobile_key']));
+        if (isset($mobile_keys[$id])) {
+            $mobile_keys[$id]['revoked'] = true;
+            update_option('cd_mobile_keys', $mobile_keys, false);
+        }
+    }
+
     echo '<div class="wrap" dir="rtl" style="text-align:right">';
-    echo '<h1>تنظیمات کنفرانس</h1>';
+    echo '<h1>تنظیمات رویدادیار</h1>';
 
     echo '<h2>آدرس سرور برای اپ‌ها</h2>';
     printf('<p><code dir="ltr">%s</code></p>', esc_html(untrailingslashit(home_url())));
@@ -198,5 +241,40 @@ function cd_render_settings() {
     wp_nonce_field('cd_new_key');
     submit_button($has_key ? 'ساخت کلید جدید (کلید قبلی باطل می‌شود)' : 'ساخت کلید', 'primary', 'cd_new_key');
     echo '</form>';
+
+    echo '<h2>کلیدهای گوشی مدیر</h2>';
+    echo '<p>برای اپ مدیریت روی گوشی یک کلید جدا بسازید. اگر گوشی گم شد، فقط همان کلید را باطل کنید؛ اپ ویندوز و گوشی‌های دیگر کار می‌کنند.</p>';
+    if ($new_mobile_key) {
+        echo '<div class="notice notice-success"><p>کلید گوشی ساخته شد. همین حالا در اپ مدیریت گوشی وارد کنید؛ دوباره نمایش داده نمی‌شود.</p></div>';
+        printf('<p><input type="text" readonly value="%s" style="width:100%%;max-width:640px;direction:ltr;font-family:monospace" onclick="this.select()"></p>', esc_attr($new_mobile_key));
+    }
+    echo '<form method="post">';
+    wp_nonce_field('cd_mobile_keys');
+    echo '<table class="widefat striped" style="max-width:760px"><thead><tr><th>گوشی</th><th>ساخته‌شده</th><th>آخرین استفاده</th><th></th></tr></thead><tbody>';
+    foreach ($mobile_keys as $id => $k) {
+        printf(
+            '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>',
+            esc_html($k['label']),
+            esc_html(cd_admin_time(cd_iso($k['created_at']))),
+            esc_html(cd_admin_time($k['last_used'] ? cd_iso($k['last_used']) : null)),
+            $k['revoked']
+                ? 'باطل‌شده'
+                : sprintf('<button class="button button-small" name="cd_revoke_mobile_key" value="%s" onclick="return confirm(\'این کلید باطل شود؟ آن گوشی دیگر به مدیریت دسترسی ندارد.\')">باطل کردن</button>', esc_attr($id)) // phpcs:ignore WordPress.Security.EscapeOutput
+        );
+    }
+    if (!$mobile_keys) {
+        echo '<tr><td colspan="4">هنوز کلید گوشی ساخته نشده است.</td></tr>';
+    }
+    echo '</tbody></table>';
+    echo '<p><input type="text" name="cd_mobile_label" placeholder="نام گوشی، مثلاً گوشی محمد" style="width:260px"> ';
+    echo '<button class="button button-primary" name="cd_new_mobile_key" value="1">ساخت کلید گوشی</button></p>';
+    echo '</form>';
+
+    echo '<h2>درباره</h2>';
+    echo '<div style="background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:16px;max-width:640px">';
+    printf('<p style="margin:0;font-size:15px;font-weight:600">رویدادیار (RoydadYar) %s</p>', esc_html(CD_VERSION));
+    echo '<p style="margin:4px 0 0;color:#646970">ساخته‌ی تیم راهکارهای نرم‌افزاری نگاه جدید (NewVisionteam)</p>';
+    echo '<p style="margin:4px 0 0"><a href="https://newvisionteam.ir" target="_blank" rel="noopener" dir="ltr">newvisionteam.ir</a></p>';
+    echo '</div>';
     echo '</div>';
 }

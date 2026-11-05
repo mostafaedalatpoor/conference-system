@@ -1,8 +1,11 @@
 <?php
 /**
- * Plugin Name: Conference Day
- * Description: سامانه‌ی مدیریت روز اجرای کنفرانس: API همگام‌سازی برای اپ نیروها و اپ مدیریت، صفحه‌ی عمومی شناسایی /c/&lt;token&gt;، و داشبورد زنده.
- * Version: 0.1.0
+ * Plugin Name: رویدادیار (RoydadYar)
+ * Plugin URI: https://newvisionteam.ir
+ * Description: سامانه‌ی روز اجرای رویداد: API همگام‌سازی برای اپ نیروها و اپ مدیریت، صفحه‌ی عمومی /c/&lt;token&gt;، و داشبورد زنده.
+ * Version: 0.2.0
+ * Author: NewVisionteam - تیم راهکارهای نرم‌افزاری نگاه جدید
+ * Author URI: https://newvisionteam.ir
  * Requires at least: 5.6
  * Requires PHP: 7.4
  * Text Domain: conference-day
@@ -12,8 +15,9 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('CD_VERSION', '0.1.0');
-define('CD_DB_VERSION', '1');
+// نام‌های فنی (پوشه‌ی افزونه، مسیر API conf/v1، پیشوند جدول‌ها wp_cd_) عوض نمی‌شوند تا داده و اپ‌های نصب‌شده بمانند.
+define('CD_VERSION', '0.2.0');
+define('CD_DB_VERSION', '2');
 define('CD_NS', 'conf/v1');
 define('CD_DIR', plugin_dir_path(__FILE__));
 

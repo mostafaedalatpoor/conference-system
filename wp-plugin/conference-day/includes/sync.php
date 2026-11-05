@@ -88,13 +88,15 @@ function cd_push_events(array $event, array $device, array $items) {
     $type_ids = array_map(function ($t) {
         return $t['id'];
     }, $config['registration_types']);
+    // در رویداد «بدون کارت» ثبت‌نام در محل کارت نمی‌خواهد.
+    $cards_required = cd_event_settings($event)['identify_mode'] !== 'none';
 
     $accepted = 0;
     $duplicates = 0;
     $rejected = [];
 
     foreach (array_slice($items, 0, CD_PUSH_LIMIT) as $i => $e) {
-        $reason = cd_validate_event_item($e, $meals);
+        $reason = cd_validate_event_item($e, $meals, $cards_required);
         if ($reason !== null) {
             $rejected[] = ['index' => $i, 'uuid' => is_array($e) ? ($e['uuid'] ?? null) : null, 'reason' => $reason];
             continue;
@@ -172,7 +174,7 @@ function cd_push_events(array $event, array $device, array $items) {
     return ['accepted' => $accepted, 'duplicates' => $duplicates, 'rejected' => $rejected];
 }
 
-function cd_validate_event_item($e, array $meals) {
+function cd_validate_event_item($e, array $meals, $cards_required = true) {
     if (!is_array($e)) {
         return 'not_object';
     }
@@ -214,7 +216,7 @@ function cd_validate_event_item($e, array $meals) {
             if (cd_str($a['first_name'] ?? '') === '' || cd_str($a['last_name'] ?? '') === '') {
                 return 'walkin_missing_name';
             }
-            if (!$has_card) {
+            if (!$has_card && $cards_required) {
                 return 'walkin_missing_card';
             }
             break;
@@ -222,8 +224,8 @@ function cd_validate_event_item($e, array $meals) {
     return null;
 }
 
-/** ساخت شرکت‌کننده‌ی ثبت‌نام در محل و وصل‌کردن کارت رزرو. خروجی: flag یا null. */
-function cd_apply_walkin($event_id, array $a, array $card, array $type_ids) {
+/** ساخت شرکت‌کننده‌ی ثبت‌نام در محل و وصل‌کردن کارت رزرو (اگر هست). خروجی: flag یا null. */
+function cd_apply_walkin($event_id, array $a, ?array $card, array $type_ids) {
     global $wpdb;
     $type_id = (int) ($a['registration_type_id'] ?? 0);
     if (!in_array($type_id, $type_ids, true)) {
@@ -236,7 +238,9 @@ function cd_apply_walkin($event_id, array $a, array $card, array $type_ids) {
     $attendee_id = strtolower($a['id']);
 
     $flag = null;
-    if (!(int) $card['is_reserve']) {
+    if ($card === null) {
+        // رویداد بدون کارت: فقط ثبت فرد.
+    } elseif (!(int) $card['is_reserve']) {
         $flag = 'card_not_reserve';
     } else {
         $linked = $wpdb->query($wpdb->prepare(

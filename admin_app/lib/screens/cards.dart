@@ -321,13 +321,13 @@ class _CardsScreenState extends State<CardsScreen> {
           onPressed: s.busy || people.isEmpty ? null : () => _generateLists(s),
           label: const Text('PDF لیست پشتیبان کاغذی'),
         ),
-        TextButton(onPressed: () => s.save(), child: const Text('ذخیره‌ی تنظیمات قالب')),
+        TextButton(onPressed: s.busy ? null : s.saveTemplate, child: const Text('ذخیره‌ی قالب روی سرور')),
       ]),
       const SizedBox(height: 8),
       Hint(
         'PDF کارت‌ها برای هر کارت یک صفحه‌ی رو و پشت‌سرش یک صفحه‌ی پشت دارد (چاپ دورو)، به ترتیب الفبایی نام خانوادگی. '
         'بعد از ساخت PDF، آدرس پایه قفل می‌شود تا لینک QR کارت‌های چاپ‌شده عوض نشود. '
-        'قالب فعلاً روی همین دستگاه ذخیره می‌شود${mobile ? '' : '، نه روی سرور'}.',
+        'قالب روی سرور ذخیره می‌شود تا ویندوز و گوشی یک قالب ببینند؛ تصویر طرح روی همین رایانه می‌ماند.',
       ),
     ]);
   }

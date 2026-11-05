@@ -254,7 +254,32 @@ class DeviceRow extends StatelessWidget {
               ]),
             ]),
           ),
-          if (revoked) const DaftarTag('باطل‌شده', kind: TagKind.outline),
+          if (revoked)
+            const DaftarTag('باطل‌شده', kind: TagKind.outline)
+          else if (device['id'] is int)
+            OutlinedButton(
+              onPressed: () async {
+                final s = StateScope.read(context);
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (c) => AlertDialog(
+                    title: const Text('باطل کردن دستگاه'),
+                    content: Text('دسترسی «${label.isEmpty ? 'این دستگاه' : label}» باطل شود؟ '
+                        'کارهای ارسال‌نشده‌ی آن دستگاه تا ورود دوباره با PIN روی همان دستگاه می‌ماند.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
+                      FilledButton(
+                        style: daftarDangerStyle(c),
+                        onPressed: () => Navigator.pop(c, true),
+                        child: const Text('باطل کن'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true) await s.revokeDevice(device['id'] as int);
+              },
+              child: const Text('باطل کن'),
+            ),
         ]),
       ),
     );

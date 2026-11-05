@@ -11,11 +11,28 @@ if (!defined('ABSPATH')) {
 
 function cd_admin_permission(WP_REST_Request $request) {
     $key = (string) $request->get_header('x-conf-admin');
-    $hash = (string) get_option('cd_admin_key_hash', '');
-    if ($key === '' || $hash === '' || !hash_equals($hash, hash('sha256', $key))) {
+    if ($key === '') {
         return cd_error('cd_admin_auth', 'کلید مدیریت نامعتبر است.', 401);
     }
-    return true;
+    $given = hash('sha256', $key);
+    $hash = (string) get_option('cd_admin_key_hash', '');
+    if ($hash !== '' && hash_equals($hash, $given)) {
+        return true;
+    }
+    // کلیدهای جدای گوشی مدیر؛ هر کدام در پیشخوان جدا باطل می‌شود (M1).
+    $keys = get_option('cd_mobile_keys', []);
+    if (is_array($keys)) {
+        foreach ($keys as $id => $k) {
+            if (empty($k['revoked']) && hash_equals((string) $k['hash'], $given)) {
+                if (empty($k['last_used']) || strtotime($k['last_used'] . ' UTC') < time() - 300) {
+                    $keys[$id]['last_used'] = cd_now();
+                    update_option('cd_mobile_keys', $keys, false);
+                }
+                return true;
+            }
+        }
+    }
+    return cd_error('cd_admin_auth', 'کلید مدیریت نامعتبر است.', 401);
 }
 
 function cd_event_from_request(WP_REST_Request $request) {
@@ -98,7 +115,13 @@ add_action('rest_api_init', function () {
         'permission_callback' => $admin,
         'callback' => function (WP_REST_Request $request) {
             $event = cd_event_from_request($request);
-            return is_wp_error($event) ? $event : cd_build_snapshot($event);
+            if (is_wp_error($event)) {
+                return $event;
+            }
+            $snap = cd_build_snapshot($event);
+            $t = !empty($event['card_template']) ? json_decode($event['card_template'], true) : null;
+            $snap['card_template'] = is_array($t) ? $t : null;
+            return $snap;
         },
     ]);
 
@@ -109,6 +132,43 @@ add_action('rest_api_init', function () {
             $event = cd_event_from_request($request);
             return is_wp_error($event) ? $event : cd_build_report($event);
         },
+    ]);
+
+    $aid = '(?P<attendee>[0-9a-fA-F-]{36})';
+
+    // تاریخچه‌ی یک نفر (PersonTimeline) برای تب «افراد» اپ مدیریت.
+    register_rest_route(CD_NS, "/admin/events/$code/attendees/$aid/timeline", [
+        'methods' => 'GET',
+        'permission_callback' => $admin,
+        'callback' => 'cd_rest_timeline',
+    ]);
+
+    // لغو پذیرش از اپ مدیریت؛ مثل رخداد checkin_undo گوشی در دفتر ثبت می‌شود.
+    register_rest_route(CD_NS, "/admin/events/$code/attendees/$aid/checkin-undo", [
+        'methods' => 'POST',
+        'permission_callback' => $admin,
+        'callback' => 'cd_rest_admin_undo_checkin',
+    ]);
+
+    // قالب کارت روی سرور تا اپ مدیریت ویندوز و موبایل یک قالب ببینند.
+    register_rest_route(CD_NS, "/admin/events/$code/card-template", [
+        [
+            'methods' => 'GET',
+            'permission_callback' => $admin,
+            'callback' => function (WP_REST_Request $request) {
+                $event = cd_event_from_request($request);
+                if (is_wp_error($event)) {
+                    return $event;
+                }
+                $t = !empty($event['card_template']) ? json_decode($event['card_template'], true) : null;
+                return ['template' => is_array($t) ? $t : null];
+            },
+        ],
+        [
+            'methods' => 'POST',
+            'permission_callback' => $admin,
+            'callback' => 'cd_rest_save_card_template',
+        ],
     ]);
 
     register_rest_route(CD_NS, '/admin/devices/(?P<id>\d+)/revoke', [
@@ -272,8 +332,102 @@ function cd_rest_config(WP_REST_Request $request) {
         $wpdb->query('COMMIT');
     }
 
+    $settings = $request->get_param('settings');
+    if (is_array($settings)) {
+        $clean = cd_sanitize_settings($settings, cd_event_settings($event));
+        $wpdb->update(cd_table('events'), ['settings' => wp_json_encode($clean), 'updated_at' => cd_now()], ['id' => $eid]);
+    }
+
     cd_bump_config($eid);
-    return array_merge(['errors' => $errors], cd_event_config($eid));
+    return array_merge(['errors' => $errors, 'settings' => cd_event_settings(cd_get_event($eid))], cd_event_config($eid));
+}
+
+/** تاریخچه‌ی یک نفر به ترتیب زمان، با نام وعده، دستگاه، نیرو و توضیح مورد مشکوک. */
+function cd_rest_timeline(WP_REST_Request $request) {
+    global $wpdb;
+    $event = cd_event_from_request($request);
+    if (is_wp_error($event)) {
+        return $event;
+    }
+    $rows = $wpdb->get_results($wpdb->prepare(
+        'SELECT l.seq, l.kind, l.flag, l.device_time, l.meal_id, m.name AS meal_name, d.label AS device_label, s.name AS staff_name
+         FROM ' . cd_table('event_log') . ' l
+         LEFT JOIN ' . cd_table('meals') . ' m ON m.id = l.meal_id
+         LEFT JOIN ' . cd_table('devices') . ' d ON d.id = l.device_id
+         LEFT JOIN ' . cd_table('staff') . ' s ON s.id = l.staff_id
+         WHERE l.event_id = %d AND l.attendee_id = %s
+         ORDER BY l.seq',
+        (int) $event['id'],
+        strtolower((string) $request['attendee'])
+    ), ARRAY_A);
+    return [
+        'events' => array_map(function ($r) {
+            return [
+                'seq' => (int) $r['seq'],
+                'kind' => $r['kind'],
+                'meal_name' => $r['meal_name'],
+                'device_time' => cd_iso($r['device_time']),
+                'device_label' => $r['device_label'] ?? 'اپ مدیریت',
+                'staff' => $r['staff_name'],
+                'flag' => $r['flag'],
+                'flag_label' => $r['flag'] ? (CD_FLAG_LABELS[$r['flag']] ?? $r['flag']) : null,
+            ];
+        }, $rows),
+        'server_time' => gmdate('c'),
+    ];
+}
+
+function cd_rest_admin_undo_checkin(WP_REST_Request $request) {
+    global $wpdb;
+    $event = cd_event_from_request($request);
+    if (is_wp_error($event)) {
+        return $event;
+    }
+    $eid = (int) $event['id'];
+    $aid = strtolower((string) $request['attendee']);
+    $exists = $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cd_table('attendees') . ' WHERE id = %s AND event_id = %d', $aid, $eid));
+    if (!(int) $exists) {
+        return cd_error('cd_no_attendee', 'این نفر در این رویداد نیست.', 404);
+    }
+    $now = cd_now();
+    $wpdb->insert(cd_table('event_log'), [
+        'uuid' => wp_generate_uuid4(),
+        'event_id' => $eid,
+        'kind' => 'checkin_undo',
+        'attendee_id' => $aid,
+        'device_time' => $now,
+        'received_at' => $now,
+    ]);
+    return ['ok' => true, 'seq' => (int) $wpdb->insert_id];
+}
+
+/** قالب کارت (جای نام و QR، اندازه، رنگ). مسیر تصویرهای طرح محلی است و ذخیره نمی‌شود. */
+function cd_rest_save_card_template(WP_REST_Request $request) {
+    global $wpdb;
+    $event = cd_event_from_request($request);
+    if (is_wp_error($event)) {
+        return $event;
+    }
+    $t = $request->get_param('template');
+    if (!is_array($t)) {
+        return cd_error('cd_bad_template', 'قالب کارت لازم است.');
+    }
+    $clean = [];
+    foreach (['width_mm', 'height_mm', 'name_x', 'name_y', 'name_size', 'qr_x', 'qr_y', 'qr_size_mm'] as $k) {
+        if (isset($t[$k]) && is_numeric($t[$k])) {
+            $clean[$k] = (float) $t[$k];
+        }
+    }
+    if (isset($t['name_color']) && preg_match('/^#?[0-9a-fA-F]{6}$/', (string) $t['name_color'])) {
+        $clean['name_color'] = ltrim((string) $t['name_color'], '#');
+    }
+    foreach (['show_role', 'show_serial'] as $k) {
+        if (array_key_exists($k, $t)) {
+            $clean[$k] = (bool) $t[$k];
+        }
+    }
+    $wpdb->update(cd_table('events'), ['card_template' => wp_json_encode($clean), 'updated_at' => cd_now()], ['id' => (int) $event['id']]);
+    return ['template' => $clean];
 }
 
 /** نیروها با نام upsert می‌شوند؛ نیرویی که در لیست نیست غیرفعال و گوشی‌هایش باطل می‌شوند. */

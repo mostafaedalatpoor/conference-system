@@ -182,3 +182,25 @@ jobs:
           path: |
             admin_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             admin_app/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+
+  wp-plugin:
+    name: رویدادیار — افزونه‌ی وردپرس
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: بررسی نحو PHP
+        run: |
+          find wp-plugin -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      # conference-day.zip پوشه‌ی conference-day را در ریشه دارد و همان را در وردپرس بارگذاری کنید
+      # تا جای نسخه‌ی قبلی بنشیند.
+      - name: ساخت zip افزونه
+        run: |
+          cd wp-plugin
+          zip -r ../conference-day.zip conference-day
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: roydadyar-wp-plugin
+          path: conference-day.zip

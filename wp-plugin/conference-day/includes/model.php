@@ -69,6 +69,9 @@ function cd_upsert_attendee($event_id, array $a, $source, $only_insert = false) 
         'presentation_kind' => cd_str($a['presentation_kind'] ?? '', 16),
         'role_id' => isset($a['role_id']) && $a['role_id'] ? (int) $a['role_id'] : null,
         'source' => $source,
+        // null یعنی «طبق تنظیم رویداد»؛ ستون «اشتراک اطلاعات تماس» اکسل برای هر نفر مقدم است.
+        'share_contact' => isset($a['share_contact']) && $a['share_contact'] !== null && $a['share_contact'] !== '' ? (int) (bool) $a['share_contact'] : null,
+        'website' => esc_url_raw(cd_str($a['website'] ?? '', 255)),
         'created_at' => $now,
         'updated_at' => $now,
     ];
@@ -116,6 +119,8 @@ function cd_attendee_out(array $r) {
         'presentation_kind' => $r['presentation_kind'],
         'role_id' => $r['role_id'] !== null ? (int) $r['role_id'] : null,
         'source' => $r['source'],
+        'share_contact' => isset($r['share_contact']) && $r['share_contact'] !== null ? (bool) $r['share_contact'] : null,
+        'website' => $r['website'] ?? '',
     ];
 }
 
@@ -202,6 +207,53 @@ function cd_event_config($event_id) {
     ];
 }
 
+/** تنظیم‌های پیش‌فرض رویداد (IdentifyMode، QrBehavior، خط سازنده). */
+function cd_default_settings() {
+    return [
+        'identify_mode' => 'scan',
+        'qr_behavior' => 'person',
+        'qr_redirect_url' => '',
+        'contact_fields' => ['name' => true, 'organization' => true, 'email' => false, 'mobile' => false, 'country' => false],
+        'show_maker_credit' => true,
+    ];
+}
+
+/** تنظیم‌های ذخیره‌شده‌ی رویداد، با پیش‌فرض برای کلیدهای نبوده. */
+function cd_event_settings(array $e) {
+    $s = cd_default_settings();
+    $saved = !empty($e['settings']) ? json_decode($e['settings'], true) : null;
+    if (is_array($saved)) {
+        $s = cd_sanitize_settings($saved, $s);
+    }
+    return $s;
+}
+
+/** فقط کلیدها و مقدارهای شناخته‌شده پذیرفته می‌شوند. */
+function cd_sanitize_settings(array $in, ?array $base = null) {
+    $s = $base ?? cd_default_settings();
+    if (in_array($in['identify_mode'] ?? null, ['scan', 'card', 'none'], true)) {
+        $s['identify_mode'] = $in['identify_mode'];
+    }
+    if (in_array($in['qr_behavior'] ?? null, ['person', 'redirect', 'vcard'], true)) {
+        $s['qr_behavior'] = $in['qr_behavior'];
+    }
+    if (isset($in['qr_redirect_url'])) {
+        $url = esc_url_raw(trim((string) $in['qr_redirect_url']), ['http', 'https']);
+        $s['qr_redirect_url'] = $url;
+    }
+    if (isset($in['contact_fields']) && is_array($in['contact_fields'])) {
+        foreach (array_keys($s['contact_fields']) as $k) {
+            if (array_key_exists($k, $in['contact_fields'])) {
+                $s['contact_fields'][$k] = (bool) $in['contact_fields'][$k];
+            }
+        }
+    }
+    if (array_key_exists('show_maker_credit', $in)) {
+        $s['show_maker_credit'] = (bool) $in['show_maker_credit'];
+    }
+    return $s;
+}
+
 function cd_event_out(array $e) {
     return [
         'id' => (int) $e['id'],
@@ -212,6 +264,7 @@ function cd_event_out(array $e) {
         'base_url' => $e['base_url'],
         'base_url_locked' => (bool) $e['base_url_locked'],
         'config_version' => (int) $e['config_version'],
+        'settings' => cd_event_settings($e),
     ];
 }
 
