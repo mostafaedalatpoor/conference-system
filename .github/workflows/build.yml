@@ -209,19 +209,32 @@ jobs:
 
   release:
     name: انتشار در Releases
-    if: startsWith(github.ref, 'refs/tags/v')
+    # با تگ v* یا با commitی روی شاخه که «[release]» در پیامش دارد؛
+    # در حالت دوم خود گیت‌هاب تگ نسخه‌ی pubspec را روی همان commit می‌سازد.
+    if: startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[release]')
     needs: [staff-android, staff-windows, admin-windows, admin-android, wp-plugin]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
+      - name: شماره‌ی نسخه
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v$(grep '^version:' staff_app/pubspec.yaml | sed -E 's/version: *([0-9.]+).*/\1/')" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
       - name: نام‌گذاری فایل‌ها
         run: |
-          V="${GITHUB_REF_NAME}"
+          V="${{ steps.ver.outputs.tag }}"
           mkdir out
           cp artifacts/roydadyar-staff-android/app-arm64-v8a-release.apk     "out/RoydadYar-Staff-$V-android-arm64.apk"
           cp artifacts/roydadyar-staff-android/app-armeabi-v7a-release.apk   "out/RoydadYar-Staff-$V-android-armv7.apk"
@@ -235,7 +248,9 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          name: رویدادیار ${{ github.ref_name }}
+          tag_name: ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: رویدادیار ${{ steps.ver.outputs.tag }}
           files: out/*
           generate_release_notes: true
           body: |
