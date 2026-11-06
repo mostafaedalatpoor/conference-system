@@ -4,6 +4,8 @@ name: build
 on:
   push:
     branches: [main, design-system-daftar]
+    # تگ نسخه (مثلاً v0.2.0) همه را می‌سازد و در Releases منتشر می‌کند.
+    tags: ['v*']
   workflow_dispatch:
   # بعد از باز شدن bundle، ساخت خودکار اجرا شود.
   workflow_run:
@@ -204,3 +206,43 @@ jobs:
         with:
           name: roydadyar-wp-plugin
           path: conference-day.zip
+
+  release:
+    name: انتشار در Releases
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [staff-android, staff-windows, admin-windows, admin-android, wp-plugin]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: نام‌گذاری فایل‌ها
+        run: |
+          V="${GITHUB_REF_NAME}"
+          mkdir out
+          cp artifacts/roydadyar-staff-android/app-arm64-v8a-release.apk     "out/RoydadYar-Staff-$V-android-arm64.apk"
+          cp artifacts/roydadyar-staff-android/app-armeabi-v7a-release.apk   "out/RoydadYar-Staff-$V-android-armv7.apk"
+          cp artifacts/roydadyar-admin-android/app-arm64-v8a-release.apk     "out/RoydadYar-Admin-$V-android-arm64.apk"
+          cp artifacts/roydadyar-admin-android/app-armeabi-v7a-release.apk   "out/RoydadYar-Admin-$V-android-armv7.apk"
+          (cd artifacts/roydadyar-staff-windows && zip -qr "../../out/RoydadYar-Staff-$V-windows.zip" .)
+          (cd artifacts/roydadyar-admin-windows && zip -qr "../../out/RoydadYar-Admin-$V-windows.zip" .)
+          # پوشه‌ی conference-day در ریشه‌ی zip است تا در وردپرس جای نسخه‌ی قبلی بنشیند.
+          cp artifacts/roydadyar-wp-plugin/conference-day.zip "out/RoydadYar-WordPress-plugin-$V.zip"
+          ls -la out
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: رویدادیار ${{ github.ref_name }}
+          files: out/*
+          generate_release_notes: true
+          body: |
+            | فایل | چیست |
+            | --- | --- |
+            | `RoydadYar-Staff-…-android-arm64.apk` | رویدادیار نیروها برای گوشی‌های جدید (اگر نصب نشد، نسخه‌ی armv7) |
+            | `RoydadYar-Staff-…-windows.zip` | رویدادیار نیروها برای ویندوز؛ کل پوشه را باز کنید و `RoydadYarStaff.exe` را اجرا کنید |
+            | `RoydadYar-Admin-…-android-arm64.apk` | رویدادیار مدیریت برای گوشی |
+            | `RoydadYar-Admin-…-windows.zip` | رویدادیار مدیریت برای ویندوز (`RoydadYarAdmin.exe`) |
+            | `RoydadYar-WordPress-plugin-….zip` | افزونه‌ی وردپرس؛ در «افزونه‌ها ← افزودن ← بارگذاری» بدهید و «جایگزینی نسخه‌ی فعلی» را بزنید |
