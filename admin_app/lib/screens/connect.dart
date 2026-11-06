@@ -53,7 +53,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
         controller: _key,
         decoration: const InputDecoration(
           labelText: 'کلید API',
-          helperText: 'از پیشخوان وردپرس: کنفرانس ← تنظیمات ← ساخت کلید',
+          helperText: 'از پیشخوان وردپرس: رویدادیار ← تنظیمات ← ساخت کلید',
         ),
         obscureText: true,
         textDirection: TextDirection.ltr,
