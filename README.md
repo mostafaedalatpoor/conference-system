@@ -431,7 +431,7 @@ flutter run
 
 ### انتشار
 
-با هر push روی `main` یا شاخه‌ی کاری، CI پنج خروجی را می‌سازد (در بخش Artifacts اجرا). برای انتشار در Releases یکی از این دو:
+با هر push روی `main` یا `design-system-daftar` (و با هر تگ نسخه)، CI پنج خروجی را می‌سازد؛ در صفحه‌ی همان اجرا، بخش Artifacts. برای انتشار در Releases یکی از این دو:
 
 - شماره‌ی نسخه را در `pubspec.yaml` هر دو اپ و `conference-day.php` بالا ببرید و در پیام commit روی شاخه `[release]` بنویسید؛ تگ از نسخه‌ی `staff_app/pubspec.yaml` ساخته می‌شود.
 - یا تگی مثل `v0.2.1` را push کنید.
