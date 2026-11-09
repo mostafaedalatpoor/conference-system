@@ -118,7 +118,7 @@ add_action('rest_api_init', function () {
             if (is_wp_error($event)) {
                 return $event;
             }
-            $snap = cd_build_snapshot($event);
+            $snap = cd_build_snapshot($event, true);
             $t = !empty($event['card_template']) ? json_decode($event['card_template'], true) : null;
             $snap['card_template'] = is_array($t) ? $t : null;
             return $snap;
@@ -401,7 +401,7 @@ function cd_rest_admin_undo_checkin(WP_REST_Request $request) {
     return ['ok' => true, 'seq' => (int) $wpdb->insert_id];
 }
 
-/** قالب کارت (جای نام و QR، اندازه، رنگ). مسیر تصویرهای طرح محلی است و ذخیره نمی‌شود. */
+/** قالب کارت (نوع کارت، QR، متن‌ها، بوم چاپ). مسیر تصویر طرح و فایل اکسل جدا محلی است و ذخیره نمی‌شود. */
 function cd_rest_save_card_template(WP_REST_Request $request) {
     global $wpdb;
     $event = cd_event_from_request($request);
@@ -412,32 +412,7 @@ function cd_rest_save_card_template(WP_REST_Request $request) {
     if (!is_array($t)) {
         return cd_error('cd_bad_template', 'قالب کارت لازم است.');
     }
-    $clean = [];
-    foreach (['width_mm', 'height_mm', 'name_x', 'name_y', 'name_size', 'qr_x', 'qr_y', 'qr_size_mm'] as $k) {
-        if (isset($t[$k]) && is_numeric($t[$k])) {
-            $clean[$k] = (float) $t[$k];
-        }
-    }
-    if (isset($t['name_color']) && preg_match('/^#?[0-9a-fA-F]{6}$/', (string) $t['name_color'])) {
-        $clean['name_color'] = ltrim((string) $t['name_color'], '#');
-    }
-    foreach (['show_role', 'show_serial', 'sheet_mode', 'auto_rotate'] as $k) {
-        if (array_key_exists($k, $t)) {
-            $clean[$k] = (bool) $t[$k];
-        }
-    }
-    // چیدن روی بوم چاپ: اندازه‌ی بوم و حاشیه (میلی‌متر)، و جهت برگشتن برگ در چاپ دورو.
-    foreach (['sheet_w', 'sheet_h', 'sheet_margin'] as $k) {
-        if (isset($t[$k]) && is_numeric($t[$k]) && (float) $t[$k] >= 0 && (float) $t[$k] <= 2000) {
-            $clean[$k] = (float) $t[$k];
-        }
-    }
-    if (isset($t['duplex']) && in_array($t['duplex'], ['long', 'short'], true)) {
-        $clean['duplex'] = $t['duplex'];
-    }
-    if (isset($t['sheet_preset']) && preg_match('/^[A-Za-z0-9]{1,12}$/', (string) $t['sheet_preset'])) {
-        $clean['sheet_preset'] = (string) $t['sheet_preset'];
-    }
+    $clean = cd_sanitize_card_template($t);
     $wpdb->update(cd_table('events'), ['card_template' => wp_json_encode($clean), 'updated_at' => cd_now()], ['id' => (int) $event['id']]);
     return ['template' => $clean];
 }

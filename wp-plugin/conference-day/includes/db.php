@@ -111,6 +111,7 @@ function cd_install_tables() {
   source varchar(16) NOT NULL DEFAULT 'import',
   share_contact tinyint(1) NULL,
   website varchar(255) NOT NULL DEFAULT '',
+  extra longtext NULL,
   search_key varchar(512) NOT NULL DEFAULT '',
   created_at datetime NOT NULL,
   updated_at datetime NOT NULL,

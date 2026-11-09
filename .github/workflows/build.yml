@@ -16,14 +16,61 @@ env:
   VAZIRMATN: https://raw.githubusercontent.com/rastikerdar/vazirmatn/master/fonts/ttf
 
 jobs:
+  # فقط بخشی ساخته می‌شود که عوض شده؛ تگ، «[release]»، اجرای دستی و bootstrap همه را می‌سازند.
+  changes:
+    name: چه چیزی عوض شده؟
+    runs-on: ubuntu-latest
+    outputs:
+      staff: ${{ steps.pick.outputs.staff }}
+      admin: ${{ steps.pick.outputs.admin }}
+      plugin: ${{ steps.pick.outputs.plugin }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: f
+        if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') && !contains(github.event.head_commit.message, '[release]')
+        with:
+          filters: |
+            staff:
+              - 'staff_app/**'
+              - 'branding/**'
+              - 'ci/**'
+              - '.github/workflows/build.yml'
+            admin:
+              - 'admin_app/**'
+              - 'branding/**'
+              - 'ci/**'
+              - 'staff_app/ci/**'
+              - '.github/workflows/build.yml'
+            plugin:
+              - 'wp-plugin/**'
+              - '.github/workflows/build.yml'
+      - id: pick
+        run: |
+          if [ "${{ steps.f.outcome }}" = "success" ]; then
+            echo "staff=${{ steps.f.outputs.staff }}" >> "$GITHUB_OUTPUT"
+            echo "admin=${{ steps.f.outputs.admin }}" >> "$GITHUB_OUTPUT"
+            echo "plugin=${{ steps.f.outputs.plugin }}" >> "$GITHUB_OUTPUT"
+          else
+            printf 'staff=true\nadmin=true\nplugin=true\n' >> "$GITHUB_OUTPUT"
+          fi
+
   staff-android:
     name: رویدادیار نیروها — اندروید
+    needs: changes
+    if: needs.changes.outputs.staff == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: staff_app
     steps:
       - uses: actions/checkout@v4
+
+      # نسخه از pubspec، شماره‌ی ساخت از شماره‌ی اجرای گیت‌هاب: هر ساخت نام و نسخه‌ی جدا دارد.
+      - name: شماره‌ی نسخه و ساخت
+        run: |
+          echo "V=$(grep '^version:' pubspec.yaml | sed -E 's/version: *([0-9.]+).*/\1/')" >> "$GITHUB_ENV"
+          echo "B=${{ github.run_number }}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -56,17 +103,22 @@ jobs:
           cp ci/debug.keystore ~/.android/debug.keystore
 
       - run: flutter pub get
-      - run: flutter build apk --release --split-per-abi
+      - run: flutter build apk --release --split-per-abi --build-name "$V" --build-number "$B" --dart-define=APP_VERSION="$V" --dart-define=APP_BUILD="$B"
+      - name: نام‌گذاری با نسخه
+        run: |
+          mkdir dist
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   "dist/RoydadYar-Staff-$V-b$B-android-arm64.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "dist/RoydadYar-Staff-$V-b$B-android-armv7.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: roydadyar-staff-android
-          path: |
-            staff_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            staff_app/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+          name: RoydadYar-Staff-${{ env.V }}-b${{ env.B }}-android
+          path: staff_app/dist/
 
   staff-windows:
     name: رویدادیار نیروها — ویندوز
+    needs: changes
+    if: needs.changes.outputs.staff == 'true'
     runs-on: windows-latest
     defaults:
       run:
@@ -74,6 +126,12 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+
+      # نسخه از pubspec، شماره‌ی ساخت از شماره‌ی اجرای گیت‌هاب: هر ساخت نام و نسخه‌ی جدا دارد.
+      - name: شماره‌ی نسخه و ساخت
+        run: |
+          echo "V=$(grep '^version:' pubspec.yaml | sed -E 's/version: *([0-9.]+).*/\1/')" >> "$GITHUB_ENV"
+          echo "B=${{ github.run_number }}" >> "$GITHUB_ENV"
 
       - uses: subosito/flutter-action@v2
         with:
@@ -94,15 +152,17 @@ jobs:
           python ../ci/patch_windows.py windows --binary RoydadYarStaff --title "رویدادیار نیروها" --icon ../branding/windows/app_icon.ico
 
       - run: flutter pub get
-      - run: flutter build windows --release
+      - run: flutter build windows --release --build-name "$V" --build-number "$B" --dart-define=APP_VERSION="$V" --dart-define=APP_BUILD="$B"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: roydadyar-staff-windows
+          name: RoydadYar-Staff-${{ env.V }}-b${{ env.B }}-windows
           path: staff_app/build/windows/x64/runner/Release/
 
   admin-windows:
     name: رویدادیار مدیریت — ویندوز
+    needs: changes
+    if: needs.changes.outputs.admin == 'true'
     runs-on: windows-latest
     defaults:
       run:
@@ -110,6 +170,12 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+
+      # نسخه از pubspec، شماره‌ی ساخت از شماره‌ی اجرای گیت‌هاب: هر ساخت نام و نسخه‌ی جدا دارد.
+      - name: شماره‌ی نسخه و ساخت
+        run: |
+          echo "V=$(grep '^version:' pubspec.yaml | sed -E 's/version: *([0-9.]+).*/\1/')" >> "$GITHUB_ENV"
+          echo "B=${{ github.run_number }}" >> "$GITHUB_ENV"
 
       - uses: subosito/flutter-action@v2
         with:
@@ -130,21 +196,29 @@ jobs:
           python ../ci/patch_windows.py windows --binary RoydadYarAdmin --title "رویدادیار مدیریت" --icon ../branding/windows/app_icon.ico
 
       - run: flutter pub get
-      - run: flutter build windows --release
+      - run: flutter build windows --release --build-name "$V" --build-number "$B" --dart-define=APP_VERSION="$V" --dart-define=APP_BUILD="$B"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: roydadyar-admin-windows
+          name: RoydadYar-Admin-${{ env.V }}-b${{ env.B }}-windows
           path: admin_app/build/windows/x64/runner/Release/
 
   admin-android:
     name: رویدادیار مدیریت — اندروید
+    needs: changes
+    if: needs.changes.outputs.admin == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: admin_app
     steps:
       - uses: actions/checkout@v4
+
+      # نسخه از pubspec، شماره‌ی ساخت از شماره‌ی اجرای گیت‌هاب: هر ساخت نام و نسخه‌ی جدا دارد.
+      - name: شماره‌ی نسخه و ساخت
+        run: |
+          echo "V=$(grep '^version:' pubspec.yaml | sed -E 's/version: *([0-9.]+).*/\1/')" >> "$GITHUB_ENV"
+          echo "B=${{ github.run_number }}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -176,19 +250,24 @@ jobs:
           cp ../staff_app/ci/debug.keystore ~/.android/debug.keystore
 
       - run: flutter pub get
-      # آزمون چیدن کارت روی بوم: جای پشت هر کارت باید آینه‌ی جای رویش باشد.
+      # آزمون‌ها: چیدن کارت روی بوم (پشت آینه‌ی رو)، متن‌های کارت و فایل اکسل جدا.
       - run: flutter test test_unit
-      - run: flutter build apk --release --split-per-abi
+      - run: flutter build apk --release --split-per-abi --build-name "$V" --build-number "$B" --dart-define=APP_VERSION="$V" --dart-define=APP_BUILD="$B"
+      - name: نام‌گذاری با نسخه
+        run: |
+          mkdir dist
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   "dist/RoydadYar-Admin-$V-b$B-android-arm64.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "dist/RoydadYar-Admin-$V-b$B-android-armv7.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: roydadyar-admin-android
-          path: |
-            admin_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            admin_app/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+          name: RoydadYar-Admin-${{ env.V }}-b${{ env.B }}-android
+          path: admin_app/dist/
 
   wp-plugin:
     name: رویدادیار — افزونه‌ی وردپرس
+    needs: changes
+    if: needs.changes.outputs.plugin == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -199,20 +278,28 @@ jobs:
 
       # conference-day.zip پوشه‌ی conference-day را در ریشه دارد و همان را در وردپرس بارگذاری کنید
       # تا جای نسخه‌ی قبلی بنشیند.
+      # نسخه‌ی افزونه در هر ساخت «نسخه.شماره‌ی ساخت» می‌شود (مثلاً 0.3.0.57) تا در وردپرس معلوم باشد کدام نصب است.
       - name: ساخت zip افزونه
         run: |
+          F=wp-plugin/conference-day/conference-day.php
+          V=$(grep -m1 ' \* Version:' $F | sed -E 's/.*Version: *([0-9.]+).*/\1/')
+          FULL="$V.${{ github.run_number }}"
+          sed -i -E "s/( \* Version: ).*/\1$FULL/; s/define\('CD_VERSION', '[^']*'\)/define('CD_VERSION', '$FULL')/" $F
+          grep -n "Version:\|CD_VERSION'" $F
+          echo "PV=$FULL" >> "$GITHUB_ENV"
+          mkdir dist
           cd wp-plugin
-          zip -r ../conference-day.zip conference-day
+          zip -r "../dist/RoydadYar-WordPress-plugin-$FULL.zip" conference-day
 
       - uses: actions/upload-artifact@v4
         with:
-          name: roydadyar-wp-plugin
-          path: conference-day.zip
+          name: RoydadYar-WordPress-plugin-${{ env.PV }}
+          path: dist/
 
   release:
     name: انتشار در Releases
-    # با تگ v* یا با commitی روی شاخه که «[release]» در پیامش دارد؛
-    # در حالت دوم خود گیت‌هاب تگ نسخه‌ی pubspec را روی همان commit می‌سازد.
+    # با تگ v* یا با commitی روی شاخه که «[release]» در پیامش دارد (در این دو حالت همه ساخته می‌شوند)؛
+    # در حالت دوم خود گیت‌هاب تگ نسخه‌ی فایل VERSION را روی همان commit می‌سازد.
     if: startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[release]')
     needs: [staff-android, staff-windows, admin-windows, admin-android, wp-plugin]
     runs-on: ubuntu-latest
@@ -227,25 +314,24 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=v$(grep '^version:' staff_app/pubspec.yaml | sed -E 's/version: *([0-9.]+).*/\1/')" >> "$GITHUB_OUTPUT"
+            echo "tag=v$(tr -d ' \n' < VERSION)" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: نام‌گذاری فایل‌ها
+      # نام هر artifact همان نام فایل نهایی است (با نسخه و شماره‌ی ساخت)؛ پوشه‌های ویندوز zip می‌شوند.
+      - name: آماده‌کردن فایل‌ها
         run: |
-          V="${{ steps.ver.outputs.tag }}"
           mkdir out
-          cp artifacts/roydadyar-staff-android/app-arm64-v8a-release.apk     "out/RoydadYar-Staff-$V-android-arm64.apk"
-          cp artifacts/roydadyar-staff-android/app-armeabi-v7a-release.apk   "out/RoydadYar-Staff-$V-android-armv7.apk"
-          cp artifacts/roydadyar-admin-android/app-arm64-v8a-release.apk     "out/RoydadYar-Admin-$V-android-arm64.apk"
-          cp artifacts/roydadyar-admin-android/app-armeabi-v7a-release.apk   "out/RoydadYar-Admin-$V-android-armv7.apk"
-          (cd artifacts/roydadyar-staff-windows && zip -qr "../../out/RoydadYar-Staff-$V-windows.zip" .)
-          (cd artifacts/roydadyar-admin-windows && zip -qr "../../out/RoydadYar-Admin-$V-windows.zip" .)
-          # پوشه‌ی conference-day در ریشه‌ی zip است تا در وردپرس جای نسخه‌ی قبلی بنشیند.
-          cp artifacts/roydadyar-wp-plugin/conference-day.zip "out/RoydadYar-WordPress-plugin-$V.zip"
+          for d in artifacts/*; do
+            n=$(basename "$d")
+            case "$n" in
+              *-windows) (cd "$d" && zip -qr "../../out/$n.zip" .) ;;
+              *) cp "$d"/* out/ ;;
+            esac
+          done
           ls -la out
 
       - uses: softprops/action-gh-release@v2
@@ -256,6 +342,8 @@ jobs:
           files: out/*
           generate_release_notes: true
           body: |
+            هر فایل نسخه‌ی خودش و شماره‌ی ساخت (`b…`) را در نام دارد؛ همان در «درباره»ی اپ دیده می‌شود.
+
             | فایل | چیست |
             | --- | --- |
             | `RoydadYar-Staff-…-android-arm64.apk` | رویدادیار نیروها برای گوشی‌های جدید (اگر نصب نشد، نسخه‌ی armv7) |

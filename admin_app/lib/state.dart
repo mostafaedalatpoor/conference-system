@@ -3,10 +3,13 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show FontLoader;
+import 'package:pdf/pdf.dart' show TtfParser;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import 'api.dart';
+import 'card_design.dart';
 import 'excel_import.dart';
 import 'normalize.dart';
 
@@ -128,6 +131,9 @@ class Person {
   /// لینک شخصی (صفحه‌ی شخصی) برای دکمه‌ی صفحه‌ی عمومی.
   String website;
 
+  /// ستون‌های دیگر فایل اکسل ورود (نام ستون → مقدار) برای متن‌های دلخواه کارت.
+  Map<String, String> extra;
+
   Person({
     required this.id,
     this.title = '',
@@ -145,7 +151,8 @@ class Person {
     this.serial,
     this.shareContact,
     this.website = '',
-  });
+    Map<String, String>? extra,
+  }) : extra = extra ?? {};
 
   String get fullName => '$firstName $lastName'.trim();
   String get displayName => '$title $firstName $lastName'.trim();
@@ -166,6 +173,7 @@ class Person {
         'card_serial': serial,
         'share_contact': shareContact,
         'website': website,
+        'extra': extra,
       };
 }
 
@@ -180,6 +188,31 @@ class ReserveCard {
 class CardTemplate {
   String frontImage = '';
   String backImage = '';
+
+  /// سه پرسش اول «کارت‌ها» (یک بار برای هر رویداد، بعد قابل تغییر).
+  bool setupDone = false;
+  bool doubleSided = true;
+  bool qrEnabled = true;
+
+  /// 'front' یا 'back'؛ در کارت یک‌رو همیشه رو.
+  String qrSide = 'back';
+
+  /// متن‌های کارت (نام، نقش، شماره، راهنمای QR و متن‌های دلخواه).
+  List<CardText> texts = [];
+
+  /// فایل اکسل جدا برای متن‌هایی با منبع «فایل جدا»؛ مثل تصویر طرح روی همین دستگاه می‌ماند.
+  String extraFile = '';
+
+  CardTemplate() {
+    texts = _migratedTexts(const {});
+  }
+
+  /// سمتی که QR واقعاً روی آن است.
+  String get effectiveQrSide => doubleSided ? qrSide : 'front';
+
+  /// متن‌هایی که با توجه به یک‌رو/دورو چاپ می‌شوند.
+  List<CardText> textsFor(String side) =>
+      [for (final t in texts) if (t.side == side && (side == 'front' || doubleSided)) t];
   double widthMm = 85;
   double heightMm = 55;
   double nameX = 50;
@@ -209,6 +242,12 @@ class CardTemplate {
   Map<String, dynamic> toJson() => {
         'front_image': frontImage,
         'back_image': backImage,
+        'extra_file': extraFile,
+        'setup_done': setupDone,
+        'double_sided': doubleSided,
+        'qr_enabled': qrEnabled,
+        'qr_side': qrSide,
+        'texts': [for (final t in texts) t.toJson()],
         'width_mm': widthMm,
         'height_mm': heightMm,
         'name_x': nameX,
@@ -251,7 +290,94 @@ class CardTemplate {
     sheetMargin = d('sheet_margin', sheetMargin);
     duplex = j['duplex'] == 'short' ? 'short' : 'long';
     autoRotate = j['auto_rotate'] != false;
+    extraFile = (j['extra_file'] ?? extraFile).toString();
+    setupDone = j['setup_done'] == true;
+    doubleSided = j['double_sided'] != false;
+    qrEnabled = j['qr_enabled'] != false;
+    qrSide = j['qr_side'] == 'front' ? 'front' : 'back';
+    final list = j['texts'];
+    texts = list is List
+        ? [for (final e in list) if (e is Map) CardText.fromJson(e.cast<String, dynamic>())]
+        : _migratedTexts(j);
   }
+
+  /// قالب‌های قدیمی (نام، نقش، شماره و راهنمای QR در جای ثابت) به متن‌های قابل ویرایش تبدیل می‌شوند،
+  /// با همان جا و اندازه، تا کارت‌های فعلی عوض نشوند.
+  List<CardText> _migratedTexts(Map<String, dynamic> j) {
+    final h = heightMm;
+    final nameSize = nameSize0(j);
+    final nameYmm = h * (((j['name_y'] as num?)?.toDouble() ?? nameY) / 100);
+    final qrYmm = h * (((j['qr_y'] as num?)?.toDouble() ?? qrY) / 100);
+    final qrMm = (j['qr_size_mm'] as num?)?.toDouble() ?? qrSizeMm;
+    final ptMm = 25.4 / 72;
+    final belowQr = qrYmm + qrMm / 2 + 3; // زیر حاشیه‌ی سکوت
+    final color = (j['name_color'] ?? nameColor).toString();
+    final x = (j['name_x'] as num?)?.toDouble() ?? nameX;
+    final qx = (j['qr_x'] as num?)?.toDouble() ?? qrX;
+    final showRoleOld = j['show_role'] != false;
+    final showSerialOld = j['show_serial'] != false;
+    return [
+      CardText(
+        id: 'name',
+        side: 'front',
+        source: 'field',
+        value: 'display_name',
+        x: x,
+        y: (nameYmm - (showRoleOld ? nameSize * 0.45 * ptMm : 0)) / h * 100,
+        widthMm: widthMm - 8,
+        font: 'vazir-extrabold',
+        size: nameSize,
+        minSize: 12,
+        color: color,
+        maxLines: 2,
+        onReserve: false,
+      ),
+      if (showRoleOld)
+        CardText(
+          id: 'role',
+          side: 'front',
+          source: 'field',
+          value: 'role',
+          x: x,
+          y: (nameYmm + nameSize * 1.1 * ptMm) / h * 100,
+          widthMm: widthMm - 8,
+          font: 'vazir-semibold',
+          size: nameSize * 9 / 16,
+          minSize: 7,
+          color: color,
+          onReserve: false,
+        ),
+      if (showSerialOld)
+        CardText(
+          id: 'serial',
+          side: 'back',
+          source: 'field',
+          value: 'serial',
+          x: qx,
+          y: (belowQr + 2.0) / h * 100,
+          widthMm: qrMm * 2,
+          font: 'vazir-semibold',
+          size: 8,
+          minSize: 7,
+          onReserve: true,
+        ),
+      CardText(
+        id: 'hint',
+        side: 'back',
+        source: 'field',
+        value: 'qr_hint',
+        x: qx,
+        y: (belowQr + (showSerialOld ? 5.7 : 1.8)) / h * 100,
+        widthMm: qrMm * 2,
+        font: 'vazir-regular',
+        size: 7,
+        minSize: 6,
+        onReserve: true,
+      ),
+    ];
+  }
+
+  double nameSize0(Map<String, dynamic> j) => (j['name_size'] as num?)?.toDouble() ?? nameSize;
 }
 
 class ImportResult {
@@ -317,6 +443,39 @@ class EventSettings {
   bool get usesCards => identifyMode != 'none';
 }
 
+/// فونتی که روی سرور بارگذاری شده.
+class CustomFont {
+  final String id;
+  final String name;
+  final int size;
+  const CustomFont(this.id, this.name, this.size);
+}
+
+/// فایل فونت را پیش از بارگذاری بررسی می‌کند؛ خطا را به فارسی برمی‌گرداند یا null اگر درست است.
+/// کتابخانه‌ی PDF فقط TrueType (glyf) را می‌خواند، نه OTF نوع CFF و نه فونت متغیر.
+String? checkFontFile(Uint8List bytes) {
+  if (bytes.length < 1024) return 'این فایل فونت نیست.';
+  if (bytes.length > 8 * 1024 * 1024) return 'فایل فونت بیش از ۸ مگابایت است.';
+  try {
+    final p = TtfParser(ByteData.sublistView(bytes));
+    if (p.tableOffsets.containsKey('CFF ') || p.tableOffsets.containsKey('CFF2')) {
+      return 'این فونت OTF از نوع CFF است و در PDF کار نمی‌کند. نسخه‌ی TTF همین فونت را بدهید.';
+    }
+    if (p.tableOffsets.containsKey('fvar')) {
+      return 'این فونت متغیر (variable) است. برای هر وزن فایل TTF جدا (مثلاً Bold) بدهید.';
+    }
+    if (!p.tableOffsets.containsKey('glyf') || !p.tableOffsets.containsKey('cmap')) {
+      return 'این فایل فونت TrueType نیست.';
+    }
+    if (!p.charToGlyphIndexMap.containsKey(0x0628) || !p.charToGlyphIndexMap.containsKey(0x06CC)) {
+      return 'این فونت حروف فارسی ندارد؛ متن فارسی با آن چاپ نمی‌شود.';
+    }
+  } catch (_) {
+    return 'فایل فونت خوانده نشد. یک فایل TTF سالم بدهید.';
+  }
+  return null;
+}
+
 class AdminState extends ChangeNotifier {
   String server = 'https://newvisionteam.ir';
   String apiKey = '';
@@ -337,6 +496,66 @@ class AdminState extends ChangeNotifier {
 
   final CardTemplate template = CardTemplate();
   EventSettings settings = EventSettings();
+
+  /// فونت‌های بارگذاری‌شده روی سرور (برای متن‌های کارت).
+  List<CustomFont> fonts = [];
+  final Map<String, Uint8List> _fontBytes = {};
+  final Set<String> _registeredFonts = {};
+
+  Uint8List? fontBytes(String id) => _fontBytes[id];
+
+  /// فقط برای آزمون: فونتی بدون سرور اضافه می‌کند.
+  @visibleForTesting
+  void addFontForTest(CustomFont f, Uint8List bytes) {
+    fonts.add(f);
+    _fontBytes[f.id] = bytes;
+  }
+
+  /// فهرست فونت‌ها از سرور؛ هر فونت یک بار دانلود و روی همین دستگاه نگه داشته می‌شود.
+  Future<void> loadFonts() async {
+    final list = await api.get('/admin/fonts');
+    fonts = [
+      for (final f in (list is Map ? (list['fonts'] as List? ?? const []) : list as List))
+        CustomFont((f as Map)['id'].toString(), (f['name'] ?? '').toString(), (f['size'] as num?)?.toInt() ?? 0),
+    ];
+    final dir = Directory('${(await getApplicationSupportDirectory()).path}/fonts');
+    await dir.create(recursive: true);
+    for (final f in fonts) {
+      if (_fontBytes.containsKey(f.id)) continue;
+      final file = File('${dir.path}/${f.id}.ttf');
+      Uint8List bytes;
+      if (await file.exists()) {
+        bytes = await file.readAsBytes();
+      } else {
+        final r = await api.get('/admin/fonts/${f.id}');
+        bytes = base64Decode((r as Map)['data'].toString());
+        await file.writeAsBytes(bytes);
+      }
+      _fontBytes[f.id] = bytes;
+      if (_registeredFonts.add(f.id)) {
+        final loader = FontLoader(customFontFamily(f.id))..addFont(Future.value(ByteData.sublistView(bytes)));
+        await loader.load();
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> uploadFont(String name, Uint8List bytes) => run('فونت «$name» اضافه شد.', () async {
+        final problem = checkFontFile(bytes);
+        if (problem != null) throw ApiException('bad_font', problem, 400);
+        await api.post('/admin/fonts', {'name': name, 'data': base64Encode(bytes)});
+        await loadFonts();
+      });
+
+  Future<void> deleteFont(String id) => run('فونت حذف شد.', () async {
+        await api.post('/admin/fonts/$id/delete', {});
+        fonts.removeWhere((f) => f.id == id);
+        // متن‌هایی که این فونت را داشتند به وزیرمتن برمی‌گردند.
+        for (final t in template.texts) {
+          if (t.font == id) t.font = 'vazir-bold';
+        }
+        await save();
+      });
   Map<String, dynamic> _settingsByEvent = {};
 
   bool busy = false;
@@ -530,6 +749,7 @@ class AdminState extends ChangeNotifier {
         serial: card?['serial'] as int?,
         shareContact: a['share_contact'] as bool?,
         website: (a['website'] ?? '').toString(),
+        extra: ((a['extra'] as Map?) ?? const {}).map((k, v) => MapEntry(k.toString(), (v ?? '').toString())),
       );
     }
 
@@ -558,6 +778,11 @@ class AdminState extends ChangeNotifier {
     final remote = (s['settings'] as Map?) ?? ((s['event'] as Map?)?['settings'] as Map?);
     if (remote != null) settings.load(remote.cast<String, dynamic>());
     report = null;
+    try {
+      await loadFonts();
+    } catch (_) {
+      // افزونه‌ی قدیمی مسیر فونت ندارد؛ فقط وزیرمتن در دسترس است.
+    }
   }
 
   // ---------------------------------------------------------------- پیکربندی
@@ -680,6 +905,13 @@ class AdminState extends ChangeNotifier {
         serial: existing?.serial ?? serial++,
         shareContact: shareFrom(cell(row, 'share_contact')) ?? existing?.shareContact,
         website: cell(row, 'website').isNotEmpty ? cell(row, 'website') : (existing?.website ?? ''),
+        // هر ستونی که به فیلدی نگاشت نشده، برای متن‌های دلخواه کارت نگه داشته می‌شود.
+        extra: {
+          ...?existing?.extra,
+          for (var i = 0; i < table.headers.length && i < row.length; i++)
+            if (!mapping.values.contains(i) && row[i].trim().isNotEmpty)
+              (table.headers[i].trim().isEmpty ? 'ستون ${faDigits(i + 1)}' : table.headers[i].trim()): row[i].trim(),
+        },
       );
       if (existing == null) {
         created++;
@@ -721,7 +953,8 @@ class AdminState extends ChangeNotifier {
         await save();
         final j = template.toJson()
           ..remove('front_image')
-          ..remove('back_image');
+          ..remove('back_image')
+          ..remove('extra_file');
         await api.post('/admin/events/$eventCode/card-template', {'template': j});
       });
 

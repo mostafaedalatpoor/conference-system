@@ -143,7 +143,7 @@ void showAboutRoydadyar(BuildContext context) => showDialog<void>(
           child: AboutCard(
             appName: appName,
             appNameLatin: appNameLatin,
-            version: appVersion,
+            version: appVersionLabel,
             maker: makerFull,
             website: makerWebsite,
           ),
@@ -363,7 +363,7 @@ class PrepScreen extends StatelessWidget {
       const AboutCard(
         appName: appName,
         appNameLatin: appNameLatin,
-        version: appVersion,
+        version: appVersionLabel,
         maker: makerFull,
         website: makerWebsite,
       ),

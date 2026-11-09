@@ -75,6 +75,11 @@ function cd_upsert_attendee($event_id, array $a, $source, $only_insert = false) 
         'created_at' => $now,
         'updated_at' => $now,
     ];
+    // ستون‌های دیگر اکسل ورود، برای متن‌های دلخواه کارت. ثبت‌نام در محل این را نمی‌فرستد و چیزی را پاک نمی‌کند.
+    if (array_key_exists('extra', $a)) {
+        $extra = cd_sanitize_extra($a['extra']);
+        $row['extra'] = $extra ? wp_json_encode($extra) : null;
+    }
     $row['search_key'] = cd_search_key($row);
 
     $table = cd_table('attendees');
@@ -105,8 +110,29 @@ function cd_upsert_attendee($event_id, array $a, $source, $only_insert = false) 
     return $wpdb->query($wpdb->prepare($sql, $values)) !== false;
 }
 
-function cd_attendee_out(array $r) {
-    return [
+/** ستون‌های اضافه‌ی یک نفر: حداکثر ۵۰ ستون، نام ستون ۱۰۰ و مقدار ۵۰۰ نویسه. */
+function cd_sanitize_extra($in) {
+    if (!is_array($in)) {
+        return [];
+    }
+    $out = [];
+    foreach ($in as $k => $v) {
+        $k = cd_str($k, 100);
+        $v = cd_str($v, 500);
+        if ($k === '' || $v === '') {
+            continue;
+        }
+        $out[$k] = $v;
+        if (count($out) >= 50) {
+            break;
+        }
+    }
+    return $out;
+}
+
+/** $with_extra فقط برای اپ مدیریت؛ گوشی نیروها ستون‌های اضافه را لازم ندارد. */
+function cd_attendee_out(array $r, $with_extra = false) {
+    $out = [
         'id' => $r['id'],
         'title' => $r['title'],
         'first_name' => $r['first_name'],
@@ -122,6 +148,11 @@ function cd_attendee_out(array $r) {
         'share_contact' => isset($r['share_contact']) && $r['share_contact'] !== null ? (bool) $r['share_contact'] : null,
         'website' => $r['website'] ?? '',
     ];
+    if ($with_extra) {
+        $extra = !empty($r['extra']) ? json_decode($r['extra'], true) : null;
+        $out['extra'] = is_array($extra) ? (object) $extra : (object) [];
+    }
+    return $out;
 }
 
 function cd_log_out(array $r) {
@@ -274,4 +305,95 @@ function cd_is_entitled(array $meal_rules, $registration_type_id, $role_id) {
         return true;
     }
     return $role_id !== null && in_array((int) $role_id, $meal_rules['role_ids'], true);
+}
+
+/** قالب کارت از اپ مدیریت: فقط کلیدهای شناخته‌شده با مقدارهای در بازه. */
+function cd_sanitize_card_template(array $t) {
+    $clean = [];
+    foreach (['width_mm', 'height_mm', 'name_x', 'name_y', 'name_size', 'qr_x', 'qr_y', 'qr_size_mm'] as $k) {
+        if (isset($t[$k]) && is_numeric($t[$k])) {
+            $clean[$k] = (float) $t[$k];
+        }
+    }
+    if (isset($t['name_color']) && preg_match('/^#?[0-9a-fA-F]{6}$/', (string) $t['name_color'])) {
+        $clean['name_color'] = ltrim((string) $t['name_color'], '#');
+    }
+    foreach (['show_role', 'show_serial', 'sheet_mode', 'auto_rotate'] as $k) {
+        if (array_key_exists($k, $t)) {
+            $clean[$k] = (bool) $t[$k];
+        }
+    }
+    // چیدن روی بوم چاپ: اندازه‌ی بوم و حاشیه (میلی‌متر)، و جهت برگشتن برگ در چاپ دورو.
+    foreach (['sheet_w', 'sheet_h', 'sheet_margin'] as $k) {
+        if (isset($t[$k]) && is_numeric($t[$k]) && (float) $t[$k] >= 0 && (float) $t[$k] <= 2000) {
+            $clean[$k] = (float) $t[$k];
+        }
+    }
+    if (isset($t['duplex']) && in_array($t['duplex'], ['long', 'short'], true)) {
+        $clean['duplex'] = $t['duplex'];
+    }
+    if (isset($t['sheet_preset']) && preg_match('/^[A-Za-z0-9]{1,12}$/', (string) $t['sheet_preset'])) {
+        $clean['sheet_preset'] = (string) $t['sheet_preset'];
+    }
+    // سه پرسش اول «کارت‌ها»: یک‌رو یا دورو، QR، سمت QR.
+    foreach (['setup_done', 'double_sided', 'qr_enabled'] as $k) {
+        if (array_key_exists($k, $t)) {
+            $clean[$k] = (bool) $t[$k];
+        }
+    }
+    if (isset($t['qr_side']) && in_array($t['qr_side'], ['front', 'back'], true)) {
+        $clean['qr_side'] = $t['qr_side'];
+    }
+    if (isset($t['texts']) && is_array($t['texts'])) {
+        $clean['texts'] = [];
+        foreach (array_slice(array_values($t['texts']), 0, 40) as $x) {
+            $one = is_array($x) ? cd_sanitize_card_text($x) : null;
+            if ($one) {
+                $clean['texts'][] = $one;
+            }
+        }
+    }
+    return $clean;
+}
+
+/** یک متن کارت. منبع: ثابت، فیلد سامانه، ستون اکسل شرکت‌کننده‌ها، یا ستون فایل جدا. */
+function cd_sanitize_card_text(array $x) {
+    $num = function ($k, $min, $max, $def) use ($x) {
+        return isset($x[$k]) && is_numeric($x[$k]) ? max($min, min($max, (float) $x[$k])) : $def;
+    };
+    $id = (string) ($x['id'] ?? '');
+    if (!preg_match('/^[A-Za-z0-9_-]{1,40}$/', $id)) {
+        return null;
+    }
+    $source = in_array($x['source'] ?? '', ['static', 'field', 'column', 'file'], true) ? $x['source'] : 'static';
+    $font = (string) ($x['font'] ?? '');
+    $color = (string) ($x['color'] ?? '');
+    return [
+        'id' => $id,
+        'side' => ($x['side'] ?? '') === 'back' ? 'back' : 'front',
+        'source' => $source,
+        'value' => cd_str($x['value'] ?? '', 200),
+        // پیشوند و پسوند فاصله‌ی کناری‌شان را نگه می‌دارند («میز ۱۲»).
+        'prefix' => cd_affix($x['prefix'] ?? ''),
+        'suffix' => cd_affix($x['suffix'] ?? ''),
+        'x' => $num('x', -50, 150, 50),
+        'y' => $num('y', -50, 150, 50),
+        'width_mm' => $num('width_mm', 1, 1000, 70),
+        'align' => in_array($x['align'] ?? '', ['right', 'center', 'left'], true) ? $x['align'] : 'center',
+        'font' => preg_match('/^[A-Za-z0-9_-]{1,64}$/', $font) ? $font : 'vazir-bold',
+        'size' => $num('size', 1, 200, 12),
+        'min_size' => $num('min_size', 1, 200, 8),
+        'color' => preg_match('/^#?[0-9a-fA-F]{6}$/', $color) ? ltrim($color, '#') : '10141A',
+        'max_lines' => (int) $num('max_lines', 1, 5, 1),
+        'on_reserve' => !empty($x['on_reserve']),
+    ];
+}
+
+function cd_affix($v) {
+    if (!is_scalar($v)) {
+        return '';
+    }
+    // wp_strip_all_tags فاصله‌ی دو سر را برمی‌دارد؛ strip_tags نه.
+    $s = preg_replace('/[\x00-\x1F\x7F]/u', '', strip_tags((string) $v));
+    return function_exists('mb_substr') ? mb_substr((string) $s, 0, 50) : substr((string) $s, 0, 50);
 }

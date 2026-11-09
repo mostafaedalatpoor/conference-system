@@ -6,6 +6,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'brand.dart';
+import 'card_design.dart';
+import 'card_text_fit.dart';
 import 'normalize.dart';
 import 'sheet_layout.dart';
 import 'state.dart';
@@ -26,14 +28,25 @@ class PdfFonts {
 /// رنگ متن کارت چاپی (ink سامانه‌ی طراحی).
 const _cardInk = PdfColor.fromInt(0xFF10141A);
 
-/// یک کارت برای چاپ: متن رو، و محتوای پشت.
+/// متن راست‌به‌چپ برای PDF. بسته‌ی pdf نیم‌فاصله (ZWNJ) را به‌صورت یک نشانه‌ی دیده‌شدنی می‌کشد؛
+/// پس متن در هر نیم‌فاصله به چند تکه شکسته می‌شود: هر تکه جدا شکل می‌گیرد (حرف‌ها به هم نمی‌چسبند)
+/// و تکه‌ها بی‌فاصله کنار هم می‌آیند، همان کاری که نیم‌فاصله باید بکند.
+pw.Widget rtlText(String text, pw.TextStyle style, {pw.TextAlign textAlign = pw.TextAlign.right, int? maxLines}) =>
+    pw.RichText(
+      textDirection: pw.TextDirection.rtl,
+      textAlign: textAlign,
+      maxLines: maxLines,
+      text: pw.TextSpan(style: style, children: [
+        for (final part in text.split('\u200c'))
+          if (part.isNotEmpty) pw.TextSpan(text: part),
+      ]),
+    );
+
+/// یک کارت برای چاپ: داده‌ی متن‌ها و محتوای QR.
 class _CardJob {
-  final String? name;
-  final String? subtitle;
+  final CardSubject subject;
   final String qrData;
-  final String serialLabel;
-  final String hint;
-  _CardJob(this.name, this.subtitle, this.qrData, this.serialLabel, this.hint);
+  _CardJob(this.subject, this.qrData);
 }
 
 /// کارت‌ها را برای [AdminState.template] جا می‌دهد؛ null یعنی در بوم انتخاب‌شده جا نمی‌شود.
@@ -49,11 +62,43 @@ SheetLayout? sheetLayoutFor(AdminState s) {
   );
 }
 
-/// PDF چاپخانه. دو حالت:
-/// - هر کارت یک صفحه: صفحه‌ی رو (طرح + نام) و بعدش صفحه‌ی پشت (طرح + QR).
-/// - چیدن روی بوم (A4 و…): چند کارت کنار هم روی هر برگ و بعد از آن برگِ پشت‌ها با جای آینه‌شده،
+/// فیلدهای سامانه برای یک نفر (منبع «فیلد سامانه» در متن‌های کارت).
+Map<String, String> personFields(AdminState s, Person p) => {
+      'display_name': p.displayName,
+      'full_name': p.fullName,
+      'first_name': p.firstName,
+      'last_name': p.lastName,
+      'title': p.title,
+      'organization': p.organization,
+      'role': s.roleName(p.roleCode),
+      'type': s.typeName(p.typeCode),
+      'serial': p.serial == null ? '' : faDigits(p.serial!),
+      'country': p.country,
+      'email': p.email,
+      'mobile': faDigits(p.mobile),
+      'qr_hint': s.template.qrEnabled ? s.qrHint(reserve: false) : '',
+    };
+
+CardSubject personSubject(AdminState s, Person p, Map<String, Map<String, String>> fileRows) => CardSubject(
+      isReserve: false,
+      fields: personFields(s, p),
+      extra: p.extra,
+      fileRow: fileRows[p.id] ?? const {},
+    );
+
+CardSubject reserveSubject(AdminState s, ReserveCard r) => CardSubject(
+      isReserve: true,
+      fields: {
+        'serial': 'R${faDigits(r.serial)}',
+        'qr_hint': s.template.qrEnabled ? s.qrHint(reserve: true) : '',
+      },
+    );
+
+/// PDF چاپخانه. یک‌رو یا دورو، QR روی رو یا پشت یا بدون QR، و متن‌های کارت. دو چیدمان:
+/// - هر کارت یک صفحه: صفحه‌ی رو و (در دورو) بعدش صفحه‌ی پشت.
+/// - چیدن روی بوم (A4 و…): چند کارت کنار هم روی هر برگ و (در دورو) بعد از آن برگِ پشت‌ها با جای آینه‌شده،
 ///   تا بعد از چاپ دورو و برش، پشتِ هر کارت پشت همان کارت و هم‌جهت با آن باشد.
-/// کارت‌های رزرو در انتها می‌آیند، بدون نام.
+/// کارت‌های رزرو در انتها می‌آیند؛ متن‌های شخصی رویشان چاپ نمی‌شود.
 Future<Uint8List> buildCardsPdf({
   required AdminState s,
   required PdfFonts fonts,
@@ -61,136 +106,133 @@ Future<Uint8List> buildCardsPdf({
   required List<ReserveCard> reserves,
   Uint8List? frontImage,
   Uint8List? backImage,
+  Map<String, Map<String, String>> fileRows = const {},
 }) async {
   final t = s.template;
   final w = t.widthMm * PdfPageFormat.mm;
   final h = t.heightMm * PdfPageFormat.mm;
-  final front = frontImage == null ? null : pw.MemoryImage(frontImage);
-  final back = backImage == null ? null : pw.MemoryImage(backImage);
-  final color = PdfColor.fromHex(t.nameColor.startsWith('#') ? t.nameColor : '#${t.nameColor}');
+  final images = {
+    'front': frontImage == null ? null : pw.MemoryImage(frontImage),
+    'back': backImage == null ? null : pw.MemoryImage(backImage),
+  };
+  final sides = t.doubleSided ? const ['front', 'back'] : const ['front'];
 
   // سازنده فقط در مشخصات فایل می‌آید، نه روی کارت.
   final doc = pw.Document(
     title: 'کارت‌های ${s.event?.name ?? ''}',
-    creator: '$productLatin $appVersion',
+    creator: '$productLatin $appVersionLabel',
     producer: '$productLatin — NewVisionteam ($makerWebsite)',
   );
 
-  pw.Widget bg(pw.MemoryImage? img) =>
-      img == null ? pw.Container(color: PdfColors.white) : pw.Image(img, fit: pw.BoxFit.cover, width: w, height: h);
+  final customPdfFonts = <String, pw.Font>{};
+  pw.Font pdfFont(String id) {
+    switch (id) {
+      case 'vazir-regular':
+        return fonts.regular;
+      case 'vazir-semibold':
+        return fonts.semiBold;
+      case 'vazir-bold':
+        return fonts.bold;
+      case 'vazir-extrabold':
+        return fonts.extraBold;
+    }
+    final bytes = s.fontBytes(id);
+    if (bytes == null) return fonts.bold; // فونت حذف یا دانلود نشده: وزیرمتن
+    return customPdfFonts.putIfAbsent(id, () => pw.Font.ttf(ByteData.sublistView(bytes)));
+  }
 
-  /// متن وسط‌چین با مرکز (cx, cy) بر حسب درصد.
-  pw.Widget centered(double cxPct, double cyPct, double boxH, pw.Widget child) {
-    final cx = w * cxPct / 100;
-    final cy = h * cyPct / 100;
-    final half = [cx, w - cx].reduce((a, b) => a < b ? a : b);
+  PdfColor color(String hex) {
+    try {
+      return PdfColor.fromHex('#${hex.replaceAll('#', '')}');
+    } catch (_) {
+      return _cardInk;
+    }
+  }
+
+  pw.TextAlign align(String a) => switch (a) {
+        'right' => pw.TextAlign.right,
+        'left' => pw.TextAlign.left,
+        _ => pw.TextAlign.center,
+      };
+
+  pw.Widget textWidget(CardText ct, String value) {
+    final (size, _) = fitCardText(value, ct);
+    final boxW = ct.widthMm * PdfPageFormat.mm;
+    final boxH = ct.maxLines * size * cardLineHeight;
+    final cx = w * ct.x / 100;
+    final cy = h * ct.y / 100;
     return pw.Positioned(
-      left: cx - half,
+      left: cx - boxW / 2,
       top: cy - boxH / 2,
-      child: pw.SizedBox(width: half * 2, height: boxH, child: pw.Center(child: child)),
+      child: pw.SizedBox(
+        width: boxW,
+        height: boxH,
+        child: pw.Align(
+          alignment: pw.Alignment.center,
+          child: pw.SizedBox(
+            width: boxW,
+            child: rtlText(
+              value,
+              pw.TextStyle(font: pdfFont(ct.font), fontSize: size, color: color(ct.color), lineSpacing: size * (cardLineHeight - 1.15)),
+              textAlign: align(ct.align),
+              maxLines: ct.maxLines,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  pw.Widget frontCard(_CardJob j) => pw.SizedBox(
-        width: w,
-        height: h,
-        child: pw.ClipRect(
-          child: pw.Stack(children: [
-            pw.Positioned(left: 0, top: 0, right: 0, bottom: 0, child: bg(front)),
-            if (j.name != null)
-              centered(
-                t.nameX,
-                t.nameY,
-                t.nameSize * 2.6 + (j.subtitle != null ? t.nameSize : 0),
-                pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
-                  pw.Text(j.name!,
-                      textDirection: pw.TextDirection.rtl,
-                      textAlign: pw.TextAlign.center,
-                      maxLines: 2,
-                      style: pw.TextStyle(font: fonts.extraBold, fontSize: t.nameSize, color: color)),
-                  if (j.subtitle != null && j.subtitle!.isNotEmpty)
-                    pw.Text(j.subtitle!,
-                        textDirection: pw.TextDirection.rtl,
-                        textAlign: pw.TextAlign.center,
-                        style: pw.TextStyle(font: fonts.semiBold, fontSize: t.nameSize * 9 / 16, color: color)),
-                ]),
-              ),
-          ]),
-        ),
-      );
-
-  pw.Widget backCard(_CardJob j) {
+  pw.Widget qrWidget(String data) {
     final size = t.qrSizeMm * PdfPageFormat.mm;
     final cx = w * t.qrX / 100;
     final cy = h * t.qrY / 100;
     const quiet = 3 * PdfPageFormat.mm;
+    // QR سیاه روی سفید خالص با حاشیه‌ی سکوت حدود ۳ میلی‌متر (۴ ماژول) دورش.
+    return pw.Positioned(
+      left: cx - size / 2 - quiet,
+      top: cy - size / 2 - quiet,
+      child: pw.Container(
+        color: PdfColors.white,
+        padding: const pw.EdgeInsets.all(quiet),
+        child: pw.BarcodeWidget(barcode: pw.Barcode.qrCode(), data: data, width: size, height: size, drawText: false),
+      ),
+    );
+  }
+
+  pw.Widget card(String side, _CardJob j) {
+    final img = images[side];
     return pw.SizedBox(
       width: w,
       height: h,
       child: pw.ClipRect(
         child: pw.Stack(children: [
-          pw.Positioned(left: 0, top: 0, right: 0, bottom: 0, child: bg(back)),
-          // QR سیاه روی سفید خالص با حاشیه‌ی سکوت حدود ۳ میلی‌متر (۴ ماژول) دورش.
           pw.Positioned(
-            left: cx - size / 2 - quiet,
-            top: cy - size / 2 - quiet,
-            child: pw.Container(
-              color: PdfColors.white,
-              padding: pw.EdgeInsets.all(quiet),
-              child: pw.BarcodeWidget(
-                barcode: pw.Barcode.qrCode(),
-                data: j.qrData,
-                width: size,
-                height: size,
-                drawText: false,
-              ),
-            ),
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+            child: img == null ? pw.Container(color: PdfColors.white) : pw.Image(img, fit: pw.BoxFit.cover, width: w, height: h),
           ),
-          if (t.showSerial)
-            pw.Positioned(
-              left: cx - size,
-              top: cy + size / 2 + quiet,
-              child: pw.SizedBox(
-                width: size * 2,
-                child: pw.Text(j.serialLabel,
-                    textAlign: pw.TextAlign.center,
-                    style: pw.TextStyle(font: fonts.semiBold, fontSize: 8, color: _cardInk)),
-              ),
-            ),
-          // خط راهنمای زیر QR: اسکن با دوربین معمولی چه می‌کند (۷pt).
-          pw.Positioned(
-            left: cx - size,
-            top: cy + size / 2 + quiet + (t.showSerial ? 10 : 0),
-            child: pw.SizedBox(
-              width: size * 2,
-              child: pw.Text(j.hint,
-                  textDirection: pw.TextDirection.rtl,
-                  textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(font: fonts.regular, fontSize: 7, color: _cardInk)),
-            ),
-          ),
+          if (t.qrEnabled && t.effectiveQrSide == side) qrWidget(j.qrData),
+          for (final ct in t.textsFor(side))
+            if (resolveCardText(ct, j.subject) case final v?) textWidget(ct, v),
         ]),
       ),
     );
   }
 
   final jobs = <_CardJob>[
-    for (final p in people)
-      _CardJob(
-        p.displayName,
-        (t.showRole ? s.roleName(p.roleCode) : '').isNotEmpty ? s.roleName(p.roleCode) : null,
-        s.qrDataFor(p),
-        faDigits(p.serial ?? ''),
-        s.qrHint(reserve: false),
-      ),
-    for (final r in reserves) _CardJob(null, null, s.qrUrl(r.token), 'R${faDigits(r.serial)}', s.qrHint(reserve: true)),
+    for (final p in people) _CardJob(personSubject(s, p, fileRows), s.qrDataFor(p)),
+    for (final r in reserves) _CardJob(reserveSubject(s, r), s.qrUrl(r.token)),
   ];
 
   if (!t.sheetMode) {
     final format = PdfPageFormat(w, h, marginAll: 0);
     for (final j in jobs) {
-      doc.addPage(pw.Page(pageFormat: format, build: (_) => frontCard(j)));
-      doc.addPage(pw.Page(pageFormat: format, build: (_) => backCard(j)));
+      for (final side in sides) {
+        doc.addPage(pw.Page(pageFormat: format, build: (_) => card(side, j)));
+      }
     }
     return doc.save();
   }
@@ -206,14 +248,14 @@ Future<Uint8List> buildCardsPdf({
 
   /// کارت را وسط خانه‌اش می‌گذارد و [deg] درجه ساعت‌گرد دور مرکز خودش می‌چرخاند.
   /// جعبه‌ی کارت همیشه اندازه‌ی خود کارت است؛ فقط محتوایش می‌چرخد و وسط خانه‌ی چرخیده می‌ماند.
-  pw.Widget place(pw.Widget card, (int, int) cell, int deg) {
+  pw.Widget place(pw.Widget c, (int, int) cell, int deg) {
     final (ox, oy) = layout.cellOrigin(cell);
     final cx = (ox + layout.cellW / 2) * mm;
     final cy = (oy + layout.cellH / 2) * mm;
     return pw.Positioned(
       left: cx - w / 2,
       top: cy - h / 2,
-      child: deg == 0 ? card : pw.Transform.rotate(angle: _clockwise(deg), child: card),
+      child: deg == 0 ? c : pw.Transform.rotate(angle: _clockwise(deg), child: c),
     );
   }
 
@@ -241,16 +283,19 @@ Future<Uint8List> buildCardsPdf({
     doc.addPage(pw.Page(
       pageFormat: format,
       build: (_) => pw.Stack(children: [
-        for (var k = 0; k < chunk.length; k++) place(frontCard(chunk[k]), layout.frontCell(k), layout.frontDegrees),
+        for (var k = 0; k < chunk.length; k++) place(card('front', chunk[k]), layout.frontCell(k), layout.frontDegrees),
         ...gridLines(),
       ]),
     ));
-    doc.addPage(pw.Page(
-      pageFormat: format,
-      build: (_) => pw.Stack(children: [
-        for (var k = 0; k < chunk.length; k++) place(backCard(chunk[k]), layout.backCell(k, flip), layout.backDegrees(flip)),
-      ]),
-    ));
+    if (t.doubleSided) {
+      doc.addPage(pw.Page(
+        pageFormat: format,
+        build: (_) => pw.Stack(children: [
+          for (var k = 0; k < chunk.length; k++)
+            place(card('back', chunk[k]), layout.backCell(k, flip), layout.backDegrees(flip)),
+        ]),
+      ));
+    }
   }
   return doc.save();
 }
@@ -262,7 +307,7 @@ double _clockwise(int degrees) => -degrees * math.pi / 180;
 Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts fonts}) async {
   final doc = pw.Document(
     title: 'لیست پشتیبان ${s.event?.name ?? ''}',
-    creator: '$productLatin $appVersion',
+    creator: '$productLatin $appVersionLabel',
     producer: '$productLatin — NewVisionteam ($makerWebsite)',
   );
   final people = s.sortedPeople;
@@ -270,10 +315,7 @@ Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts f
 
   pw.Widget cell(String text, {bool bold = false, pw.TextAlign align = pw.TextAlign.right}) => pw.Padding(
         padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-        child: pw.Text(text,
-            textDirection: rtl,
-            textAlign: align,
-            style: pw.TextStyle(font: bold ? fonts.bold : fonts.regular, fontSize: 9)),
+        child: rtlText(text, pw.TextStyle(font: bold ? fonts.bold : fonts.regular, fontSize: 9), textAlign: align),
       );
 
   // جدول‌های pdf چپ‌به‌راست چیده می‌شوند، پس ستون‌ها برعکس داده می‌شوند تا ستون اول سمت راست باشد.
@@ -295,7 +337,7 @@ Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts f
 
   pw.Widget title(String text) => pw.Padding(
         padding: const pw.EdgeInsets.only(bottom: 8),
-        child: pw.Text(text, textDirection: rtl, style: pw.TextStyle(font: fonts.bold, fontSize: 14)),
+        child: rtlText(text, pw.TextStyle(font: fonts.bold, fontSize: 14)),
       );
 
   final theme = pw.PageTheme(pageFormat: PdfPageFormat.a4, margin: const pw.EdgeInsets.all(28), textDirection: rtl);
@@ -304,10 +346,9 @@ Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts f
   pw.Widget footer(pw.Context c) => pw.Padding(
         padding: const pw.EdgeInsets.only(top: 8),
         child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-          pw.Text('صفحه‌ی ${faDigits(c.pageNumber)} از ${faDigits(c.pagesCount)}',
-              textDirection: rtl, style: pw.TextStyle(font: fonts.regular, fontSize: 8, color: PdfColors.grey700)),
-          pw.Text('$productName · $makerWebsite',
-              textDirection: rtl, style: pw.TextStyle(font: fonts.regular, fontSize: 8, color: PdfColors.grey700)),
+          rtlText('صفحه‌ی ${faDigits(c.pageNumber)} از ${faDigits(c.pagesCount)}',
+              pw.TextStyle(font: fonts.regular, fontSize: 8, color: PdfColors.grey700)),
+          rtlText('$productName · $makerWebsite', pw.TextStyle(font: fonts.regular, fontSize: 8, color: PdfColors.grey700)),
         ]),
       );
 

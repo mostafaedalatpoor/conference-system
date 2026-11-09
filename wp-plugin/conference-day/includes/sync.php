@@ -8,7 +8,7 @@ const CD_PULL_LIMIT = 1000;
 const CD_PUSH_LIMIT = 500;
 
 /** کل داده‌ای که یک گوشی برای کار آفلاین لازم دارد. */
-function cd_build_snapshot(array $event) {
+function cd_build_snapshot(array $event, $for_admin = false) {
     global $wpdb;
     $eid = (int) $event['id'];
 
@@ -25,7 +25,9 @@ function cd_build_snapshot(array $event) {
         ['event' => cd_event_out($event)],
         cd_event_config($eid),
         [
-            'attendees' => array_map('cd_attendee_out', $attendees),
+            'attendees' => array_map(function ($a) use ($for_admin) {
+                return cd_attendee_out($a, $for_admin);
+            }, $attendees),
             'cards' => array_map(function ($c) {
                 return [
                     'token' => $c['token'],

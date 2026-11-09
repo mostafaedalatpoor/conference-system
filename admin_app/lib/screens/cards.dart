@@ -2,12 +2,11 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'dart:ui' as ui;
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../cards_pdf.dart';
+import 'card_editor.dart';
 import '../main.dart';
 import '../theme/daftar.dart';
 import '../theme/widgets.dart';
@@ -104,7 +103,7 @@ class _CardsScreenState extends State<CardsScreen> {
   }
 
   bool _checkBase(AdminState s) {
-    if (s.event?.baseUrl.isEmpty ?? true) {
+    if (s.template.qrEnabled && (s.event?.baseUrl.isEmpty ?? true)) {
       s.message = 'آدرس پایه‌ی رویداد خالی است.';
       s.messageIsError = true;
       s.notify();
@@ -133,12 +132,13 @@ class _CardsScreenState extends State<CardsScreen> {
         people: s.sortedPeople,
         reserves: s.reserveCards.where((r) => !r.used).toList(),
         frontImage: await _read(s.template.frontImage),
-        backImage: await _read(s.template.backImage),
+        backImage: s.template.doubleSided ? await _read(s.template.backImage) : null,
+        fileRows: (await loadExtraFile(s)).rows,
       );
     });
     if (bytes == null || !mounted) return;
     await _saveBytes(s, 'cards-${s.eventCode}.pdf', bytes);
-    if (!(s.event?.locked ?? true)) await s.setLocked(true);
+    if (s.template.qrEnabled && !(s.event?.locked ?? true)) await s.setLocked(true);
   }
 
   /// PDF فقط کارت‌های رزرو آزاد: سبک، روی موبایل هم شدنی.
@@ -152,7 +152,8 @@ class _CardsScreenState extends State<CardsScreen> {
         people: const [],
         reserves: s.reserveCards.where((r) => !r.used).toList(),
         frontImage: await _read(s.template.frontImage),
-        backImage: await _read(s.template.backImage),
+        backImage: s.template.doubleSided ? await _read(s.template.backImage) : null,
+        fileRows: (await loadExtraFile(s)).rows,
       );
     });
     if (bytes == null || !mounted) return;
@@ -192,6 +193,19 @@ class _CardsScreenState extends State<CardsScreen> {
     );
   }
 
+  /// فایل اکسل جدا یک بار خوانده می‌شود و تا عوض‌شدن مسیر یا افراد نگه داشته می‌شود.
+  ExtraFileData _file = ExtraFileData.empty;
+  String? _fileKey;
+
+  void _ensureFile(AdminState s) {
+    final key = '${s.template.extraFile}|${s.people.length}';
+    if (key == _fileKey) return;
+    _fileKey = key;
+    loadExtraFile(s).then((d) {
+      if (mounted && key == _fileKey) setState(() => _file = d);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
@@ -202,9 +216,20 @@ class _CardsScreenState extends State<CardsScreen> {
     if (_reserveCount.text.isEmpty) {
       _reserveCount.text = '${(people.length / 10).ceil().clamp(1, 1000)}';
     }
+    _ensureFile(s);
+
+    // پیش از هر چیز سه پرسش: یک‌رو یا دورو، QR، سمت QR.
+    if (!t.setupDone) {
+      return PageBody(title: 'کارت‌ها', children: [
+        const SectionTitle('نوع کارت'),
+        CardSetupForm(s: s, initial: true, onDone: () => setState(() {})),
+      ]);
+    }
+
     final longest = people.isEmpty
         ? null
         : people.reduce((a, b) => a.displayName.length >= b.displayName.length ? a : b);
+    final sample = sampleSubject(s, _longName ? longest : (people.isEmpty ? null : people.first), _file);
 
     return PageBody(title: 'کارت‌ها', children: [
       if (locked)
@@ -215,6 +240,7 @@ class _CardsScreenState extends State<CardsScreen> {
             text: 'کارت‌ها چاپ شده‌اند. تغییر قالب فقط روی کارت‌های رزرو جدید اثر دارد.',
           ),
         ),
+      CardSetupSummary(s: s),
       const SectionTitle('کارت‌های رزرو (برای ثبت‌نام در محل)'),
       Text('${faDigits(s.reserveCards.length)} کارت رزرو ساخته شده؛ ${faDigits(free)} هنوز آزاد است. '
           'پیشنهاد: حدود ۱۰٪ ثبت‌نامی‌ها (${faDigits((people.length / 10).ceil())} کارت).'),
@@ -231,69 +257,55 @@ class _CardsScreenState extends State<CardsScreen> {
           child: const Text('ساخت کارت رزرو'),
         ),
       ]),
-      const SectionTitle('قالب کارت'),
+      const SectionTitle('طرح زمینه'),
       Wrap(spacing: 12, runSpacing: 8, children: [
         OutlinedButton.icon(
           icon: const Icon(Icons.image_rounded),
           label: Text(t.frontImage.isEmpty ? 'طرح روی کارت' : 'روی: ${t.frontImage.split(Platform.pathSeparator).last}'),
           onPressed: () => _pickImage(s, true),
         ),
-        OutlinedButton.icon(
-          icon: const Icon(Icons.image_rounded),
-          label: Text(t.backImage.isEmpty ? 'طرح پشت کارت' : 'پشت: ${t.backImage.split(Platform.pathSeparator).last}'),
-          onPressed: () => _pickImage(s, false),
-        ),
+        if (t.doubleSided)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.image_rounded),
+            label: Text(t.backImage.isEmpty ? 'طرح پشت کارت' : 'پشت: ${t.backImage.split(Platform.pathSeparator).last}'),
+            onPressed: () => _pickImage(s, false),
+          ),
       ]),
       const SizedBox(height: 8),
       const Hint('طرح‌ها PNG یا JPG، با حاشیه‌ی اضافه‌ی ۳ میلی‌متر از هر طرف و ۳۰۰ DPI باشند '
           '(برای ۸۵×۵۵ میلی‌متر فایل ۹۱×۶۱ میلی‌متر، حدود ۱۰۷۵×۷۲۰ پیکسل). متن مهم دست‌کم ۴ میلی‌متر داخل لبه‌ی برش باشد.'),
-      const SizedBox(height: 12),
-      Wrap(spacing: 12, runSpacing: 12, children: [
-        _num('مرکز نام: افقی ٪', t.nameX, (v) => t.nameX = v, step: 1),
-        _num('مرکز نام: عمودی ٪', t.nameY, (v) => t.nameY = v, step: 1),
-        _num('اندازه‌ی نام (pt)', t.nameSize, (v) => t.nameSize = v, step: 0.5),
-        SizedBox(
-          width: 130,
-          child: TextFormField(
-            initialValue: t.nameColor,
-            decoration: const InputDecoration(labelText: 'رنگ نام (hex)', isDense: true),
-            textDirection: TextDirection.ltr,
-            onChanged: (v) => setState(() => t.nameColor = v.replaceAll('#', '').trim()),
-          ),
-        ),
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          Checkbox(value: t.showRole, onChanged: (v) => setState(() => t.showRole = v ?? true)),
-          const Text('نقش زیر نام'),
+      if (t.qrEnabled) ...[
+        SectionTitle(t.effectiveQrSide == 'front' ? 'QR (روی کارت)' : 'QR (پشت کارت)'),
+        Wrap(spacing: 12, runSpacing: 12, children: [
+          _num('مرکز QR: افقی ٪', t.qrX, (v) => t.qrX = v, step: 1),
+          _num('مرکز QR: عمودی ٪', t.qrY, (v) => t.qrY = v, step: 1),
+          _num('اندازه‌ی QR (mm)', t.qrSizeMm, (v) => t.qrSizeMm = v, step: 0.5),
         ]),
-      ]),
-      const SizedBox(height: 12),
-      Wrap(spacing: 12, runSpacing: 12, children: [
-        _num('مرکز QR: افقی ٪', t.qrX, (v) => t.qrX = v, step: 1),
-        _num('مرکز QR: عمودی ٪', t.qrY, (v) => t.qrY = v, step: 1),
-        _num('اندازه‌ی QR (mm)', t.qrSizeMm, (v) => t.qrSizeMm = v, step: 0.5),
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          Checkbox(value: t.showSerial, onChanged: (v) => setState(() => t.showSerial = v ?? true)),
-          const Text('شماره‌ی کارت زیر QR'),
-        ]),
-      ]),
-      if (t.qrSizeMm < s.minQrMm)
-        Padding(
-          padding: const EdgeInsets.only(top: DaftarSize.space2),
-          child: Notice(
-            tone: NoticeTone.wait,
-            text: 'QR کوچک است؛ گوشی‌های قدیمی از فاصله نمی‌خوانند. کمینه برای '
-                '${s.settings.qrBehavior == 'vcard' ? 'کارت ویزیت' : 'لینک'} ${faDigits(s.minQrMm.toStringAsFixed(0))} میلی‌متر است.',
+        if (t.qrSizeMm < s.minQrMm)
+          Padding(
+            padding: const EdgeInsets.only(top: DaftarSize.space2),
+            child: Notice(
+              tone: NoticeTone.wait,
+              text: 'QR کوچک است؛ گوشی‌های قدیمی از فاصله نمی‌خوانند. کمینه برای '
+                  '${s.settings.qrBehavior == 'vcard' ? 'کارت ویزیت' : 'لینک'} ${faDigits(s.minQrMm.toStringAsFixed(0))} میلی‌متر است.',
+            ),
           ),
-        ),
+      ],
+      const SectionTitle('متن‌های کارت'),
+      CardTextsSection(s: s, file: _file, onChanged: () => setState(() {})),
+      const SectionTitle('فونت‌ها'),
+      FontsSection(s: s),
+      const SectionTitle('فایل اکسل جدا'),
+      ExtraFileSection(s: s, data: _file, onChanged: () => setState(() => _fileKey = null)),
       const SectionTitle('پیش‌نمایش'),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         value: _longName,
         onChanged: longest == null ? null : (v) => setState(() => _longName = v),
         title: const Text('آزمون نام بلند'),
-        subtitle: Text(longest == null ? 'هنوز کسی وارد نشده.' : 'طولانی‌ترین نام لیست: ${longest.displayName}'),
+        subtitle: Text(longest == null ? 'هنوز کسی وارد نشده؛ مقدارهای نمونه نشان داده می‌شود.' : 'طولانی‌ترین نام لیست: ${longest.displayName}'),
       ),
-      _Preview(s: s, person: _longName ? longest : (people.isEmpty ? null : people.first)),
+      CardPreview(s: s, subject: sample),
       const SectionTitle('چیدمان برای چاپخانه'),
       _SheetSettings(
         s: s,
@@ -301,7 +313,7 @@ class _CardsScreenState extends State<CardsScreen> {
         onChanged: () => setState(() {}),
       ),
       const SectionTitle('بررسی پیش از چاپ'),
-      _Preflight(s: s, longest: longest),
+      CardPreflight(s: s, file: _file),
       const SizedBox(height: 20),
       Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
         FilledButton.icon(
@@ -323,229 +335,13 @@ class _CardsScreenState extends State<CardsScreen> {
       ]),
       const SizedBox(height: 8),
       Hint(
-        t.sheetMode
-            ? 'PDF کارت‌ها روی بوم چیده می‌شود: یک برگ رو و بعدش برگ پشت‌ها با جای آینه‌شده (چاپ دورو)، به ترتیب الفبایی نام خانوادگی. '
-            : 'PDF کارت‌ها برای هر کارت یک صفحه‌ی رو و پشت‌سرش یک صفحه‌ی پشت دارد (چاپ دورو)، به ترتیب الفبایی نام خانوادگی. '
-        'بعد از ساخت PDF، آدرس پایه قفل می‌شود تا لینک QR کارت‌های چاپ‌شده عوض نشود. '
-        'قالب و تنظیم بوم روی سرور ذخیره می‌شود تا ویندوز و گوشی یک قالب ببینند؛ تصویر طرح روی همین دستگاه می‌ماند، پس روی هر دستگاه یک بار انتخابش کنید.',
+        '${t.sheetMode ? (t.doubleSided ? 'PDF کارت‌ها روی بوم چیده می‌شود: یک برگ رو و بعدش برگ پشت‌ها با جای آینه‌شده (چاپ دورو)، ' : 'PDF کارت‌ها روی بوم چیده می‌شود (یک‌رو)، ') : (t.doubleSided ? 'PDF کارت‌ها برای هر کارت یک صفحه‌ی رو و پشت‌سرش یک صفحه‌ی پشت دارد (چاپ دورو)، ' : 'PDF کارت‌ها برای هر کارت یک صفحه دارد، ')}'
+        'به ترتیب الفبایی نام خانوادگی. '
+        '${t.qrEnabled ? 'بعد از ساخت PDF، آدرس پایه قفل می‌شود تا لینک QR کارت‌های چاپ‌شده عوض نشود. ' : ''}'
+        'قالب، متن‌ها و تنظیم بوم روی سرور ذخیره می‌شود تا ویندوز و گوشی یک قالب ببینند؛ تصویر طرح و فایل اکسل جدا روی همین دستگاه می‌ماند، پس روی هر دستگاه یک بار انتخابشان کنید.',
       ),
     ]);
   }
-}
-
-/// بررسی پیش از چاپ: جاشدن نام‌ها در ناحیه‌ی امن، اندازه و جای QR، کیفیت تصویر طرح.
-class _Preflight extends StatelessWidget {
-  final AdminState s;
-  final Person? longest;
-  const _Preflight({required this.s, required this.longest});
-
-  static const _safe = 4.0; // ناحیه‌ی امن، میلی‌متر
-  static const _ptPerMm = 72 / 25.4;
-
-  static final _sizes = <String, Future<(int, int)?>>{};
-
-  // تصویر هر مسیر یک بار خوانده می‌شود، نه با هر تغییر فیلد.
-  Future<(int, int)?> _imageSize(String path) => _sizes.putIfAbsent(path, () => _readSize(path));
-
-  Future<(int, int)?> _readSize(String path) async {
-    if (path.isEmpty) return null;
-    final f = File(path);
-    if (!await f.exists()) return null;
-    final codec = await ui.instantiateImageCodec(await f.readAsBytes());
-    final frame = await codec.getNextFrame();
-    return (frame.image.width, frame.image.height);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = s.template;
-    final checks = <(bool?, String)>[]; // true خوب، false مشکل، null هشدار
-
-    // ۱. جاشدن طولانی‌ترین نام در ناحیه‌ی امن.
-    if (longest != null) {
-      final cx = t.widthMm * t.nameX / 100;
-      final availMm = 2 * [cx - _safe, t.widthMm - cx - _safe].reduce((a, b) => a < b ? a : b);
-      final tp = TextPainter(
-        text: TextSpan(
-          text: longest!.displayName,
-          style: TextStyle(fontFamily: 'Vazirmatn', fontSize: t.nameSize, fontWeight: FontWeight.w800),
-        ),
-        textDirection: TextDirection.rtl,
-        maxLines: 1,
-      )..layout();
-      final widthMm = tp.width / _ptPerMm;
-      if (availMm <= 0) {
-        checks.add((false, 'مرکز نام بیرون از ناحیه‌ی امن است.'));
-      } else if (widthMm <= availMm) {
-        checks.add((true, 'همه‌ی نام‌ها در یک خط و داخل ناحیه‌ی امن جا می‌شوند.'));
-      } else if (widthMm <= availMm * 2) {
-        checks.add((null, 'طولانی‌ترین نام («${longest!.displayName}») دو خطی چاپ می‌شود.'));
-      } else {
-        checks.add((false, 'طولانی‌ترین نام حتی در دو خط جا نمی‌شود؛ اندازه‌ی نام را کم کنید.'));
-      }
-    }
-
-    // ۲. اندازه‌ی QR.
-    checks.add(t.qrSizeMm >= s.minQrMm
-        ? (true, 'اندازه‌ی QR ${faDigits(t.qrSizeMm.toStringAsFixed(0))} میلی‌متر؛ کافی است.')
-        : (false, 'QR کمتر از ${faDigits(s.minQrMm.toStringAsFixed(0))} میلی‌متر است.'));
-
-    // ۳. QR با حاشیه‌ی سکوت و خط‌های زیرش داخل ناحیه‌ی امن.
-    final qx = t.widthMm * t.qrX / 100, qy = t.heightMm * t.qrY / 100, half = t.qrSizeMm / 2 + 3;
-    final below = t.showSerial ? 8.0 : 4.0;
-    final inside = qx - half >= _safe &&
-        qx + half <= t.widthMm - _safe &&
-        qy - half >= _safe &&
-        qy + half + below <= t.heightMm - _safe;
-    checks.add(inside
-        ? (true, 'QR و حاشیه‌ی سکوتش داخل ناحیه‌ی امن است.')
-        : (false, 'QR یا خط‌های زیرش از ناحیه‌ی امن بیرون زده؛ جایش یا اندازه‌اش را عوض کنید.'));
-
-    return FutureBuilder<List<(int, int)?>>(
-      future: Future.wait([_imageSize(t.frontImage), _imageSize(t.backImage)]),
-      builder: (context, snap) {
-        final all = [...checks];
-        final sizes = snap.data;
-        if (sizes != null) {
-          for (final (label, size) in [('روی', sizes[0]), ('پشت', sizes[1])]) {
-            if (size == null) continue;
-            final dpi = size.$1 / ((t.widthMm + 6) / 25.4);
-            all.add(dpi >= 290
-                ? (true, 'تصویر $label: ${faDigits(dpi.round())} dpi.')
-                : (dpi >= 150
-                    ? (null, 'تصویر $label: ${faDigits(dpi.round())} dpi؛ برای چاپ تیز ۳۰۰ لازم است.')
-                    : (false, 'تصویر $label: ${faDigits(dpi.round())} dpi؛ چاپ تار می‌شود.')));
-          }
-        }
-        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          for (final (ok, text) in all)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(
-                  ok == true ? Icons.check_circle_rounded : (ok == null ? Icons.warning_rounded : Icons.error_rounded),
-                  size: 18,
-                  color: ok == true
-                      ? DaftarColors.of(context).go
-                      : (ok == null ? DaftarColors.of(context).wait : DaftarColors.of(context).stop),
-                ),
-                const SizedBox(width: DaftarSize.space2),
-                Expanded(child: Text(text)),
-              ]),
-            ),
-        ]);
-      },
-    );
-  }
-}
-
-/// پیش‌نمایش جای نام و QR روی کارت، با خط برش و ناحیه‌ی امن ۴ میلی‌متری.
-class _Preview extends StatelessWidget {
-  final AdminState s;
-  final Person? person;
-  const _Preview({required this.s, required this.person});
-
-  Widget _side(BuildContext context, double width, String imagePath, List<Widget> overlay) {
-    final t = s.template;
-    final x = DaftarColors.of(context);
-    final pxPerMm = width / t.widthMm;
-    return SizedBox(
-      width: width,
-      child: AspectRatio(
-        aspectRatio: t.widthMm / t.heightMm,
-        child: LayoutBuilder(builder: (context, c) {
-          return Container(
-            decoration: BoxDecoration(border: Border.all(color: x.lineStrong), color: Colors.white),
-            child: Stack(children: [
-              if (imagePath.isNotEmpty && File(imagePath).existsSync())
-                Positioned.fill(child: Image.file(File(imagePath), fit: BoxFit.cover)),
-              // ناحیه‌ی امن (نقطه‌چین در طراحی؛ اینجا خط نازک)
-              Positioned.fill(
-                child: Padding(
-                  padding: EdgeInsets.all(4 * pxPerMm),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(border: Border.all(color: x.stamp.withValues(alpha: .5), width: 1)),
-                  ),
-                ),
-              ),
-              ...overlay.map((w) => w is _At ? w.build2(c.biggest) : w),
-            ]),
-          );
-        }),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = s.template;
-    Color color;
-    try {
-      color = Color(int.parse('FF${t.nameColor}', radix: 16));
-    } catch (_) {
-      color = const Color(0xFF10141A);
-    }
-    return LayoutBuilder(builder: (context, c) {
-      final width = c.maxWidth < 340 ? c.maxWidth : 340.0;
-      final scale = width / (t.widthMm * 72 / 25.4); // pt → پیکسل پیش‌نمایش
-      final role = person == null ? '' : s.roleName(person!.roleCode);
-      return Wrap(spacing: 16, runSpacing: 16, children: [
-        _side(context, width, t.frontImage, [
-          _At(
-            t.nameX,
-            t.nameY,
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4 * width / t.widthMm),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(person?.displayName ?? 'نام نمونه',
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    style: TextStyle(fontSize: t.nameSize * scale, fontWeight: FontWeight.w800, color: color, letterSpacing: 0)),
-                if (t.showRole && role.isNotEmpty)
-                  Text(role,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: t.nameSize * 9 / 16 * scale, fontWeight: FontWeight.w600, color: color)),
-              ]),
-            ),
-          ),
-        ]),
-        _side(context, width, t.backImage, [
-          _At(t.qrX, t.qrY, Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              padding: EdgeInsets.all(3 * width / t.widthMm),
-              color: Colors.white,
-              child: SizedBox(
-                width: width * t.qrSizeMm / t.widthMm,
-                height: width * t.qrSizeMm / t.widthMm,
-                child: const FittedBox(child: Icon(Icons.qr_code_2_rounded, color: Colors.black)),
-              ),
-            ),
-            if (t.showSerial)
-              Text('۲۱۳', style: TextStyle(fontSize: 8 * scale, color: const Color(0xFF10141A))),
-            Text(s.qrHint(reserve: false), style: TextStyle(fontSize: 7 * scale, color: const Color(0xFF10141A))),
-          ])),
-        ]),
-      ]);
-    });
-  }
-}
-
-class _At extends StatelessWidget {
-  final double xPct;
-  final double yPct;
-  final Widget child;
-  const _At(this.xPct, this.yPct, this.child);
-
-  Widget build2(Size size) => Positioned(
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-        child: Align(alignment: Alignment(xPct / 50 - 1, yPct / 50 - 1), child: child),
-      );
-
-  @override
-  Widget build(BuildContext context) => child;
 }
 
 
@@ -600,7 +396,7 @@ class _SheetSettings extends StatelessWidget {
         : 'برگ ${t.sheetPreset == 'custom' ? 'دلخواه' : t.sheetPreset} ${layout.landscape ? 'افقی' : 'عمودی'}، '
             '${faDigits(layout.cols)} ستون × ${faDigits(layout.rows)} ردیف = ${faDigits(layout.perSheet)} کارت در هر برگ'
             '${layout.rotated ? '، کارت‌ها ۹۰ درجه چرخیده‌اند' : ''}. '
-            '${faDigits(cards)} کارت = ${faDigits(layout.sheetsFor(cards))} برگ (${faDigits(layout.sheetsFor(cards) * 2)} صفحه‌ی PDF).';
+            '${faDigits(cards)} کارت = ${faDigits(layout.sheetsFor(cards))} برگ (${faDigits(layout.sheetsFor(cards) * (t.doubleSided ? 2 : 1))} صفحه‌ی PDF).';
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SegmentedButton<bool>(
@@ -614,10 +410,12 @@ class _SheetSettings extends StatelessWidget {
       ),
       const SizedBox(height: DaftarSize.space2),
       if (!t.sheetMode)
-        const Hint('هر کارت در یک صفحه‌ی هم‌اندازه‌ی خودش می‌آید: رو، بعد پشت. برای چاپخانه‌هایی که خودشان کارت‌ها را روی بوم می‌چینند.')
+        Hint('هر کارت در یک صفحه‌ی هم‌اندازه‌ی خودش می‌آید${t.doubleSided ? ': رو، بعد پشت' : ''}. برای چاپخانه‌هایی که خودشان کارت‌ها را روی بوم می‌چینند.')
       else ...[
-        const Hint('چند کارت را کنار هم روی بوم می‌چیند، و بعد از هر برگ رو، برگ پشت‌ها را با جای آینه‌شده می‌گذارد تا بعد از چاپ دورو و برش، '
-            'پشت هر کارت پشت همان کارت و هم‌جهت با آن باشد. خط نازک جداکننده فقط روی برگ رو است.'),
+        Hint(t.doubleSided
+            ? 'چند کارت را کنار هم روی بوم می‌چیند، و بعد از هر برگ رو، برگ پشت‌ها را با جای آینه‌شده می‌گذارد تا بعد از چاپ دورو و برش، '
+                'پشت هر کارت پشت همان کارت و هم‌جهت با آن باشد. خط نازک جداکننده فقط روی برگ رو است.'
+            : 'چند کارت را کنار هم روی بوم می‌چیند، با خط نازک جداکننده برای برش.'),
         const SizedBox(height: DaftarSize.space3),
         Wrap(spacing: DaftarSize.space3, runSpacing: DaftarSize.space3, crossAxisAlignment: WrapCrossAlignment.end, children: [
           SizedBox(
@@ -643,6 +441,7 @@ class _SheetSettings extends StatelessWidget {
           num('حاشیه‌ی برگ (mm)', t.sheetMargin, (v) => t.sheetMargin = v),
         ]),
         const SizedBox(height: DaftarSize.space3),
+        if (t.doubleSided) ...[
         Text('چاپ دورو: برگ از کدام لبه برمی‌گردد؟', style: theme.textTheme.labelLarge),
         const SizedBox(height: DaftarSize.space1),
         SegmentedButton<String>(
@@ -655,6 +454,7 @@ class _SheetSettings extends StatelessWidget {
           onSelectionChanged: (v) => set(() => t.duplex = v.first),
         ),
         const Hint('همان گزینه را در چاپگر یا چاپخانه بزنید («Flip on long edge / short edge»). اگر مطمئن نیستید «از لبه‌ی بلند» که حالت عادی است.'),
+        ],
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: t.autoRotate,
@@ -681,13 +481,16 @@ class _SheetSettings extends StatelessWidget {
           const SizedBox(height: DaftarSize.space3),
           Wrap(spacing: DaftarSize.space5, runSpacing: DaftarSize.space3, children: [
             _SheetPreview(title: 'برگ رو', layout: layout, flip: flip, back: false, count: cards),
-            _SheetPreview(title: 'برگ پشت (آینه‌شده)', layout: layout, flip: flip, back: true, count: cards),
+            if (t.doubleSided)
+              _SheetPreview(title: 'برگ پشت (آینه‌شده)', layout: layout, flip: flip, back: true, count: cards),
           ]),
           Padding(
             padding: const EdgeInsets.only(top: DaftarSize.space2),
             child: Text(
-              'پیش‌نمایش برگ اول. مثلث بالای هر کارت را نشان می‌دهد؛ کارت ۱ (آبی) رو و پشتش را ببینید که روی هم می‌افتند. '
-              'پیش از چاپ همه، یک برگ آزمایشی از چاپخانه بخواهید و رو و پشت را روی هم بگیرید.',
+              t.doubleSided
+                  ? 'پیش‌نمایش برگ اول. مثلث بالای هر کارت را نشان می‌دهد؛ کارت ۱ (آبی) رو و پشتش را ببینید که روی هم می‌افتند. '
+                      'پیش از چاپ همه، یک برگ آزمایشی از چاپخانه بخواهید و رو و پشت را روی هم بگیرید.'
+                  : 'پیش‌نمایش برگ اول. مثلث بالای هر کارت را نشان می‌دهد.',
               style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted),
             ),
           ),
