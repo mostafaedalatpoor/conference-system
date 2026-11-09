@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served', 'attendee_update'];
+const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served', 'attendee_update', 'card_link'];
 
 /** فیلدهایی که نیرو می‌تواند برای فردِ ناقص تکمیل کند. */
 const CD_COMPLETABLE_FIELDS = ['first_name', 'last_name', 'mobile', 'email'];
@@ -160,9 +160,11 @@ function cd_push_events(array $event, array $device, array $items) {
 
         $flag = null;
         if ($kind === 'walkin_register') {
-            $flag = cd_apply_walkin($eid, $payload['attendee'], $card, $type_ids);
+            $flag = cd_apply_walkin($eid, $payload['attendee'], $card, $type_ids, $cards_required);
         } elseif ($kind === 'checkin') {
             $flag = $attendee_id === null ? 'unknown_attendee' : cd_checkin_flag($eid, $attendee_id, $seq);
+        } elseif ($kind === 'card_link') {
+            $flag = cd_apply_card_link($eid, $attendee_id, $card);
         } elseif ($kind === 'attendee_update') {
             $flag = cd_apply_attendee_update($eid, $attendee_id, $payload);
         } elseif ($kind === 'meal_served') {
@@ -233,8 +235,12 @@ function cd_validate_event_item($e, array $meals, $cards_required = true) {
             if (cd_str($a['first_name'] ?? '') === '' || cd_str($a['last_name'] ?? '') === '') {
                 return 'walkin_missing_name';
             }
-            if (!$has_card && $cards_required) {
-                return 'walkin_missing_card';
+            // کارت رزرو تمام شده باشد، بدون کارت هم ثبت می‌شود (با flag برای گزارش).
+            break;
+        case 'card_link':
+            // وصل‌کردن کارت رزرو به کسی که بدون کارت ثبت‌نام شده بود.
+            if (!$has_card || !$has_att) {
+                return 'missing_target';
             }
             break;
     }
@@ -242,7 +248,7 @@ function cd_validate_event_item($e, array $meals, $cards_required = true) {
 }
 
 /** ساخت شرکت‌کننده‌ی ثبت‌نام در محل و وصل‌کردن کارت رزرو (اگر هست). خروجی: flag یا null. */
-function cd_apply_walkin($event_id, array $a, ?array $card, array $type_ids) {
+function cd_apply_walkin($event_id, array $a, ?array $card, array $type_ids, $cards_required = false) {
     global $wpdb;
     $type_id = (int) ($a['registration_type_id'] ?? 0);
     if (!in_array($type_id, $type_ids, true)) {
@@ -256,7 +262,7 @@ function cd_apply_walkin($event_id, array $a, ?array $card, array $type_ids) {
 
     $flag = null;
     if ($card === null) {
-        // رویداد بدون کارت: فقط ثبت فرد.
+        // رویداد بدون کارت: فقط ثبت فرد. رویداد کارت‌دار: کارت رزرو تمام شده بود.
     } elseif (!(int) $card['is_reserve']) {
         $flag = 'card_not_reserve';
     } else {
@@ -286,7 +292,48 @@ function cd_apply_walkin($event_id, array $a, ?array $card, array $type_ids) {
             $flag = 'possible_duplicate';
         }
     }
+    if ($flag === null && $card === null && $cards_required) {
+        $flag = 'walkin_no_card';
+    }
     return $flag;
+}
+
+/** کارت رزرو آزاد را به فردی که کارت ندارد وصل می‌کند. خروجی: flag یا null. */
+function cd_apply_card_link($event_id, $attendee_id, ?array $card) {
+    global $wpdb;
+    if ($card === null) {
+        return 'unknown_card';
+    }
+    if (!(int) $card['is_reserve']) {
+        return 'card_not_reserve';
+    }
+    $exists = $wpdb->get_var($wpdb->prepare(
+        'SELECT COUNT(*) FROM ' . cd_table('attendees') . ' WHERE id = %s AND event_id = %d',
+        $attendee_id,
+        $event_id
+    ));
+    if (!(int) $exists) {
+        return 'unknown_attendee';
+    }
+    $has = $wpdb->get_var($wpdb->prepare(
+        'SELECT token FROM ' . cd_table('cards') . ' WHERE event_id = %d AND attendee_id = %s AND token <> %s LIMIT 1',
+        $event_id,
+        $attendee_id,
+        $card['token']
+    ));
+    if ($has) {
+        return 'attendee_has_card';
+    }
+    $linked = $wpdb->query($wpdb->prepare(
+        'UPDATE ' . cd_table('cards') . ' SET attendee_id = %s WHERE token = %s AND event_id = %d AND attendee_id IS NULL',
+        $attendee_id,
+        $card['token'],
+        $event_id
+    ));
+    if (!$linked && $card['attendee_id'] !== $attendee_id) {
+        return 'card_conflict';
+    }
+    return null;
 }
 
 /** آیا این فرد پیش از این رخداد در وضعیت «پذیرش‌شده» بوده؟ */

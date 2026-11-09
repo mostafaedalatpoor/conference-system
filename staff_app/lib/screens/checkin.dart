@@ -598,7 +598,7 @@ class AttendeePanel extends StatelessWidget {
             title: 'پذیرش شد',
             text: !cards
                 ? 'خوش آمدید.'
-                : (card == null ? 'کارت این نفر در لیست نیست.' : 'کارت را از دسته‌ی «$letter» بدهید.'),
+                : (card == null ? 'این فرد کارت ندارد؛ پذیرایی‌اش با جستجوی نام انجام می‌شود.' : 'کارت را از دسته‌ی «$letter» بدهید.'),
           ),
           if (cards) ...[
             const SizedBox(height: DaftarSize.space4),
@@ -705,6 +705,20 @@ class AttendeePanel extends StatelessWidget {
               ]),
             ),
           ..._warnings(context, store, a),
+          if (cards && card == null) ...[
+            const SizedBox(height: DaftarSize.space3),
+            Notice(
+              tone: NoticeTone.neutral,
+              icon: Icons.credit_card_off_rounded,
+              title: 'بدون کارت',
+              text: 'این فرد کارت ندارد (هنگام ثبت‌نام کارت رزرو تمام شده بود).',
+              action: OutlinedButton.icon(
+                onPressed: store.freeReserveCards.isEmpty ? null : () => showLinkCard(context, a),
+                icon: const Icon(Icons.add_card_rounded),
+                label: Text(store.freeReserveCards.isEmpty ? 'کارت رزرو آزادی نیست' : 'وصل‌کردن کارت رزرو'),
+              ),
+            ),
+          ],
           const SizedBox(height: DaftarSize.space4),
           AnimatedSwitcher(
             duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 150),
@@ -815,6 +829,72 @@ Future<void> showCompleteInfo(BuildContext context, Attendee a) async {
   if (ok != true) return;
   String v(String k) => fields.where((f) => f.$1 == k).map((f) => f.$3.text).firstOrNull ?? '';
   store.completeInfo(a, firstName: v('first_name'), lastName: v('last_name'), mobile: v('mobile'), email: v('email'));
+}
+
+/// وصل‌کردن کارت رزرو تازه به کسی که بدون کارت ثبت شده بود؛ با شماره یا اسکن. آفلاین هم ثبت می‌شود.
+Future<void> showLinkCard(BuildContext context, Attendee a) async {
+  final store = StoreScope.read(context);
+  final serial = TextEditingController();
+  String? error;
+  final card = await showDialog<PassCard>(
+    context: context,
+    builder: (c) => StatefulBuilder(builder: (c, setState) {
+      void submit(String input) {
+        final (found, err) = store.reserveCardFrom(input);
+        if (found != null) return Navigator.pop(c, found);
+        setState(() => error = err);
+      }
+
+      return AlertDialog(
+        title: const Text('وصل‌کردن کارت رزرو'),
+        content: SizedBox(
+          width: 380,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(a.displayName, style: Theme.of(c).textTheme.titleMedium),
+            const SizedBox(height: DaftarSize.space3),
+            DaftarField(
+              label: 'شماره‌ی روی کارت',
+              error: error,
+              helper: store.cameraScan
+                  ? 'کارت را اسکن کنید یا شماره را بنویسید (R5001 یا 5001).'
+                  : 'شماره‌ی روی کارت را بنویسید (R5001 یا 5001).',
+              child: Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: serial,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    textDirection: TextDirection.ltr,
+                    onSubmitted: submit,
+                  ),
+                ),
+                if (store.cameraScan) ...[
+                  const SizedBox(width: DaftarSize.space2),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final token = await ScannerPage.scan(c, title: 'اسکن کارت رزرو');
+                      if (token != null) submit(token);
+                    },
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                    label: const Text('اسکن'),
+                  ),
+                ],
+              ]),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('انصراف')),
+          FilledButton(onPressed: () => submit(serial.text), child: const Text('وصل شود')),
+        ],
+      );
+    }),
+  );
+  if (card == null || !context.mounted) return;
+  store.linkCard(a, card);
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('کارت رزرو R${faDigits(card.serial)} به ${a.fullName} وصل شد.')),
+  );
 }
 
 /// صفحه‌ی «دسته و شماره‌ی کارت»: نیرو هم‌زمان با تیک می‌داند دستش را سمت کدام دسته ببرد.

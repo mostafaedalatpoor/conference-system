@@ -94,7 +94,13 @@ class _ReportScreenState extends State<ReportScreen> {
               value: faDigits(r['totals']['checked_in']),
               of: faDigits(r['totals']['attendees']),
             ),
-            StatTile(width: w, label: 'ثبت‌نام در محل', value: faDigits(r['totals']['walkins'])),
+            StatTile(
+              width: w,
+              label: (r['totals']['walkins_no_card'] ?? 0) > 0
+                  ? 'ثبت‌نام در محل (${faDigits(r['totals']['walkins_no_card'])} بدون کارت)'
+                  : 'ثبت‌نام در محل',
+              value: faDigits(r['totals']['walkins']),
+            ),
             StatTile(width: w, label: 'کارت رزرو آزاد', value: faDigits(r['totals']['reserve_cards_free'])),
             StatTile(
               width: w,

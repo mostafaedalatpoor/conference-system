@@ -106,7 +106,7 @@ function cd_render_dashboard() {
     echo '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:16px 0">';
     $tiles = [
         ['پذیرش‌شده', $t['checked_in'] . ' از ' . $t['attendees'] . ' (' . $pct . '٪)'],
-        ['ثبت‌نام در محل', $t['walkins']],
+        ['ثبت‌نام در محل', $t['walkins'] . (!empty($t['walkins_no_card']) ? ' (' . $t['walkins_no_card'] . ' بدون کارت)' : '')],
         ['کارت رزرو باقی‌مانده', $t['reserve_cards_free']],
         ['موارد مشکوک', count($r['flagged'])],
     ];

@@ -12,6 +12,8 @@ const CD_FLAG_LABELS = [
     'possible_duplicate' => 'موبایل تکراری (احتمالاً ثبت دوباره)',
     'unknown_attendee' => 'کارت به کسی وصل نیست',
     'bad_registration_type' => 'نوع ثبت‌نام نامعتبر',
+    'walkin_no_card' => 'ثبت‌نام در محل بدون کارت (کارت رزرو تمام شده بود)',
+    'attendee_has_card' => 'این فرد از قبل کارت دارد',
 ];
 
 const CD_KIND_LABELS = [
@@ -20,6 +22,7 @@ const CD_KIND_LABELS = [
     'walkin_register' => 'ثبت‌نام در محل',
     'meal_served' => 'تحویل وعده',
     'attendee_update' => 'تکمیل اطلاعات',
+    'card_link' => 'وصل‌کردن کارت رزرو',
 ];
 
 /**
@@ -64,6 +67,11 @@ function cd_build_report(array $event) {
 
     $checked_in = 0;
     $walkins = 0;
+    $walkins_no_card = 0;
+    $with_card = array_flip($wpdb->get_col($wpdb->prepare(
+        'SELECT attendee_id FROM ' . cd_table('cards') . ' WHERE event_id = %d AND attendee_id IS NOT NULL',
+        $eid
+    )) ?: []);
     $by_type = [];
     foreach ($config['registration_types'] as $t) {
         $by_type[$t['id']] = ['name' => $t['name'], 'total' => 0, 'checked_in' => 0];
@@ -76,6 +84,9 @@ function cd_build_report(array $event) {
         }
         if ($a['source'] === 'walkin') {
             $walkins++;
+            if (!isset($with_card[$a['id']])) {
+                $walkins_no_card++;
+            }
         }
         if (isset($by_type[$tid])) {
             $by_type[$tid]['total']++;
@@ -145,6 +156,8 @@ function cd_build_report(array $event) {
             'attendees' => count($attendees),
             'checked_in' => $checked_in,
             'walkins' => $walkins,
+            // در رویداد کارت‌دار: ثبت‌نام‌هایی که کارت رزرو نداشتند (هنوز کارتی وصل نشده).
+            'walkins_no_card' => cd_event_settings($event)['identify_mode'] !== 'none' ? $walkins_no_card : 0,
             'reserve_cards_free' => $reserve_free,
         ],
         'by_registration_type' => array_values($by_type),

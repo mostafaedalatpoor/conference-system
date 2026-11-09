@@ -235,6 +235,12 @@ class AppStore extends ChangeNotifier {
         case 'checkin_undo':
           if (aid != null) chk.remove(aid);
           break;
+        case 'card_link':
+          // کارت رزرو که بعداً به کسی وصل شد که بدون کارت ثبت‌نام کرده بود.
+          if (aid != null && e.cardToken != null && !owner.containsKey(e.cardToken)) {
+            owner[e.cardToken!] = aid;
+          }
+          break;
         case 'attendee_update':
           final f = (e.payload?['fields'] as Map?)?.cast<String, dynamic>();
           final cur = aid == null ? null : att[aid];
@@ -380,6 +386,30 @@ class AppStore extends ChangeNotifier {
       'before': {'first_name': a.printedFirst ?? a.firstName, 'last_name': a.printedLast ?? a.lastName},
     });
   }
+
+  /// کارت رزرو از روی شماره («R5001»، «۵۰۰۱») یا لینک اسکن‌شده. خروجی: کارت آزاد، یا پیام خطا.
+  (PassCard?, String?) reserveCardFrom(String input) {
+    final scanned = tokenFromScan(latinizeLayout(input));
+    String? token = scanned;
+    if (token == null) {
+      final cleaned = latinDigits(input.trim()).replaceFirst(RegExp(r'^[Rrر]\s*'), '');
+      final n = int.tryParse(cleaned);
+      if (n == null) return (null, 'شماره‌ی روی کارت را بنویسید، مثلاً ۵۰۰۱.');
+      final match = cards.values.where((c) => c.isReserve && c.serial == n);
+      if (match.isEmpty) return (null, 'کارت رزرو با شماره‌ی ${faDigits(n)} پیدا نشد.');
+      token = match.first.token;
+    }
+    final c = cards[token];
+    if (c == null) return (null, 'این کارت در لیست نیست. اگر کارت تازه است، از «وضعیت» لیست را دوباره بگیرید.');
+    if (!c.isReserve) return (null, 'این کارت رزرو نیست؛ مال ${attendeeForToken(token)?.fullName ?? 'شخص دیگری'} است.');
+    if (cardOwner.containsKey(token)) {
+      return (null, 'این کارت رزرو قبلاً به ${attendeeForToken(token)?.fullName ?? 'کسی'} وصل شده.');
+    }
+    return (c, null);
+  }
+
+  /// وصل‌کردن کارت رزرو به کسی که بدون کارت ثبت شده بود (کارت رزرو تمام شده بود).
+  void linkCard(Attendee a, PassCard c) => _record('card_link', attendeeId: a.id, cardToken: c.token);
 
   /// افراد دیگری که همین ایمیل یا موبایل را دارند (مثلاً ایمیل مشترک شرکت).
   List<Attendee> sharingContact(Attendee a) {

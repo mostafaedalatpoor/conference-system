@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../models.dart';
 import '../normalize.dart';
+import '../store.dart';
 import '../theme/daftar.dart';
 import '../theme/widgets.dart';
 import 'scanner.dart';
@@ -66,54 +67,27 @@ class _WalkinScreenState extends State<WalkinScreen> {
     }
   }
 
-  void _setCardFromToken(String token) {
-    final store = StoreScope.read(context);
-    final c = store.cards[token];
+  void _setCard(String input) {
+    final (card, error) = StoreScope.read(context).reserveCardFrom(input);
     setState(() {
-      if (c == null) {
-        _card = null;
-        _cardError = 'این کارت در لیست نیست. اگر کارت تازه است، از «وضعیت» لیست را دوباره بگیرید.';
-      } else if (!c.isReserve) {
-        _card = null;
-        _cardError = 'این کارت رزرو نیست؛ مال ${store.attendeeForToken(token)?.fullName ?? 'شخص دیگری'} است.';
-      } else if (store.cardOwner.containsKey(token)) {
-        _card = null;
-        _cardError = 'این کارت رزرو قبلاً به ${store.attendeeForToken(token)?.fullName ?? 'کسی'} وصل شده.';
-      } else {
-        _card = c;
-        _serial.text = faDigits(c.serial);
-        _cardError = null;
-      }
+      _card = card;
+      _cardError = error;
+      if (card != null) _serial.text = faDigits(card.serial);
     });
   }
 
+  void _setCardFromToken(String token) => _setCard(token);
+
   /// شماره‌ی روی کارت رزرو «R5001» چاپ می‌شود؛ R، r و ر اول شماره نادیده گرفته می‌شود.
-  void _setCardFromSerial(String s) {
-    final store = StoreScope.read(context);
-    // بارکدخوان روی ویندوز همین فیلد را پر می‌کند: اگر لینک کارت است، همان را بخوان.
-    final scanned = tokenFromScan(latinizeLayout(s));
-    if (scanned != null) return _setCardFromToken(scanned);
-    final cleaned = latinDigits(s.trim()).replaceFirst(RegExp(r'^[Rrر]\s*'), '');
-    final n = int.tryParse(cleaned);
-    if (n == null) {
-      setState(() => _cardError = 'شماره‌ی روی کارت را بنویسید، مثلاً ۵۰۰۱.');
-      return;
-    }
-    final match = store.cards.values.where((c) => c.isReserve && c.serial == n);
-    if (match.isEmpty) {
-      setState(() {
-        _card = null;
-        _cardError = 'کارت رزرو با شماره‌ی ${faDigits(n)} پیدا نشد.';
-      });
-    } else {
-      _setCardFromToken(match.first.token);
-    }
-  }
+  void _setCardFromSerial(String s) => _setCard(s);
 
   Future<void> _scan() async {
     final token = await ScannerPage.scan(context, title: 'اسکن کارت رزرو');
     if (token != null && mounted) _setCardFromToken(token);
   }
+
+  /// کارت رزرو لازم است مگر همه‌ی کارت‌های رزرو مصرف شده باشند؛ آن وقت بدون کارت ثبت می‌شود.
+  bool _needsCard(AppStore store) => store.usesCards && store.freeReserveCards.isNotEmpty;
 
   Future<void> _save() async {
     final store = StoreScope.read(context);
@@ -121,7 +95,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
       _firstError = _first.text.trim().isEmpty ? 'نام را بنویسید.' : null;
       _lastError = _last.text.trim().isEmpty ? 'نام خانوادگی را بنویسید.' : null;
       _typeError = _typeId == null ? 'نوع ثبت‌نامی تعریف نشده است؛ از مدیر بخواهید.' : null;
-      if (_card == null && store.usesCards) {
+      if (_card == null && _needsCard(store)) {
         _cardError ??= store.cameraScan
             ? 'یک کارت رزرو اسکن کنید یا شماره‌اش را بنویسید.'
             : 'شماره‌ی کارت رزرو را بنویسید.';
@@ -131,7 +105,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
     if (_firstError != null) return _firstFocus.requestFocus();
     if (_lastError != null) return _lastFocus.requestFocus();
     if (_typeError != null) return;
-    if (_card == null && store.usesCards) return _serialFocus.requestFocus();
+    if (_card == null && _needsCard(store)) return _serialFocus.requestFocus();
 
     final dup = store.findByMobile(_mobile.text);
     if (dup != null) {
@@ -160,7 +134,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(_card == null || !store.usesCards
-          ? '${a.fullName} ثبت و پذیرش شد.'
+          ? '${a.fullName} ثبت و پذیرش شد${store.usesCards ? '، بدون کارت' : ''}.'
           : '${a.fullName} ثبت و پذیرش شد — کارت رزرو ${faDigits(_card!.serial)}'),
     ));
   }
@@ -257,7 +231,14 @@ class _WalkinScreenState extends State<WalkinScreen> {
                 style: theme.textTheme.bodySmall?.copyWith(color: free == 0 ? x.stop : x.inkMuted)),
           ]),
           const SizedBox(height: DaftarSize.space2),
-          if (_card != null)
+          if (free == 0 && _card == null)
+            const Notice(
+              tone: NoticeTone.wait,
+              title: 'کارت رزرو تمام شده',
+              text: 'این فرد بدون کارت ثبت و پذیرش می‌شود؛ پذیرایی‌اش با جستجوی نام انجام می‌شود. '
+                  'اگر بعداً کارت رزرو تازه رسید، از صفحه‌ی همین فرد «وصل‌کردن کارت رزرو» را بزنید.',
+            )
+          else if (_card != null)
             // خانه‌ی پر: پلاک شماره‌ی کارت درشت با تیک.
             Container(
               padding: const EdgeInsets.all(DaftarSize.space4),
@@ -328,7 +309,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
           FilledButton.icon(
             style: daftarGoStyle(context),
             icon: const Icon(Icons.how_to_reg_rounded),
-            label: Text(store.usesCards ? 'ثبت، پذیرش و تحویل کارت' : 'ثبت و پذیرش'),
+            label: Text(_needsCard(store) || _card != null ? 'ثبت، پذیرش و تحویل کارت' : 'ثبت و پذیرش'),
             onPressed: _save,
           ),
         ],
