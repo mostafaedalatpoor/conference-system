@@ -103,7 +103,12 @@ function cd_upsert_attendee($event_id, array $a, $source, $only_insert = false) 
             if (in_array($col, ['id', 'event_id', 'created_at', 'source'], true)) {
                 continue;
             }
-            $updates[] = "$col = VALUES($col)";
+            // خانه‌ی خالی اکسل اطلاعاتی را که نیروها روز اجرا تکمیل کرده‌اند پاک نمی‌کند.
+            if (in_array($col, ['first_name', 'last_name', 'mobile', 'email'], true)) {
+                $updates[] = "$col = IF(VALUES($col) = '', $col, VALUES($col))";
+            } else {
+                $updates[] = "$col = VALUES($col)";
+            }
         }
         $sql .= ' ON DUPLICATE KEY UPDATE ' . implode(', ', $updates);
     }

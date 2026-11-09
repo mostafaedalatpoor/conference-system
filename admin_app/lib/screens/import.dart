@@ -7,6 +7,7 @@ import '../theme/widgets.dart';
 import '../theme/daftar.dart';
 import '../normalize.dart';
 import '../state.dart';
+import 'people.dart';
 
 class ImportScreen extends StatefulWidget {
   const ImportScreen({super.key});
@@ -150,7 +151,16 @@ class _ImportScreenState extends State<ImportScreen> {
       if (_preview != null) ...[
         const SectionTitle('پیش‌نمایش'),
         Text('${faDigits(_preview!.people.length)} نفر: ${faDigits(_preview!.created)} جدید، '
-            '${faDigits(_preview!.updated)} به‌روزرسانی. ${faDigits(_preview!.problems.length)} مورد مشکل.'),
+            '${faDigits(_preview!.updated)} به‌روزرسانی. ${faDigits(_preview!.problems.length)} هشدار.'),
+        if (_preview!.incomplete > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Notice(
+              tone: NoticeTone.wait,
+              text: '${faDigits(_preview!.incomplete)} نفر نام یا نام خانوادگی ندارند. همه وارد می‌شوند تا روز اجرا پذیرش شوند؛ '
+                  'نیروها هنگام پذیرش هشدار می‌بینند و می‌توانند اطلاعات را تکمیل کنند. پیش از چاپ کارت هم می‌شود از «افراد ناقص» پایین همین صفحه تکمیلشان کرد.',
+            ),
+          ),
         const SizedBox(height: 8),
         if (_preview!.problems.isNotEmpty)
           // ردیف‌های مشکل‌دار: پس‌زمینه‌ی wait-soft با آیکن هشدار.
@@ -219,6 +229,7 @@ class _ImportScreenState extends State<ImportScreen> {
           ),
         ),
       ],
+      IncompletePeople(s: s),
     ]);
   }
 }

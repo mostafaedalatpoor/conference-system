@@ -3,7 +3,10 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served'];
+const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served', 'attendee_update'];
+
+/** فیلدهایی که نیرو می‌تواند برای فردِ ناقص تکمیل کند. */
+const CD_COMPLETABLE_FIELDS = ['first_name', 'last_name', 'mobile', 'email'];
 const CD_PULL_LIMIT = 1000;
 const CD_PUSH_LIMIT = 500;
 
@@ -160,6 +163,8 @@ function cd_push_events(array $event, array $device, array $items) {
             $flag = cd_apply_walkin($eid, $payload['attendee'], $card, $type_ids);
         } elseif ($kind === 'checkin') {
             $flag = $attendee_id === null ? 'unknown_attendee' : cd_checkin_flag($eid, $attendee_id, $seq);
+        } elseif ($kind === 'attendee_update') {
+            $flag = cd_apply_attendee_update($eid, $attendee_id, $payload);
         } elseif ($kind === 'meal_served') {
             $flag = $attendee_id === null ? 'unknown_attendee' : cd_meal_flag($eid, $attendee_id, $meals[$meal_id], $seq);
         }
@@ -208,6 +213,16 @@ function cd_validate_event_item($e, array $meals, $cards_required = true) {
             }
             if (!isset($e['meal_id']) || !isset($meals[(int) $e['meal_id']])) {
                 return 'bad_meal';
+            }
+            break;
+        case 'attendee_update':
+            // تکمیل اطلاعات فردی که در ثبت‌نام ناقص وارد شده؛ فقط فیلدهای مجاز.
+            if (!$has_att) {
+                return 'missing_target';
+            }
+            $f = $e['payload']['fields'] ?? null;
+            if (!is_array($f) || !array_intersect(array_keys($f), CD_COMPLETABLE_FIELDS)) {
+                return 'bad_update_fields';
             }
             break;
         case 'walkin_register':
@@ -310,4 +325,53 @@ function cd_meal_flag($event_id, $attendee_id, array $meal, $seq) {
         $seq
     ));
     return (int) $before > 0 ? 'duplicate_meal' : null;
+}
+
+/**
+ * تکمیل اطلاعات یک نفر از گوشی نیرو. فقط فیلدهای مجاز و غیرخالی عوض می‌شوند؛ چیزی پاک نمی‌شود.
+ * رخداد در دفتر می‌ماند و گوشی‌های دیگر با pull همان را روی داده‌ی خودشان اعمال می‌کنند.
+ */
+function cd_apply_attendee_update($event_id, $attendee_id, $payload) {
+    global $wpdb;
+    $a = $wpdb->get_row($wpdb->prepare(
+        'SELECT * FROM ' . cd_table('attendees') . ' WHERE id = %s AND event_id = %d',
+        $attendee_id,
+        $event_id
+    ), ARRAY_A);
+    if (!$a) {
+        return 'unknown_attendee';
+    }
+    $set = cd_completion_fields($payload['fields'] ?? []);
+    if (!$set) {
+        return null;
+    }
+    $row = array_merge($a, $set);
+    $set['search_key'] = cd_search_key($row);
+    $set['updated_at'] = cd_now();
+    $wpdb->update(cd_table('attendees'), $set, ['id' => $attendee_id, 'event_id' => (int) $event_id]);
+    return null;
+}
+
+/** فیلدهای تکمیل، پاک‌شده؛ مقدار خالی یعنی «دست نزن». */
+function cd_completion_fields($fields) {
+    $set = [];
+    if (!is_array($fields)) {
+        return $set;
+    }
+    foreach (CD_COMPLETABLE_FIELDS as $k) {
+        if (!isset($fields[$k])) {
+            continue;
+        }
+        if ($k === 'mobile') {
+            $v = cd_normalize_mobile($fields[$k]);
+        } elseif ($k === 'email') {
+            $v = sanitize_email((string) $fields[$k]);
+        } else {
+            $v = cd_str($fields[$k]);
+        }
+        if ($v !== '') {
+            $set[$k] = $v;
+        }
+    }
+    return $set;
 }

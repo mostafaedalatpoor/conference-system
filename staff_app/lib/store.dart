@@ -169,6 +169,13 @@ class AppStore extends ChangeNotifier {
     selectedMealId = j['selected_meal_id'] as int?;
   }
 
+  /// فقط برای آزمون: داده‌ی ذخیره‌شده را بدون شبکه بار می‌کند.
+  @visibleForTesting
+  void loadForTest(Map<String, dynamic> j) {
+    _fromJson(j);
+    _recompute();
+  }
+
   static List<Map<String, dynamic>> _list(dynamic v) =>
       ((v as List?) ?? const []).map((e) => (e as Map).cast<String, dynamic>()).toList();
 
@@ -227,6 +234,21 @@ class AppStore extends ChangeNotifier {
           break;
         case 'checkin_undo':
           if (aid != null) chk.remove(aid);
+          break;
+        case 'attendee_update':
+          final f = (e.payload?['fields'] as Map?)?.cast<String, dynamic>();
+          final cur = aid == null ? null : att[aid];
+          if (cur != null && f != null) {
+            // نام چاپی از «پیش از اولین تکمیل» است؛ snapshot سرور نام تازه را دارد.
+            final before = (e.payload?['before'] as Map?)?.cast<String, dynamic>();
+            final u = cur.completedWith(f);
+            if (before != null && cur.printedLast == null) {
+              u
+                ..printedFirst = (before['first_name'] ?? '').toString()
+                ..printedLast = (before['last_name'] ?? '').toString();
+            }
+            att[aid!] = u;
+          }
           break;
         case 'meal_served':
           if (aid != null && e.mealId != null) {
@@ -343,6 +365,34 @@ class AppStore extends ChangeNotifier {
   void checkin(Attendee a) => _record('checkin', attendeeId: a.id, cardToken: cardOf(a.id)?.token);
 
   void undoCheckin(Attendee a) => _record('checkin_undo', attendeeId: a.id);
+
+  /// تکمیل اطلاعات فردی که ناقص ثبت‌نام کرده؛ آفلاین هم ثبت می‌شود و با همگام‌سازی به سرور می‌رود.
+  void completeInfo(Attendee a, {String firstName = '', String lastName = '', String mobile = '', String email = ''}) {
+    final f = <String, String>{
+      if (firstName.trim().isNotEmpty) 'first_name': firstName.trim(),
+      if (lastName.trim().isNotEmpty) 'last_name': lastName.trim(),
+      if (mobile.trim().isNotEmpty) 'mobile': normalizeMobile(mobile),
+      if (email.trim().isNotEmpty) 'email': email.trim().toLowerCase(),
+    };
+    if (f.isEmpty) return;
+    _record('attendee_update', attendeeId: a.id, payload: {
+      'fields': f,
+      'before': {'first_name': a.printedFirst ?? a.firstName, 'last_name': a.printedLast ?? a.lastName},
+    });
+  }
+
+  /// افراد دیگری که همین ایمیل یا موبایل را دارند (مثلاً ایمیل مشترک شرکت).
+  List<Attendee> sharingContact(Attendee a) {
+    final m = normalizeMobile(a.mobile);
+    final e = a.email.trim().toLowerCase();
+    if (m.isEmpty && e.isEmpty) return const [];
+    return [
+      for (final o in attendees.values)
+        if (o.id != a.id &&
+            ((m.isNotEmpty && normalizeMobile(o.mobile) == m) || (e.isNotEmpty && o.email.trim().toLowerCase() == e)))
+          o,
+    ];
+  }
 
   void serveMeal(Attendee a, Meal m) =>
       _record('meal_served', attendeeId: a.id, mealId: m.id, cardToken: cardOf(a.id)?.token);

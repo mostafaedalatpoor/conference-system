@@ -64,9 +64,9 @@ SheetLayout? sheetLayoutFor(AdminState s) {
 
 /// فیلدهای سامانه برای یک نفر (منبع «فیلد سامانه» در متن‌های کارت).
 Map<String, String> personFields(AdminState s, Person p) => {
-      'display_name': p.displayName,
-      'full_name': p.fullName,
-      'first_name': p.firstName,
+      'display_name': '${p.title} ${p.cardFirstName} ${p.lastName}'.trim(),
+      'full_name': '${p.cardFirstName} ${p.lastName}'.trim(),
+      'first_name': p.cardFirstName,
       'last_name': p.lastName,
       'title': p.title,
       'organization': p.organization,

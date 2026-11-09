@@ -63,11 +63,17 @@ class _PeopleScreenState extends State<PeopleScreen> {
       Expanded(
         child: _q.text.trim().isEmpty
             ? SingleChildScrollView(
-                child: EmptyState(
-                  icon: Icons.people_alt_rounded,
-                  title: '${faDigits(s.people.length)} نفر در لیست',
-                  hint: 'نام کسی را بنویسید تا ببینید چه گرفته و کی پذیرش شده.',
-                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  EmptyState(
+                    icon: Icons.people_alt_rounded,
+                    title: '${faDigits(s.people.length)} نفر در لیست',
+                    hint: 'نام کسی را بنویسید تا ببینید چه گرفته و کی پذیرش شده.',
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space4),
+                    child: IncompletePeople(s: s),
+                  ),
+                ]),
               )
             : results.isEmpty
                 ? SingleChildScrollView(
@@ -85,7 +91,13 @@ class _PeopleScreenState extends State<PeopleScreen> {
                             child: Row(children: [
                               Expanded(
                                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                  Text(p.displayName, style: theme.textTheme.titleMedium),
+                                  Row(children: [
+                                    Flexible(child: Text(p.listName, style: theme.textTheme.titleMedium)),
+                                    if (p.missingName) ...[
+                                      const SizedBox(width: DaftarSize.space2),
+                                      const DaftarTag('ناقص', kind: TagKind.outline),
+                                    ],
+                                  ]),
                                   Text(
                                     [s.typeName(p.typeCode), s.roleName(p.roleCode), p.organization]
                                         .where((e) => e.isNotEmpty)
@@ -143,6 +155,7 @@ class _PersonPageState extends State<PersonPage> {
       'checkin_undo' => 'پذیرش لغو شد',
       'meal_served' => meal.isEmpty ? 'وعده تحویل شد' : '$meal تحویل شد',
       'walkin_register' => 'ثبت‌نام در محل',
+      'attendee_update' => 'اطلاعات تکمیل شد',
       _ => '${e['label'] ?? kind}',
     };
   }
@@ -165,15 +178,32 @@ class _PersonPageState extends State<PersonPage> {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(title: Text(p.displayName, overflow: TextOverflow.ellipsis)),
+      appBar: AppBar(title: Text(p.listName, overflow: TextOverflow.ellipsis)),
       body: RefreshIndicator(
         onRefresh: () async {
           setState(_load);
           await _timeline.catchError((_) => <Map<String, dynamic>>[]);
         },
         child: ListView(padding: const EdgeInsets.all(DaftarSize.space4), children: [
-          Text(p.displayName, style: theme.textTheme.headlineSmall),
+          Text(p.listName, style: theme.textTheme.headlineSmall),
           const SizedBox(height: DaftarSize.space2),
+          if (p.missingName) ...[
+            Notice(
+              tone: NoticeTone.wait,
+              title: 'اطلاعات ناقص',
+              text: 'نام یا نام خانوادگی این فرد در اکسل خالی بوده. در لیست هست و پذیرش می‌شود.',
+              action: TextButton(
+                onPressed: s.busy
+                    ? null
+                    : () async {
+                        await editPersonDialog(context, s, p);
+                        if (mounted) setState(() {});
+                      },
+                child: const Text('تکمیل اطلاعات'),
+              ),
+            ),
+            const SizedBox(height: DaftarSize.space2),
+          ],
           Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
             for (final t in [s.typeName(p.typeCode), s.roleName(p.roleCode)].where((e) => e.isNotEmpty)) DaftarTag(t),
             if (p.source == 'walkin') const DaftarTag('ثبت‌نام در محل', kind: TagKind.outline),
@@ -224,6 +254,7 @@ class _PersonPageState extends State<PersonPage> {
                           Text(_label(e), style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
                           Text(
                             [
+                              if ('${e['detail'] ?? ''}'.isNotEmpty) '${e['detail']}',
                               if (e['flag_label'] != null) '${e['flag_label']}',
                               if ('${e['device_label'] ?? ''}'.isNotEmpty) '${e['device_label']}',
                               if ('${e['staff'] ?? ''}'.isNotEmpty) '${e['staff']}',
@@ -286,5 +317,99 @@ class _PersonPageState extends State<PersonPage> {
         ]),
       ),
     );
+  }
+}
+
+
+/// ویرایش اطلاعات یک نفر از اپ مدیریت (بیشتر برای تکمیل افراد ناقص پیش از چاپ کارت).
+/// خانه‌ی خالی چیزی را روی سرور پاک نمی‌کند.
+Future<void> editPersonDialog(BuildContext context, AdminState s, Person p) async {
+  final c = {
+    'title': TextEditingController(text: p.title),
+    'first': TextEditingController(text: p.cardFirstName),
+    'last': TextEditingController(text: p.lastName),
+    'mobile': TextEditingController(text: p.mobile),
+    'email': TextEditingController(text: p.email),
+    'org': TextEditingController(text: p.organization),
+  };
+  Widget f(String k, String label, {bool ltr = false}) => Padding(
+        padding: const EdgeInsets.only(bottom: DaftarSize.space3),
+        child: DaftarField(
+          label: label,
+          child: TextField(controller: c[k], textDirection: ltr ? TextDirection.ltr : null),
+        ),
+      );
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (d) => AlertDialog(
+      title: const Text('ویرایش اطلاعات'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            f('title', 'عنوان'),
+            f('first', 'نام'),
+            f('last', 'نام خانوادگی'),
+            f('mobile', 'موبایل', ltr: true),
+            f('email', 'ایمیل', ltr: true),
+            f('org', 'سازمان'),
+            const Hint('خالی‌گذاشتن یک خانه چیزی را روی سرور پاک نمی‌کند.'),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('انصراف')),
+        FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('ذخیره روی سرور')),
+      ],
+    ),
+  );
+  if (ok != true) return;
+  String v(String k) => c[k]!.text.trim();
+  p
+    ..title = v('title')
+    ..organization = v('org');
+  if (v('first').isNotEmpty) p.firstName = v('first');
+  if (v('last').isNotEmpty) p.lastName = v('last');
+  if (v('mobile').isNotEmpty) p.mobile = normalizeMobile(v('mobile'));
+  if (v('email').isNotEmpty) p.email = v('email').toLowerCase();
+  await s.uploadPeople([p]);
+}
+
+/// فهرست افرادی که نام یا نام خانوادگی ندارند، با «ویرایش».
+class IncompletePeople extends StatelessWidget {
+  final AdminState s;
+  const IncompletePeople({super.key, required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    final list = s.people.values.where((p) => p.missingName).toList()
+      ..sort((a, b) => a.listName.compareTo(b.listName));
+    if (list.isEmpty) return const SizedBox.shrink();
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SectionTitle('افراد ناقص (${faDigits(list.length)})'),
+      const Hint('نام یا نام خانوادگی این افراد در اکسل خالی بوده. همه در لیست هستند و پذیرش می‌شوند؛ '
+          'نیروها هنگام پذیرش هشدار می‌بینند و می‌توانند تکمیل کنند. برای کارت درست، بهتر است پیش از چاپ تکمیلشان کنید.'),
+      const SizedBox(height: DaftarSize.space2),
+      for (final p in list.take(100))
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: DaftarSize.space1),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
+          child: Row(children: [
+            const DaftarTag('ناقص', kind: TagKind.outline),
+            const SizedBox(width: DaftarSize.space2),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(p.listName, style: theme.textTheme.bodyMedium),
+                Text([p.mobile, p.email, p.organization].where((e) => e.isNotEmpty).join('، '),
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+              ]),
+            ),
+            TextButton(onPressed: s.busy ? null : () => editPersonDialog(context, s, p), child: const Text('ویرایش')),
+          ]),
+        ),
+      if (list.length > 100) Text('… و ${faDigits(list.length - 100)} نفر دیگر'),
+    ]);
   }
 }

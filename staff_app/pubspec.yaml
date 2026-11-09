@@ -1,7 +1,7 @@
 name: conference_staff
 description: رویداد یار (Roydadyar) — اپ نیروهای اجرایی روز کنفرانس — پذیرش، ثبت‌نام در محل و پذیرایی، آفلاین.
 publish_to: 'none'
-version: 0.2.0+2
+version: 0.3.0+3
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

@@ -350,7 +350,7 @@ function cd_rest_timeline(WP_REST_Request $request) {
         return $event;
     }
     $rows = $wpdb->get_results($wpdb->prepare(
-        'SELECT l.seq, l.kind, l.flag, l.device_time, l.meal_id, m.name AS meal_name, d.label AS device_label, s.name AS staff_name
+        'SELECT l.seq, l.kind, l.flag, l.device_time, l.meal_id, l.payload, m.name AS meal_name, d.label AS device_label, s.name AS staff_name
          FROM ' . cd_table('event_log') . ' l
          LEFT JOIN ' . cd_table('meals') . ' m ON m.id = l.meal_id
          LEFT JOIN ' . cd_table('devices') . ' d ON d.id = l.device_id
@@ -371,6 +371,8 @@ function cd_rest_timeline(WP_REST_Request $request) {
                 'staff' => $r['staff_name'],
                 'flag' => $r['flag'],
                 'flag_label' => $r['flag'] ? (CD_FLAG_LABELS[$r['flag']] ?? $r['flag']) : null,
+                // در «تکمیل اطلاعات»: کدام فیلدها چه شدند.
+                'detail' => $r['kind'] === 'attendee_update' ? cd_completion_detail($r['payload']) : null,
             ];
         }, $rows),
         'server_time' => gmdate('c'),
@@ -548,7 +550,9 @@ function cd_rest_attendees(WP_REST_Request $request) {
             $errors[] = ['index' => $i, 'reason' => 'bad_id'];
             continue;
         }
-        if (cd_str($a['first_name'] ?? '') === '' || cd_str($a['last_name'] ?? '') === '') {
+        // هر کس در اکسل هست باید در روز اجرا پیدا شود، حتی با نام ناقص؛ فقط ردیفی که هیچ شناسه‌ای ندارد رد می‌شود.
+        if (cd_str($a['first_name'] ?? '') === '' && cd_str($a['last_name'] ?? '') === ''
+            && cd_str($a['email'] ?? '') === '' && cd_str($a['mobile'] ?? '') === '') {
             $errors[] = ['index' => $i, 'reason' => 'missing_name'];
             continue;
         }
@@ -631,4 +635,14 @@ function cd_rest_reserve_cards(WP_REST_Request $request) {
     }
     cd_bump_config($eid);
     return ['saved' => $saved, 'errors' => $errors];
+}
+
+function cd_completion_detail($payload) {
+    $p = $payload ? json_decode($payload, true) : null;
+    $labels = ['first_name' => 'نام', 'last_name' => 'نام خانوادگی', 'mobile' => 'موبایل', 'email' => 'ایمیل'];
+    $parts = [];
+    foreach (cd_completion_fields($p['fields'] ?? []) as $k => $v) {
+        $parts[] = $labels[$k] . ': ' . $v;
+    }
+    return implode('، ', $parts);
 }

@@ -354,7 +354,11 @@ class _Recent extends StatelessWidget {
 
 /// حرف دسته: حرف اول نام خانوادگی، چون کارت‌های چاپی به ترتیب نام خانوادگی چیده شده‌اند.
 String batchLetter(Attendee a) {
-  final s = (a.lastName.trim().isNotEmpty ? a.lastName : a.firstName).trim();
+  // همان قاعده‌ی چیدن کارت‌ها در اپ مدیریت: نام خانوادگی، اگر نبود نام، اگر هیچ نبود «؟» (آخر دسته‌ها).
+  final last = a.printedLast ?? a.lastName;
+  var first = a.printedFirst ?? a.firstName;
+  if (first.startsWith('بی‌نام (ردیف ')) first = ''; // نام جایگزین ردیف بی‌نام اپ مدیریت
+  final s = (last.trim().isNotEmpty ? last : first).trim();
   if (s.isEmpty) return '؟';
   final ch = String.fromCharCode(s.runes.first);
   return ch == 'آ' ? 'ا' : ch;
@@ -700,6 +704,7 @@ class AttendeePanel extends StatelessWidget {
                 ),
               ]),
             ),
+          ..._warnings(context, store, a),
           const SizedBox(height: DaftarSize.space4),
           AnimatedSwitcher(
             duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 150),
@@ -709,6 +714,107 @@ class AttendeePanel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// نام خالی، یا نام جایگزین «بی‌نام (ردیف N)» که اپ مدیریت برای ردیف بی‌نام و بی‌تماس می‌گذارد.
+bool _noFirst(Attendee a) => a.firstName.trim().isEmpty || a.firstName.startsWith('بی‌نام (ردیف ');
+
+/// هشدار فرد ناقص یا با ایمیل/موبایل مشترک. جلوی پذیرش را نمی‌گیرد.
+List<Widget> _warnings(BuildContext context, AppStore store, Attendee a) {
+  final missing = [
+    if (_noFirst(a)) 'نام',
+    if (a.lastName.trim().isEmpty) 'نام خانوادگی',
+  ];
+  final completable = missing.isNotEmpty || a.mobile.isEmpty || a.email.isEmpty;
+  final shared = store.sharingContact(a);
+  final out = <Widget>[];
+  if (missing.isNotEmpty) {
+    out.add(Notice(
+      tone: NoticeTone.wait,
+      title: 'اطلاعات ناقص',
+      text: '${missing.join(' و ')} این فرد در ثبت‌نام وارد نشده؛ از خود اوست، نه از اپ. '
+          'پذیرش مشکلی ندارد؛ از خودش بپرسید و تکمیل کنید.',
+      action: _CompleteButton(a: a, primary: true),
+    ));
+  }
+  if (shared.isNotEmpty) {
+    if (out.isNotEmpty) out.add(const SizedBox(height: DaftarSize.space2));
+    final names = shared.take(3).map((o) => '«${o.displayName}»').join('، ');
+    out.add(Notice(
+      tone: NoticeTone.info,
+      title: 'ایمیل یا موبایل مشترک',
+      text: 'ایمیل یا موبایل این فرد با $names یکی است. مطمئن شوید همین شخص است.',
+    ));
+  }
+  if (missing.isEmpty && completable) {
+    out.add(Align(alignment: AlignmentDirectional.centerStart, child: _CompleteButton(a: a, primary: false)));
+  }
+  return out.isEmpty ? out : [const SizedBox(height: DaftarSize.space3), ...out];
+}
+
+class _CompleteButton extends StatelessWidget {
+  final Attendee a;
+  final bool primary;
+  const _CompleteButton({required this.a, required this.primary});
+
+  @override
+  Widget build(BuildContext context) {
+    final onPressed = () => showCompleteInfo(context, a);
+    return primary
+        ? OutlinedButton.icon(onPressed: onPressed, icon: const Icon(Icons.edit_rounded), label: const Text('تکمیل اطلاعات'))
+        : TextButton.icon(onPressed: onPressed, icon: const Icon(Icons.edit_rounded, size: 18), label: const Text('تکمیل اطلاعات تماس'));
+  }
+}
+
+/// فرم تکمیل: فقط فیلدهای خالی را نشان می‌دهد؛ چیزی که هست عوض نمی‌شود.
+Future<void> showCompleteInfo(BuildContext context, Attendee a) async {
+  final store = StoreScope.of(context);
+  final fields = <(String, String, TextEditingController, TextInputType)>[
+    if (_noFirst(a)) ('first_name', 'نام', TextEditingController(), TextInputType.name),
+    if (a.lastName.trim().isEmpty) ('last_name', 'نام خانوادگی', TextEditingController(), TextInputType.name),
+    if (a.mobile.isEmpty) ('mobile', 'موبایل', TextEditingController(), TextInputType.phone),
+    if (a.email.isEmpty) ('email', 'ایمیل', TextEditingController(), TextInputType.emailAddress),
+  ];
+  if (fields.isEmpty) return;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: const Text('تکمیل اطلاعات'),
+      content: SizedBox(
+        width: 380,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(a.displayName, style: Theme.of(c).textTheme.titleMedium),
+            const SizedBox(height: DaftarSize.space3),
+            for (final (i, f) in fields.indexed) ...[
+              DaftarField(
+                label: f.$2,
+                optional: true,
+                child: TextField(
+                  controller: f.$3,
+                  autofocus: i == 0,
+                  keyboardType: f.$4,
+                  textDirection: f.$4 == TextInputType.name ? TextDirection.rtl : TextDirection.ltr,
+                  textInputAction: i == fields.length - 1 ? TextInputAction.done : TextInputAction.next,
+                  onSubmitted: i == fields.length - 1 ? (_) => Navigator.pop(c, true) : null,
+                ),
+              ),
+              const SizedBox(height: DaftarSize.space3),
+            ],
+            Text('بدون اینترنت هم ثبت می‌شود و با همگام‌سازی به سرور و گوشی‌های دیگر می‌رسد. در گزارش ثبت می‌شود چه کسی تکمیل کرد.',
+                style: Theme.of(c).textTheme.bodySmall?.copyWith(color: DaftarColors.of(c).inkMuted)),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
+        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('ذخیره')),
+      ],
+    ),
+  );
+  if (ok != true) return;
+  String v(String k) => fields.where((f) => f.$1 == k).map((f) => f.$3.text).firstOrNull ?? '';
+  store.completeInfo(a, firstName: v('first_name'), lastName: v('last_name'), mobile: v('mobile'), email: v('email'));
 }
 
 /// صفحه‌ی «دسته و شماره‌ی کارت»: نیرو هم‌زمان با تیک می‌داند دستش را سمت کدام دسته ببرد.

@@ -109,6 +109,9 @@ class StaffDef {
 }
 
 /// یک شرکت‌کننده، همان شکلی که سرور می‌شناسد، همراه کارت.
+/// پیشوند نام جایگزین ردیف بی‌نام و بی‌تماس.
+const namelessPrefix = 'بی‌نام (ردیف ';
+
 class Person {
   final String id;
   String title;
@@ -156,6 +159,24 @@ class Person {
 
   String get fullName => '$firstName $lastName'.trim();
   String get displayName => '$title $firstName $lastName'.trim();
+
+  /// نام یا نام خانوادگی در اکسل خالی بوده؛ با هشدار وارد شده و هنگام پذیرش تکمیل می‌شود.
+  bool get missingName => firstName.trim().isEmpty || lastName.trim().isEmpty;
+
+  /// ردیفی از اکسل که نه نام دارد نه ایمیل و موبایل، با «بی‌نام (ردیف N)» وارد می‌شود تا جستجو شود؛
+  /// این نام روی کارت چاپ نمی‌شود.
+  bool get placeholderName => firstName.startsWith(namelessPrefix);
+  String get cardFirstName => placeholderName ? '' : firstName;
+
+  /// نام برای فهرست‌ها؛ کسی که نام ندارد با ایمیل یا موبایلش.
+  String get listName {
+    if (displayName.isNotEmpty) return displayName;
+    final c = email.isNotEmpty ? email : mobile;
+    return c.isEmpty ? 'بی‌نام' : 'بی‌نام ($c)';
+  }
+
+  /// کلید چیدن کارت‌ها و دسته‌ها: نام خانوادگی، اگر نبود نام. همان قاعده‌ی «دسته» در اپ نیروها.
+  String get sortName => lastName.trim().isNotEmpty ? lastName : cardFirstName;
 
   Map<String, dynamic> toUpload() => {
         'id': id,
@@ -385,7 +406,10 @@ class ImportResult {
   final List<String> problems;
   final int updated;
   final int created;
-  ImportResult(this.people, this.problems, this.updated, this.created);
+
+  /// چند نفر نام یا نام خانوادگی ندارند (با هشدار وارد می‌شوند).
+  final int incomplete;
+  ImportResult(this.people, this.problems, this.updated, this.created, [this.incomplete = 0]);
 }
 
 /// تنظیم‌های رویداد که هم اپ نیروها و هم صفحه‌ی عمومی به آن نیاز دارند.
@@ -855,8 +879,13 @@ class AdminState extends ChangeNotifier {
       return (i == null || i >= row.length) ? '' : row[i].trim();
     }
 
+    // هر کس در اکسل هست وارد می‌شود: بدون نام هم، تا روز اجرا پیدا و پذیرش شود. فقط هشدار داده می‌شود.
+    final rowOf = <String, int>{};
+    final nameOf = <String, String>{};
+    var incomplete = 0;
     for (var r = 0; r < table.rows.length; r++) {
       final row = table.rows[r];
+      final rowNo = faDigits(r + 2);
       var first = cell(row, 'first_name');
       var last = cell(row, 'last_name');
       if ((first.isEmpty || last.isEmpty) && cell(row, 'full_name').isNotEmpty) {
@@ -864,19 +893,46 @@ class AdminState extends ChangeNotifier {
         first = parts.first;
         last = parts.length > 1 ? parts.sublist(1).join(' ') : '';
       }
-      if (first.isEmpty || last.isEmpty) {
-        problems.add('ردیف ${r + 2}: نام یا نام خانوادگی خالی است؛ رد شد.');
-        continue;
-      }
-      final email = cell(row, 'email').toLowerCase();
-      final mobile = normalizeMobile(cell(row, 'mobile'));
-      final key = email.isNotEmpty ? 'e:$email' : (mobile.isNotEmpty ? 'm:$mobile' : 'n:${normalizeText('$first $last')}');
-      final id = _stableId(key);
+      var email = cell(row, 'email').toLowerCase();
+      var mobile = normalizeMobile(cell(row, 'mobile'));
+      final nameKey = normalizeText('$first $last');
+      final key = email.isNotEmpty
+          ? 'e:$email'
+          : (mobile.isNotEmpty ? 'm:$mobile' : (nameKey.isNotEmpty ? 'n:$nameKey' : 'r:$r'));
+      var id = _stableId(key);
       if (out.containsKey(id)) {
-        problems.add('ردیف ${r + 2}: تکراری ($first $last)؛ فقط یک بار وارد می‌شود.');
-        continue;
+        final other = out[id]!;
+        if (nameOf[id] == nameKey) {
+          // همان نام و همان ایمیل/موبایل: یک نفر که دو بار ثبت‌نام کرده؛ دو کارت چاپ نشود.
+          problems.add('ردیف $rowNo: تکرار ردیف ${faDigits(rowOf[id]! + 2)} (همان نام و همان ایمیل/موبایل)؛ یک بار وارد شد.');
+          continue;
+        }
+        // ایمیل یا موبایل مشترک با نام دیگر (مثلاً ایمیل شرکت): دو نفر جدا.
+        id = _stableId('$key|$nameKey');
+        if (out.containsKey(id)) {
+          problems.add('ردیف $rowNo: تکرار ردیف ${faDigits(rowOf[id]! + 2)}؛ یک بار وارد شد.');
+          continue;
+        }
+        problems.add('ردیف $rowNo: ایمیل یا موبایلش با «${other.listName}» یکی است؛ جدا وارد شد.');
       }
+      rowOf[id] = r;
+      nameOf[id] = nameKey;
       final existing = people[id];
+      // خانه‌ی خالی اکسل چیزی را که قبلاً هست (مثلاً تکمیل‌شده در روز اجرا) پاک نمی‌کند.
+      if (first.isEmpty) first = existing?.firstName ?? '';
+      if (last.isEmpty) last = existing?.lastName ?? '';
+      if (email.isEmpty) email = existing?.email ?? '';
+      if (mobile.isEmpty) mobile = existing?.mobile ?? '';
+      if (first.isEmpty && last.isEmpty && email.isEmpty && mobile.isEmpty) {
+        first = '$namelessPrefix$rowNo)';
+      }
+      if (first.isEmpty || last.isEmpty) {
+        incomplete++;
+        final what = first.isEmpty && last.isEmpty
+            ? 'نام و نام خانوادگی'
+            : (first.isEmpty ? 'نام' : 'نام خانوادگی');
+        problems.add('ردیف $rowNo: $what خالی است؛ با هشدار وارد شد و هنگام پذیرش تکمیل می‌شود.');
+      }
       var roleCode = existing?.roleCode;
       final roleRaw = cell(row, 'role');
       if (roleRaw.isNotEmpty) {
@@ -885,7 +941,7 @@ class AdminState extends ChangeNotifier {
         if (match.isNotEmpty) {
           roleCode = match.first.code;
         } else {
-          problems.add('ردیف ${r + 2}: نقش «$roleRaw» تعریف نشده؛ بدون نقش وارد شد.');
+          problems.add('ردیف $rowNo: نقش «$roleRaw» تعریف نشده؛ بدون نقش وارد شد.');
         }
       }
       final pk = presentationKindFrom(cell(row, 'presentation_kind'));
@@ -919,7 +975,7 @@ class AdminState extends ChangeNotifier {
         updated++;
       }
     }
-    return ImportResult(out.values.toList(), problems, updated, created);
+    return ImportResult(out.values.toList(), problems, updated, created, incomplete);
   }
 
   Future<void> uploadPeople(List<Person> list) => run('${faDigits(list.length)} نفر روی سرور ذخیره شدند.', () async {
@@ -1022,7 +1078,10 @@ class AdminState extends ChangeNotifier {
   List<Person> get sortedPeople {
     final l = people.values.where((p) => p.token != null && p.source != 'walkin').toList();
     l.sort((a, b) {
-      final c = normalizeText(a.lastName).compareTo(normalizeText(b.lastName));
+      // بی‌نام‌ها آخر؛ بقیه با نام خانوادگی، اگر نبود نام (همان «دسته» در اپ نیروها).
+      final an = a.sortName.trim().isEmpty, bn = b.sortName.trim().isEmpty;
+      if (an != bn) return an ? 1 : -1;
+      final c = normalizeText(a.sortName).compareTo(normalizeText(b.sortName));
       return c != 0 ? c : normalizeText(a.firstName).compareTo(normalizeText(b.firstName));
     });
     return l;

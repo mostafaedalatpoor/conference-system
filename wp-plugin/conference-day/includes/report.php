@@ -19,6 +19,7 @@ const CD_KIND_LABELS = [
     'checkin_undo' => 'لغو پذیرش',
     'walkin_register' => 'ثبت‌نام در محل',
     'meal_served' => 'تحویل وعده',
+    'attendee_update' => 'تکمیل اطلاعات',
 ];
 
 /**

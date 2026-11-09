@@ -103,6 +103,8 @@ jobs:
           cp ci/debug.keystore ~/.android/debug.keystore
 
       - run: flutter pub get
+      # آزمون‌ها: تکمیل اطلاعات فرد ناقص، هشدار و دسته‌ی کارت.
+      - run: flutter test test_unit
       - run: flutter build apk --release --split-per-abi --build-name "$V" --build-number "$B" --dart-define=APP_VERSION="$V" --dart-define=APP_BUILD="$B"
       - name: نام‌گذاری با نسخه
         run: |

@@ -64,6 +64,10 @@ class Attendee {
   final String source;
   late final String searchKey;
 
+  /// نامی که کارت با آن چاپ و در دسته چیده شده؛ اگر نیرو بعداً نام را تکمیل کند، دسته عوض نمی‌شود.
+  String? printedLast;
+  String? printedFirst;
+
   Attendee({
     required this.id,
     this.title = '',
@@ -81,8 +85,48 @@ class Attendee {
     searchKey = normalizeText('$firstName $lastName $mobile $email $organization');
   }
 
-  String get fullName => '$firstName $lastName'.trim();
-  String get displayName => '$title $firstName $lastName'.trim();
+  /// نام یا نام خانوادگی در ثبت‌نام خالی مانده؛ هنگام پذیرش هشدار داده می‌شود.
+  bool get missingName => firstName.trim().isEmpty || lastName.trim().isEmpty;
+
+  String get _nameless {
+    final c = email.isNotEmpty ? email : mobile;
+    return c.isEmpty ? 'بی‌نام' : 'بی‌نام ($c)';
+  }
+
+  String get fullName {
+    final n = '$firstName $lastName'.trim();
+    return n.isEmpty ? _nameless : n;
+  }
+
+  String get displayName {
+    final n = '$firstName $lastName'.trim();
+    return n.isEmpty ? _nameless : '$title $n'.trim();
+  }
+
+  /// همین فرد با فیلدهای تکمیل‌شده؛ مقدار خالی چیزی را پاک نمی‌کند.
+  Attendee completedWith(Map<String, dynamic> f) {
+    String v(String k, String old) {
+      final n = (f[k] ?? '').toString().trim();
+      return n.isEmpty ? old : n;
+    }
+
+    return Attendee(
+      id: id,
+      title: title,
+      firstName: v('first_name', firstName),
+      lastName: v('last_name', lastName),
+      email: v('email', email),
+      mobile: v('mobile', mobile),
+      organization: organization,
+      country: country,
+      registrationTypeId: registrationTypeId,
+      presentationKind: presentationKind,
+      roleId: roleId,
+      source: source,
+    )
+      ..printedFirst = printedFirst ?? firstName
+      ..printedLast = printedLast ?? lastName;
+  }
 
   factory Attendee.fromJson(Map<String, dynamic> j) => Attendee(
         id: _str(j['id']).toLowerCase(),

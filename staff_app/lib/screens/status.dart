@@ -194,7 +194,7 @@ class _StatusScreenState extends State<StatusScreen> {
         const AboutCard(
           appName: appName,
           appNameLatin: appNameLatin,
-          version: appVersion,
+          version: appVersionLabel,
           maker: makerFull,
           website: makerWebsite,
         ),
