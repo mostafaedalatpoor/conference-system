@@ -192,6 +192,20 @@ class CardTemplate {
   double qrSizeMm = 30;
   bool showSerial = true;
 
+  // چیدن روی بوم چاپ برای چاپخانه (sheet_layout.dart)
+  /// false = هر کارت یک صفحه؛ true = چند کارت کنار هم روی بوم، با پشتِ آینه‌شده.
+  bool sheetMode = false;
+
+  /// نام بوم آماده (A4…) یا 'custom'.
+  String sheetPreset = 'A4';
+  double sheetW = 210;
+  double sheetH = 297;
+  double sheetMargin = 10;
+
+  /// 'long' = برگشت از لبه‌ی بلند، 'short' = از لبه‌ی کوتاه.
+  String duplex = 'long';
+  bool autoRotate = true;
+
   Map<String, dynamic> toJson() => {
         'front_image': frontImage,
         'back_image': backImage,
@@ -206,6 +220,13 @@ class CardTemplate {
         'qr_y': qrY,
         'qr_size_mm': qrSizeMm,
         'show_serial': showSerial,
+        'sheet_mode': sheetMode,
+        'sheet_preset': sheetPreset,
+        'sheet_w': sheetW,
+        'sheet_h': sheetH,
+        'sheet_margin': sheetMargin,
+        'duplex': duplex,
+        'auto_rotate': autoRotate,
       };
 
   void load(Map<String, dynamic> j) {
@@ -223,6 +244,13 @@ class CardTemplate {
     qrY = d('qr_y', qrY);
     qrSizeMm = d('qr_size_mm', qrSizeMm);
     showSerial = j['show_serial'] != false;
+    sheetMode = j['sheet_mode'] == true;
+    sheetPreset = (j['sheet_preset'] ?? sheetPreset).toString();
+    sheetW = d('sheet_w', sheetW);
+    sheetH = d('sheet_h', sheetH);
+    sheetMargin = d('sheet_margin', sheetMargin);
+    duplex = j['duplex'] == 'short' ? 'short' : 'long';
+    autoRotate = j['auto_rotate'] != false;
   }
 }
 

@@ -421,10 +421,22 @@ function cd_rest_save_card_template(WP_REST_Request $request) {
     if (isset($t['name_color']) && preg_match('/^#?[0-9a-fA-F]{6}$/', (string) $t['name_color'])) {
         $clean['name_color'] = ltrim((string) $t['name_color'], '#');
     }
-    foreach (['show_role', 'show_serial'] as $k) {
+    foreach (['show_role', 'show_serial', 'sheet_mode', 'auto_rotate'] as $k) {
         if (array_key_exists($k, $t)) {
             $clean[$k] = (bool) $t[$k];
         }
+    }
+    // چیدن روی بوم چاپ: اندازه‌ی بوم و حاشیه (میلی‌متر)، و جهت برگشتن برگ در چاپ دورو.
+    foreach (['sheet_w', 'sheet_h', 'sheet_margin'] as $k) {
+        if (isset($t[$k]) && is_numeric($t[$k]) && (float) $t[$k] >= 0 && (float) $t[$k] <= 2000) {
+            $clean[$k] = (float) $t[$k];
+        }
+    }
+    if (isset($t['duplex']) && in_array($t['duplex'], ['long', 'short'], true)) {
+        $clean['duplex'] = $t['duplex'];
+    }
+    if (isset($t['sheet_preset']) && preg_match('/^[A-Za-z0-9]{1,12}$/', (string) $t['sheet_preset'])) {
+        $clean['sheet_preset'] = (string) $t['sheet_preset'];
     }
     $wpdb->update(cd_table('events'), ['card_template' => wp_json_encode($clean), 'updated_at' => cd_now()], ['id' => (int) $event['id']]);
     return ['template' => $clean];

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -6,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import 'brand.dart';
 import 'normalize.dart';
+import 'sheet_layout.dart';
 import 'state.dart';
 
 class PdfFonts {
@@ -24,7 +26,33 @@ class PdfFonts {
 /// رنگ متن کارت چاپی (ink سامانه‌ی طراحی).
 const _cardInk = PdfColor.fromInt(0xFF10141A);
 
-/// PDF چاپخانه: برای هر کارت یک صفحه‌ی رو (طرح + نام) و بعد یک صفحه‌ی پشت (طرح + QR).
+/// یک کارت برای چاپ: متن رو، و محتوای پشت.
+class _CardJob {
+  final String? name;
+  final String? subtitle;
+  final String qrData;
+  final String serialLabel;
+  final String hint;
+  _CardJob(this.name, this.subtitle, this.qrData, this.serialLabel, this.hint);
+}
+
+/// کارت‌ها را برای [AdminState.template] جا می‌دهد؛ null یعنی در بوم انتخاب‌شده جا نمی‌شود.
+SheetLayout? sheetLayoutFor(AdminState s) {
+  final t = s.template;
+  return computeSheetLayout(
+    sheetW: t.sheetW,
+    sheetH: t.sheetH,
+    margin: t.sheetMargin,
+    cardW: t.widthMm,
+    cardH: t.heightMm,
+    autoRotate: t.autoRotate,
+  );
+}
+
+/// PDF چاپخانه. دو حالت:
+/// - هر کارت یک صفحه: صفحه‌ی رو (طرح + نام) و بعدش صفحه‌ی پشت (طرح + QR).
+/// - چیدن روی بوم (A4 و…): چند کارت کنار هم روی هر برگ و بعد از آن برگِ پشت‌ها با جای آینه‌شده،
+///   تا بعد از چاپ دورو و برش، پشتِ هر کارت پشت همان کارت و هم‌جهت با آن باشد.
 /// کارت‌های رزرو در انتها می‌آیند، بدون نام.
 Future<Uint8List> buildCardsPdf({
   required AdminState s,
@@ -37,7 +65,6 @@ Future<Uint8List> buildCardsPdf({
   final t = s.template;
   final w = t.widthMm * PdfPageFormat.mm;
   final h = t.heightMm * PdfPageFormat.mm;
-  final format = PdfPageFormat(w, h, marginAll: 0);
   final front = frontImage == null ? null : pw.MemoryImage(frontImage);
   final back = backImage == null ? null : pw.MemoryImage(backImage);
   final color = PdfColor.fromHex(t.nameColor.startsWith('#') ? t.nameColor : '#${t.nameColor}');
@@ -64,96 +91,172 @@ Future<Uint8List> buildCardsPdf({
     );
   }
 
-  void frontPage(String? name, String? subtitle) {
-    doc.addPage(pw.Page(
-      pageFormat: format,
-      build: (_) => pw.Stack(children: [
-        pw.Positioned(left: 0, top: 0, right: 0, bottom: 0, child: bg(front)),
-        if (name != null)
-          centered(
-            t.nameX,
-            t.nameY,
-            t.nameSize * 2.6 + (subtitle != null ? t.nameSize : 0),
-            pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
-              pw.Text(name,
-                  textDirection: pw.TextDirection.rtl,
-                  textAlign: pw.TextAlign.center,
-                  maxLines: 2,
-                  style: pw.TextStyle(font: fonts.extraBold, fontSize: t.nameSize, color: color)),
-              if (subtitle != null && subtitle.isNotEmpty)
-                pw.Text(subtitle,
-                    textDirection: pw.TextDirection.rtl,
-                    textAlign: pw.TextAlign.center,
-                    style: pw.TextStyle(font: fonts.semiBold, fontSize: t.nameSize * 9 / 16, color: color)),
-            ]),
-          ),
-      ]),
-    ));
-  }
+  pw.Widget frontCard(_CardJob j) => pw.SizedBox(
+        width: w,
+        height: h,
+        child: pw.ClipRect(
+          child: pw.Stack(children: [
+            pw.Positioned(left: 0, top: 0, right: 0, bottom: 0, child: bg(front)),
+            if (j.name != null)
+              centered(
+                t.nameX,
+                t.nameY,
+                t.nameSize * 2.6 + (j.subtitle != null ? t.nameSize : 0),
+                pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
+                  pw.Text(j.name!,
+                      textDirection: pw.TextDirection.rtl,
+                      textAlign: pw.TextAlign.center,
+                      maxLines: 2,
+                      style: pw.TextStyle(font: fonts.extraBold, fontSize: t.nameSize, color: color)),
+                  if (j.subtitle != null && j.subtitle!.isNotEmpty)
+                    pw.Text(j.subtitle!,
+                        textDirection: pw.TextDirection.rtl,
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(font: fonts.semiBold, fontSize: t.nameSize * 9 / 16, color: color)),
+                ]),
+              ),
+          ]),
+        ),
+      );
 
-  void backPage(String qrData, String serialLabel, String hint) {
+  pw.Widget backCard(_CardJob j) {
     final size = t.qrSizeMm * PdfPageFormat.mm;
     final cx = w * t.qrX / 100;
     final cy = h * t.qrY / 100;
     const quiet = 3 * PdfPageFormat.mm;
+    return pw.SizedBox(
+      width: w,
+      height: h,
+      child: pw.ClipRect(
+        child: pw.Stack(children: [
+          pw.Positioned(left: 0, top: 0, right: 0, bottom: 0, child: bg(back)),
+          // QR سیاه روی سفید خالص با حاشیه‌ی سکوت حدود ۳ میلی‌متر (۴ ماژول) دورش.
+          pw.Positioned(
+            left: cx - size / 2 - quiet,
+            top: cy - size / 2 - quiet,
+            child: pw.Container(
+              color: PdfColors.white,
+              padding: pw.EdgeInsets.all(quiet),
+              child: pw.BarcodeWidget(
+                barcode: pw.Barcode.qrCode(),
+                data: j.qrData,
+                width: size,
+                height: size,
+                drawText: false,
+              ),
+            ),
+          ),
+          if (t.showSerial)
+            pw.Positioned(
+              left: cx - size,
+              top: cy + size / 2 + quiet,
+              child: pw.SizedBox(
+                width: size * 2,
+                child: pw.Text(j.serialLabel,
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(font: fonts.semiBold, fontSize: 8, color: _cardInk)),
+              ),
+            ),
+          // خط راهنمای زیر QR: اسکن با دوربین معمولی چه می‌کند (۷pt).
+          pw.Positioned(
+            left: cx - size,
+            top: cy + size / 2 + quiet + (t.showSerial ? 10 : 0),
+            child: pw.SizedBox(
+              width: size * 2,
+              child: pw.Text(j.hint,
+                  textDirection: pw.TextDirection.rtl,
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(font: fonts.regular, fontSize: 7, color: _cardInk)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  final jobs = <_CardJob>[
+    for (final p in people)
+      _CardJob(
+        p.displayName,
+        (t.showRole ? s.roleName(p.roleCode) : '').isNotEmpty ? s.roleName(p.roleCode) : null,
+        s.qrDataFor(p),
+        faDigits(p.serial ?? ''),
+        s.qrHint(reserve: false),
+      ),
+    for (final r in reserves) _CardJob(null, null, s.qrUrl(r.token), 'R${faDigits(r.serial)}', s.qrHint(reserve: true)),
+  ];
+
+  if (!t.sheetMode) {
+    final format = PdfPageFormat(w, h, marginAll: 0);
+    for (final j in jobs) {
+      doc.addPage(pw.Page(pageFormat: format, build: (_) => frontCard(j)));
+      doc.addPage(pw.Page(pageFormat: format, build: (_) => backCard(j)));
+    }
+    return doc.save();
+  }
+
+  final layout = sheetLayoutFor(s);
+  if (layout == null) {
+    throw StateError('کارت ${faDigits(t.widthMm.toStringAsFixed(0))}×${faDigits(t.heightMm.toStringAsFixed(0))} '
+        'در این بوم با این حاشیه جا نمی‌شود.');
+  }
+  final flip = t.duplex == 'short' ? DuplexFlip.shortEdge : DuplexFlip.longEdge;
+  const mm = PdfPageFormat.mm;
+  final format = PdfPageFormat(layout.pageW * mm, layout.pageH * mm, marginAll: 0);
+
+  /// کارت را وسط خانه‌اش می‌گذارد و [deg] درجه ساعت‌گرد دور مرکز خودش می‌چرخاند.
+  /// جعبه‌ی کارت همیشه اندازه‌ی خود کارت است؛ فقط محتوایش می‌چرخد و وسط خانه‌ی چرخیده می‌ماند.
+  pw.Widget place(pw.Widget card, (int, int) cell, int deg) {
+    final (ox, oy) = layout.cellOrigin(cell);
+    final cx = (ox + layout.cellW / 2) * mm;
+    final cy = (oy + layout.cellH / 2) * mm;
+    return pw.Positioned(
+      left: cx - w / 2,
+      top: cy - h / 2,
+      child: deg == 0 ? card : pw.Transform.rotate(angle: _clockwise(deg), child: card),
+    );
+  }
+
+  // خط جداکننده‌ی نازک بین کارت‌ها: فقط روی رو، چون اگر چاپ دورو چند دهم میلی‌متر جابه‌جا شود
+  // خط پشت با رو نمی‌خواند و خراب دیده می‌شود.
+  const line = PdfColors.grey500;
+  const hair = 0.3;
+  List<pw.Widget> gridLines() => [
+        for (var c = 0; c <= layout.cols; c++)
+          pw.Positioned(
+            left: (layout.originX + c * layout.cellW) * mm - hair / 2,
+            top: layout.originY * mm,
+            child: pw.Container(width: hair, height: layout.rows * layout.cellH * mm, color: line),
+          ),
+        for (var r = 0; r <= layout.rows; r++)
+          pw.Positioned(
+            left: layout.originX * mm,
+            top: (layout.originY + r * layout.cellH) * mm - hair / 2,
+            child: pw.Container(width: layout.cols * layout.cellW * mm, height: hair, color: line),
+          ),
+      ];
+
+  for (var start = 0; start < jobs.length; start += layout.perSheet) {
+    final chunk = jobs.sublist(start, (start + layout.perSheet).clamp(0, jobs.length));
     doc.addPage(pw.Page(
       pageFormat: format,
       build: (_) => pw.Stack(children: [
-        pw.Positioned(left: 0, top: 0, right: 0, bottom: 0, child: bg(back)),
-        // QR سیاه روی سفید خالص با حاشیه‌ی سکوت حدود ۳ میلی‌متر (۴ ماژول) دورش.
-        pw.Positioned(
-          left: cx - size / 2 - quiet,
-          top: cy - size / 2 - quiet,
-          child: pw.Container(
-            color: PdfColors.white,
-            padding: pw.EdgeInsets.all(quiet),
-            child: pw.BarcodeWidget(
-              barcode: pw.Barcode.qrCode(),
-              data: qrData,
-              width: size,
-              height: size,
-              drawText: false,
-            ),
-          ),
-        ),
-        if (t.showSerial)
-          pw.Positioned(
-            left: cx - size,
-            top: cy + size / 2 + quiet,
-            child: pw.SizedBox(
-              width: size * 2,
-              child: pw.Text(serialLabel,
-                  textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(font: fonts.semiBold, fontSize: 8, color: _cardInk)),
-            ),
-          ),
-        // خط راهنمای زیر QR: اسکن با دوربین معمولی چه می‌کند (۷pt).
-        pw.Positioned(
-          left: cx - size,
-          top: cy + size / 2 + quiet + (t.showSerial ? 10 : 0),
-          child: pw.SizedBox(
-            width: size * 2,
-            child: pw.Text(hint,
-                textDirection: pw.TextDirection.rtl,
-                textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(font: fonts.regular, fontSize: 7, color: _cardInk)),
-          ),
-        ),
+        for (var k = 0; k < chunk.length; k++) place(frontCard(chunk[k]), layout.frontCell(k), layout.frontDegrees),
+        ...gridLines(),
+      ]),
+    ));
+    doc.addPage(pw.Page(
+      pageFormat: format,
+      build: (_) => pw.Stack(children: [
+        for (var k = 0; k < chunk.length; k++) place(backCard(chunk[k]), layout.backCell(k, flip), layout.backDegrees(flip)),
       ]),
     ));
   }
-
-  for (final p in people) {
-    final role = t.showRole ? s.roleName(p.roleCode) : '';
-    frontPage(p.displayName, role.isNotEmpty ? role : null);
-    backPage(s.qrDataFor(p), faDigits(p.serial ?? ''), s.qrHint(reserve: false));
-  }
-  for (final r in reserves) {
-    frontPage(null, null);
-    backPage(s.qrUrl(r.token), 'R${faDigits(r.serial)}', s.qrHint(reserve: true));
-  }
   return doc.save();
 }
+
+/// pdf: زاویه‌ی مثبت در Transform خلاف ساعت‌گرد است (در آزمون دیداری تأیید شد)؛ ما ساعت‌گرد می‌گوییم.
+double _clockwise(int degrees) => -degrees * math.pi / 180;
 
 /// لیست پشتیبان کاغذی: پذیرش الفبایی، و برای هر وعده لیست کسانی که حق دارند.
 Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts fonts}) async {

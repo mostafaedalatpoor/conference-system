@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'dart:ui' as ui;
@@ -11,6 +12,7 @@ import '../main.dart';
 import '../theme/daftar.dart';
 import '../theme/widgets.dart';
 import '../normalize.dart';
+import '../sheet_layout.dart';
 import '../state.dart';
 
 class CardsScreen extends StatefulWidget {
@@ -20,7 +22,7 @@ class CardsScreen extends StatefulWidget {
   State<CardsScreen> createState() => _CardsScreenState();
 }
 
-/// روی موبایل PDF نهایی همه‌ی کارت‌ها و انتخاب تصویر طرح «روی ویندوز» است (ScreenAdminMobileCards).
+/// روی موبایل فقط شیوه‌ی ذخیره‌ی PDF فرق دارد (انتخاب‌گر سیستم)؛ ساخت PDF و انتخاب تصویر طرح روی هر دو هست.
 bool get isMobilePlatform => Platform.isAndroid || Platform.isIOS;
 
 class _CardsScreenState extends State<CardsScreen> {
@@ -111,9 +113,18 @@ class _CardsScreenState extends State<CardsScreen> {
     return true;
   }
 
+  /// در حالت بوم، اگر کارت در بوم جا نشود پیش از ساخت می‌گوید.
+  bool _checkSheet(AdminState s) {
+    if (!s.template.sheetMode || sheetLayoutFor(s) != null) return true;
+    s.message = 'کارت در این بوم با این حاشیه جا نمی‌شود. بوم بزرگ‌تر یا حاشیه‌ی کمتر انتخاب کنید.';
+    s.messageIsError = true;
+    s.notify();
+    return false;
+  }
+
   Future<void> _generateCards(AdminState s) async {
     if (!await _askSize(s)) return;
-    if (!_checkBase(s)) return;
+    if (!_checkBase(s) || !_checkSheet(s)) return;
     final bytes = await s.run('', () async {
       final fonts = await PdfFonts.load();
       return buildCardsPdf(
@@ -132,7 +143,7 @@ class _CardsScreenState extends State<CardsScreen> {
 
   /// PDF فقط کارت‌های رزرو آزاد: سبک، روی موبایل هم شدنی.
   Future<void> _generateReserves(AdminState s) async {
-    if (!_checkBase(s)) return;
+    if (!_checkBase(s) || !_checkSheet(s)) return;
     final bytes = await s.run('', () async {
       final fonts = await PdfFonts.load();
       return buildCardsPdf(
@@ -187,7 +198,6 @@ class _CardsScreenState extends State<CardsScreen> {
     final t = s.template;
     final free = s.reserveCards.where((r) => !r.used).length;
     final people = s.sortedPeople;
-    final mobile = isMobilePlatform;
     final locked = s.event?.locked ?? false;
     if (_reserveCount.text.isEmpty) {
       _reserveCount.text = '${(people.length / 10).ceil().clamp(1, 1000)}';
@@ -195,17 +205,6 @@ class _CardsScreenState extends State<CardsScreen> {
     final longest = people.isEmpty
         ? null
         : people.reduce((a, b) => a.displayName.length >= b.displayName.length ? a : b);
-
-    Widget onWindows(String label, String reason) => Opacity(
-          opacity: .7,
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            OutlinedButton.icon(onPressed: null, icon: const Icon(Icons.desktop_windows_rounded), label: Text(label)),
-            const SizedBox(width: DaftarSize.space2),
-            const DaftarTag('روی ویندوز', kind: TagKind.outline),
-            const SizedBox(width: DaftarSize.space2),
-            Flexible(child: Hint(reason)),
-          ]),
-        );
 
     return PageBody(title: 'کارت‌ها', children: [
       if (locked)
@@ -233,21 +232,18 @@ class _CardsScreenState extends State<CardsScreen> {
         ),
       ]),
       const SectionTitle('قالب کارت'),
-      if (mobile)
-        onWindows('انتخاب طرح روی و پشت', 'تصویر طرح و ویرایش کامل با موس روی اپ ویندوز است.')
-      else
-        Wrap(spacing: 12, runSpacing: 8, children: [
-          OutlinedButton.icon(
-            icon: const Icon(Icons.image_rounded),
-            label: Text(t.frontImage.isEmpty ? 'طرح روی کارت' : 'روی: ${t.frontImage.split(Platform.pathSeparator).last}'),
-            onPressed: () => _pickImage(s, true),
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.image_rounded),
-            label: Text(t.backImage.isEmpty ? 'طرح پشت کارت' : 'پشت: ${t.backImage.split(Platform.pathSeparator).last}'),
-            onPressed: () => _pickImage(s, false),
-          ),
-        ]),
+      Wrap(spacing: 12, runSpacing: 8, children: [
+        OutlinedButton.icon(
+          icon: const Icon(Icons.image_rounded),
+          label: Text(t.frontImage.isEmpty ? 'طرح روی کارت' : 'روی: ${t.frontImage.split(Platform.pathSeparator).last}'),
+          onPressed: () => _pickImage(s, true),
+        ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.image_rounded),
+          label: Text(t.backImage.isEmpty ? 'طرح پشت کارت' : 'پشت: ${t.backImage.split(Platform.pathSeparator).last}'),
+          onPressed: () => _pickImage(s, false),
+        ),
+      ]),
       const SizedBox(height: 8),
       const Hint('طرح‌ها PNG یا JPG، با حاشیه‌ی اضافه‌ی ۳ میلی‌متر از هر طرف و ۳۰۰ DPI باشند '
           '(برای ۸۵×۵۵ میلی‌متر فایل ۹۱×۶۱ میلی‌متر، حدود ۱۰۷۵×۷۲۰ پیکسل). متن مهم دست‌کم ۴ میلی‌متر داخل لبه‌ی برش باشد.'),
@@ -298,19 +294,21 @@ class _CardsScreenState extends State<CardsScreen> {
         subtitle: Text(longest == null ? 'هنوز کسی وارد نشده.' : 'طولانی‌ترین نام لیست: ${longest.displayName}'),
       ),
       _Preview(s: s, person: _longName ? longest : (people.isEmpty ? null : people.first)),
+      const SectionTitle('چیدمان برای چاپخانه'),
+      _SheetSettings(
+        s: s,
+        cards: people.length + free,
+        onChanged: () => setState(() {}),
+      ),
       const SectionTitle('بررسی پیش از چاپ'),
       _Preflight(s: s, longest: longest),
       const SizedBox(height: 20),
       Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        if (mobile)
-          onWindows('PDF همه‌ی کارت‌ها برای چاپخانه',
-              '${faDigits((people.length + free) * 2)} صفحه با طرح؛ برای گوشی سنگین است.')
-        else
-          FilledButton.icon(
-            icon: const Icon(Icons.picture_as_pdf_rounded),
-            onPressed: s.busy || people.isEmpty ? null : () => _generateCards(s),
-            label: Text('ساخت PDF کارت‌ها (${faDigits(people.length)} نفر + ${faDigits(free)} رزرو)'),
-          ),
+        FilledButton.icon(
+          icon: const Icon(Icons.picture_as_pdf_rounded),
+          onPressed: s.busy || people.isEmpty ? null : () => _generateCards(s),
+          label: Text('ساخت PDF کارت‌ها (${faDigits(people.length)} نفر + ${faDigits(free)} رزرو)'),
+        ),
         OutlinedButton.icon(
           icon: const Icon(Icons.style_rounded),
           onPressed: s.busy || free == 0 ? null : () => _generateReserves(s),
@@ -325,9 +323,11 @@ class _CardsScreenState extends State<CardsScreen> {
       ]),
       const SizedBox(height: 8),
       Hint(
-        'PDF کارت‌ها برای هر کارت یک صفحه‌ی رو و پشت‌سرش یک صفحه‌ی پشت دارد (چاپ دورو)، به ترتیب الفبایی نام خانوادگی. '
+        t.sheetMode
+            ? 'PDF کارت‌ها روی بوم چیده می‌شود: یک برگ رو و بعدش برگ پشت‌ها با جای آینه‌شده (چاپ دورو)، به ترتیب الفبایی نام خانوادگی. '
+            : 'PDF کارت‌ها برای هر کارت یک صفحه‌ی رو و پشت‌سرش یک صفحه‌ی پشت دارد (چاپ دورو)، به ترتیب الفبایی نام خانوادگی. '
         'بعد از ساخت PDF، آدرس پایه قفل می‌شود تا لینک QR کارت‌های چاپ‌شده عوض نشود. '
-        'قالب روی سرور ذخیره می‌شود تا ویندوز و گوشی یک قالب ببینند؛ تصویر طرح روی همین رایانه می‌ماند.',
+        'قالب و تنظیم بوم روی سرور ذخیره می‌شود تا ویندوز و گوشی یک قالب ببینند؛ تصویر طرح روی همین دستگاه می‌ماند، پس روی هر دستگاه یک بار انتخابش کنید.',
       ),
     ]);
   }
@@ -546,4 +546,216 @@ class _At extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => child;
+}
+
+
+/// تنظیم بوم چاپ برای چاپخانه: اندازه، حاشیه، جهت برگشتن برگ، چرخاندن خودکار، و پیش‌نمایش برگ اول.
+class _SheetSettings extends StatelessWidget {
+  final AdminState s;
+  final int cards;
+  final VoidCallback onChanged;
+  const _SheetSettings({required this.s, required this.cards, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = s.template;
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    final layout = t.sheetMode ? sheetLayoutFor(s) : null;
+    void set(void Function() f) {
+      f();
+      s.notify();
+      onChanged();
+    }
+
+    Widget num(String label, double value, void Function(double) on, {double width = 120}) => SizedBox(
+          width: width,
+          child: TextFormField(
+            key: ValueKey('$label-${t.sheetPreset}-$value-${t.sheetMode}'),
+            initialValue: value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1),
+            decoration: InputDecoration(labelText: label, isDense: true),
+            keyboardType: TextInputType.number,
+            onChanged: (v) {
+              final d = double.tryParse(latinDigits(v));
+              if (d != null && d > 0) {
+                on(d);
+                s.notify();
+              }
+            },
+          ),
+        );
+
+    final presetItems = [
+      for (final e in sheetPresets.entries)
+        DropdownMenuItem(
+          value: e.key,
+          child: Text('${e.key}  (${faDigits(e.value.$1.toStringAsFixed(0))}×${faDigits(e.value.$2.toStringAsFixed(0))} میلی‌متر)'),
+        ),
+      const DropdownMenuItem(value: 'custom', child: Text('اندازه‌ی دلخواه')),
+    ];
+
+    final flip = t.duplex == 'short' ? DuplexFlip.shortEdge : DuplexFlip.longEdge;
+    final String? summary = layout == null
+        ? null
+        : 'برگ ${t.sheetPreset == 'custom' ? 'دلخواه' : t.sheetPreset} ${layout.landscape ? 'افقی' : 'عمودی'}، '
+            '${faDigits(layout.cols)} ستون × ${faDigits(layout.rows)} ردیف = ${faDigits(layout.perSheet)} کارت در هر برگ'
+            '${layout.rotated ? '، کارت‌ها ۹۰ درجه چرخیده‌اند' : ''}. '
+            '${faDigits(cards)} کارت = ${faDigits(layout.sheetsFor(cards))} برگ (${faDigits(layout.sheetsFor(cards) * 2)} صفحه‌ی PDF).';
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SegmentedButton<bool>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment(value: false, label: Text('هر کارت یک صفحه')),
+          ButtonSegment(value: true, label: Text('چیدن روی بوم')),
+        ],
+        selected: {t.sheetMode},
+        onSelectionChanged: (v) => set(() => t.sheetMode = v.first),
+      ),
+      const SizedBox(height: DaftarSize.space2),
+      if (!t.sheetMode)
+        const Hint('هر کارت در یک صفحه‌ی هم‌اندازه‌ی خودش می‌آید: رو، بعد پشت. برای چاپخانه‌هایی که خودشان کارت‌ها را روی بوم می‌چینند.')
+      else ...[
+        const Hint('چند کارت را کنار هم روی بوم می‌چیند، و بعد از هر برگ رو، برگ پشت‌ها را با جای آینه‌شده می‌گذارد تا بعد از چاپ دورو و برش، '
+            'پشت هر کارت پشت همان کارت و هم‌جهت با آن باشد. خط نازک جداکننده فقط روی برگ رو است.'),
+        const SizedBox(height: DaftarSize.space3),
+        Wrap(spacing: DaftarSize.space3, runSpacing: DaftarSize.space3, crossAxisAlignment: WrapCrossAlignment.end, children: [
+          SizedBox(
+            width: 260,
+            child: DropdownButtonFormField<String>(
+              initialValue: t.sheetPreset,
+              decoration: const InputDecoration(labelText: 'سایز بوم', isDense: true),
+              items: presetItems,
+              onChanged: (v) => set(() {
+                t.sheetPreset = v ?? 'A4';
+                final p = sheetPresets[t.sheetPreset];
+                if (p != null) {
+                  t.sheetW = p.$1;
+                  t.sheetH = p.$2;
+                }
+              }),
+            ),
+          ),
+          if (t.sheetPreset == 'custom') ...[
+            num('عرض بوم (mm)', t.sheetW, (v) => t.sheetW = v),
+            num('ارتفاع بوم (mm)', t.sheetH, (v) => t.sheetH = v),
+          ],
+          num('حاشیه‌ی برگ (mm)', t.sheetMargin, (v) => t.sheetMargin = v),
+        ]),
+        const SizedBox(height: DaftarSize.space3),
+        Text('چاپ دورو: برگ از کدام لبه برمی‌گردد؟', style: theme.textTheme.labelLarge),
+        const SizedBox(height: DaftarSize.space1),
+        SegmentedButton<String>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: 'long', label: Text('از لبه‌ی بلند')),
+            ButtonSegment(value: 'short', label: Text('از لبه‌ی کوتاه')),
+          ],
+          selected: {t.duplex},
+          onSelectionChanged: (v) => set(() => t.duplex = v.first),
+        ),
+        const Hint('همان گزینه را در چاپگر یا چاپخانه بزنید («Flip on long edge / short edge»). اگر مطمئن نیستید «از لبه‌ی بلند» که حالت عادی است.'),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: t.autoRotate,
+          onChanged: (v) => set(() => t.autoRotate = v),
+          title: const Text('چرخاندن خودکار کارت‌ها ۹۰ درجه'),
+          subtitle: const Text('فقط وقتی جای بیشتری در برگ آزاد کند. پشت هر کارت همراه رویش می‌چرخد.'),
+        ),
+        const SizedBox(height: DaftarSize.space2),
+        if (layout == null)
+          const Notice(
+            tone: NoticeTone.stop,
+            text: 'کارت در این بوم با این حاشیه جا نمی‌شود. بوم بزرگ‌تر یا حاشیه‌ی کمتر انتخاب کنید.',
+          )
+        else ...[
+          Notice(tone: NoticeTone.info, text: summary!),
+          if (layout.perSheet < 4)
+            Padding(
+              padding: const EdgeInsets.only(top: DaftarSize.space2),
+              child: Notice(
+                tone: NoticeTone.wait,
+                text: 'فقط ${faDigits(layout.perSheet)} کارت در هر برگ جا می‌شود؛ شاید بوم بزرگ‌تری بخواهید.',
+              ),
+            ),
+          const SizedBox(height: DaftarSize.space3),
+          Wrap(spacing: DaftarSize.space5, runSpacing: DaftarSize.space3, children: [
+            _SheetPreview(title: 'برگ رو', layout: layout, flip: flip, back: false, count: cards),
+            _SheetPreview(title: 'برگ پشت (آینه‌شده)', layout: layout, flip: flip, back: true, count: cards),
+          ]),
+          Padding(
+            padding: const EdgeInsets.only(top: DaftarSize.space2),
+            child: Text(
+              'پیش‌نمایش برگ اول. مثلث بالای هر کارت را نشان می‌دهد؛ کارت ۱ (آبی) رو و پشتش را ببینید که روی هم می‌افتند. '
+              'پیش از چاپ همه، یک برگ آزمایشی از چاپخانه بخواهید و رو و پشت را روی هم بگیرید.',
+              style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted),
+            ),
+          ),
+        ],
+      ],
+    ]);
+  }
+}
+
+/// پیش‌نمایش یک برگ: خانه‌ها با شماره‌ی کارت و مثلثی که «بالای کارت» را نشان می‌دهد.
+class _SheetPreview extends StatelessWidget {
+  final String title;
+  final SheetLayout layout;
+  final DuplexFlip flip;
+  final bool back;
+  final int count;
+  const _SheetPreview({required this.title, required this.layout, required this.flip, required this.back, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    const long = 300.0;
+    final scale = long / (layout.pageW > layout.pageH ? layout.pageW : layout.pageH);
+    final w = layout.pageW * scale, h = layout.pageH * scale;
+    final n = count < layout.perSheet ? count : layout.perSheet;
+    final deg = back ? layout.backDegrees(flip) : layout.frontDegrees;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: theme.textTheme.labelLarge),
+      const SizedBox(height: DaftarSize.space1),
+      Container(
+        width: w,
+        height: h,
+        decoration: BoxDecoration(color: Colors.white, border: Border.all(color: x.lineStrong)),
+        child: Stack(children: [
+          for (var k = 0; k < n; k++)
+            Builder(builder: (context) {
+              final cell = back ? layout.backCell(k, flip) : layout.frontCell(k);
+              final (ox, oy) = layout.cellOrigin(cell);
+              return Positioned(
+                left: ox * scale,
+                top: oy * scale,
+                width: layout.cellW * scale,
+                height: layout.cellH * scale,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: k == 0 ? x.stampSoft : null,
+                    border: Border.all(color: x.line),
+                  ),
+                  child: Center(
+                    child: Transform.rotate(
+                      angle: deg * math.pi / 180,
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.arrow_drop_up_rounded, size: 18, color: k == 0 ? x.stamp : x.inkMuted),
+                        Text(faDigits(k + 1),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFF10141A),
+                              fontWeight: k == 0 ? FontWeight.w800 : FontWeight.w500,
+                              height: 1,
+                            )),
+                      ]),
+                    ),
+                  ),
+                ),
+              );
+            }),
+        ]),
+      ),
+    ]);
+  }
 }
