@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../main.dart';
+import '../desk/desk_app.dart';
 import 'checkin.dart';
 import 'login.dart';
 import 'meal.dart';
@@ -10,7 +11,9 @@ import 'status.dart';
 import 'nv_widgets.dart';
 
 class NvRoot extends StatelessWidget {
-  const NvRoot({super.key});
+  /// ویندوز (و رایانه): پوسته‌ی دو ستونه با کلیدهای میان‌بر.
+  final bool desk;
+  const NvRoot({super.key, this.desk = false});
 
   @override
   Widget build(BuildContext context) {
@@ -21,10 +24,10 @@ class NvRoot extends StatelessWidget {
         body: const Center(child: CircularProgressIndicator(color: Colors.white)),
       );
     }
-    if (!s.loggedIn) return const NvLoginScreen();
+    if (!s.loggedIn) return desk ? const _DeskFrame(child: NvLoginScreen(desk: true)) : const NvLoginScreen();
     // توکن باطل شده ولی داده و صف روی گوشی هست: فقط PIN دوباره.
-    if (s.needsLogin) return const NvRevokedScreen();
-    return const NvShell();
+    if (s.needsLogin) return desk ? const _DeskFrame(child: NvRevokedScreen()) : const NvRevokedScreen();
+    return desk ? const NvDeskShell() : const NvShell();
   }
 }
 
@@ -80,6 +83,21 @@ class _NvShellState extends State<NvShell> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// ورود روی ویندوز: ستون ۶۴۰ وسط پنجره.
+class _DeskFrame extends StatelessWidget {
+  final Widget child;
+  const _DeskFrame({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = NvColors.of(context);
+    return ColoredBox(
+      color: c.chip,
+      child: Center(child: SizedBox(width: 640, child: ClipRect(child: child))),
     );
   }
 }

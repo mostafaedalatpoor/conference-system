@@ -18,3 +18,4 @@ const makerTeam = 'تیم راهکارهای نرم‌افزاری نگاه جد
 const makerShort = 'ساخته‌ی تیم نگاه جدید';
 const makerLatin = 'by NewVisionteam';
 const makerWebsite = 'newvisionteam.ir';
+const makerEmail = 'info@newvisionteam.ir';

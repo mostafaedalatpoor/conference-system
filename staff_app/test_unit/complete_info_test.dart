@@ -1,7 +1,7 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 import 'package:flutter_test/flutter_test.dart';
 import 'package:conference_staff/models.dart';
-import 'package:conference_staff/screens/checkin.dart' show batchLetter;
+import 'package:conference_staff/android/attendee_dialogs.dart' show batchLetter;
 import 'package:conference_staff/store.dart';
 
 Map<String, dynamic> att(String id, String first, String last, {String email = '', String mobile = ''}) => {

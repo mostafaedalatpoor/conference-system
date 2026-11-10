@@ -145,6 +145,7 @@ class AppStore extends ChangeNotifier {
         'last_sync_ok': lastSyncOk?.toIso8601String(),
         'selected_meal_id': selectedMealId,
         'approvers': approvers,
+        'desk_staff_ids': deskStaffIds.toList(),
         'settings': {'identify_mode': identifyMode},
       };
 
@@ -163,12 +164,14 @@ class AppStore extends ChangeNotifier {
     _serverUuids
       ..clear()
       ..addAll(serverLog.map((e) => e.uuid));
-    pending = _list(j['pending']).map(LogEvent.fromJson).toList();
+    // کارهای ذخیره‌شده پیش از «تعویض نیرو» توکن ندارند: مال نیروی فعلی‌اند.
+    pending = _list(j['pending']).map(LogEvent.fromJson).map((e) => e.sendToken == null ? e.withSendToken(token) : e).toList();
     rejected = _list(j['rejected']);
     cursor = (j['cursor'] as int?) ?? 0;
     lastSyncOk = DateTime.tryParse((j['last_sync_ok'] as String?) ?? '');
     selectedMealId = j['selected_meal_id'] as int?;
     approvers = ((j['approvers'] as List?) ?? const []).map((e) => e.toString()).toList();
+    deskStaffIds = {for (final e in (j['desk_staff_ids'] as List?) ?? const []) if (e is int) e};
   }
 
   /// فقط برای آزمون: داده‌ی ذخیره‌شده را بدون شبکه بار می‌کند.
@@ -376,6 +379,7 @@ class AppStore extends ChangeNotifier {
       payload: payload,
       deviceTime: DateTime.now().toUtc(),
       staffId: staffId,
+      sendToken: token,
     );
     pending.add(e);
     _recompute();
@@ -571,7 +575,34 @@ class AppStore extends ChangeNotifier {
     canCheckin = me['can_checkin'] == true;
     canServe = me['can_serve'] == true;
     isAdmin = me['is_admin'] == true;
+    if (staffId != null) deskStaffIds.add(staffId!);
   }
+
+  /// نیروهایی که روی همین دستگاه وارد شده‌اند؛ برای «این میز امروز».
+  Set<int> deskStaffIds = {};
+
+  /// پذیرش‌های امروزِ این دستگاه (همه‌ی نیروهایی که اینجا وارد شده‌اند) و زمان اولینشان.
+  (int, DateTime?) deskCheckinsToday([DateTime? now]) {
+    final n = (now ?? DateTime.now()).toLocal();
+    bool today(DateTime t) {
+      final l = t.toLocal();
+      return l.year == n.year && l.month == n.month && l.day == n.day;
+    }
+
+    var count = 0;
+    DateTime? first;
+    for (final e in [...serverLog, ...pending]) {
+      if (e.kind != 'checkin' || !deskStaffIds.contains(e.staffId) || !today(e.deviceTime)) continue;
+      count++;
+      if (first == null || e.deviceTime.isBefore(first)) first = e.deviceTime;
+    }
+    return (count, first?.toLocal());
+  }
+
+  /// «تعویض نیرو»: نیروی دیگری با PIN خودش روی همین دستگاه وارد می‌شود.
+  /// لیست و کارهای ارسال‌نشده می‌مانند؛ کارهای نیروی قبلی به نام خودش فرستاده می‌شوند.
+  Future<void> switchStaff(String pin) =>
+      login(server: server!, eventCode: eventCode!, pin: pin, label: deviceLabel);
 
   /// گرفتن کل داده‌ی رویداد از سرور. صف ارسال دست نمی‌خورد.
   Future<void> refreshSnapshot() async {
@@ -611,12 +642,23 @@ class AppStore extends ChangeNotifier {
       var rounds = 0;
       while (more && rounds < 10) {
         rounds++;
-        final batch = pending.take(200).toList();
-        final api = Api(server!, token);
-        final r = await api.post('/device/sync', {
-          'events': batch.map((e) => e.toPush()).toList(),
-          'since': cursor,
-        });
+        // اول کارهای نیروی قبلی (پیش از «تعویض نیرو») با دسترسی خودش، بعد کارهای نیروی فعلی.
+        final old = pending.where((e) => e.sendToken != null && e.sendToken != token);
+        final useToken = old.isNotEmpty ? old.first.sendToken : token;
+        final batch = pending.where((e) => (e.sendToken ?? token) == useToken).take(200).toList();
+        final api = Api(server!, useToken);
+        final Map<String, dynamic> r;
+        try {
+          r = await api.post('/device/sync', {
+            'events': batch.map((e) => e.toPush()).toList(),
+            'since': cursor,
+          });
+        } on ApiException catch (e) {
+          if (!e.isAuth || useToken == token) rethrow;
+          // دسترسی نیروی قبلی باطل شده: کارهایش از بین نمی‌رود و با دسترسی نیروی فعلی فرستاده می‌شود.
+          pending = [for (final p in pending) p.sendToken == useToken ? p.withSendToken(token) : p];
+          continue;
+        }
 
         final sent = batch.map((e) => e.uuid).toSet();
         for (final rej in _list(r['rejected'])) {

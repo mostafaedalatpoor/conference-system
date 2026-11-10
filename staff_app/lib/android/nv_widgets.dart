@@ -93,7 +93,10 @@ class NvRoundIcon extends StatelessWidget {
 /// نشانگر همگام‌سازی روی سربرگ: «ارسال شد»، «۳ در صف»، «آفلاین · ۳ در صف».
 class NvSyncPill extends StatefulWidget {
   final VoidCallback? onOpenStatus;
-  const NvSyncPill({super.key, this.onOpenStatus});
+
+  /// «ارسال شد · ۰۹:۱۴» (ویندوز).
+  final bool showTime;
+  const NvSyncPill({super.key, this.onOpenStatus, this.showTime = false});
 
   @override
   State<NvSyncPill> createState() => _NvSyncPillState();
@@ -124,10 +127,10 @@ class _NvSyncPillState extends State<NvSyncPill> {
         : s.syncing
             ? (Icons.sync_rounded, 'در حال ارسال…')
             : !s.online
-                ? (Icons.cloud_off_rounded, n > 0 ? 'آفلاین · ${faDigits(n)} در صف' : 'آفلاین')
+                ? (Icons.cloud_off_rounded, n > 0 ? 'آفلاین، ${faDigits(n)} در صف' : 'آفلاین')
                 : n > 0
                     ? (Icons.cloud_upload_rounded, '${faDigits(n)} در صف')
-                    : (Icons.cloud_done_rounded, 'ارسال شد');
+                    : (Icons.cloud_done_rounded, widget.showTime && s.lastSyncOk != null ? 'ارسال شد، ساعت ${faDigits(hm(s.lastSyncOk!))}' : 'ارسال شد');
     return Semantics(
       button: true,
       label: '$text. لمس برای همگام‌سازی',

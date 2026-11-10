@@ -6,11 +6,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'android/android_app.dart';
 import 'android/nv_theme.dart';
-import 'screens/home.dart';
-import 'screens/setup.dart';
 import 'brand.dart';
 import 'store.dart';
-import 'theme/daftar.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +27,7 @@ class StoreScope extends InheritedNotifier<AppStore> {
       context.getInheritedWidgetOfExactType<StoreScope>()!.notifier!;
 }
 
-/// ظاهر تازه فقط روی اندروید؛ ویندوز تا طراحی کاملش همان دفتر می‌ماند.
+/// اندروید: پوسته‌ی گوشی؛ ویندوز: پوسته‌ی دو ستونه با کلیدهای میان‌بر. هر دو با ظاهر تازه.
 bool get useAndroidDesign => !kIsWeb && Platform.isAndroid;
 
 class StaffApp extends StatelessWidget {
@@ -40,7 +37,7 @@ class StaffApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final nv = android ?? useAndroidDesign;
+    final isAndroid = android ?? useAndroidDesign;
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,
@@ -51,25 +48,11 @@ class StaffApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: nv ? nvTheme(Brightness.light) : daftarTheme(Brightness.light),
-      darkTheme: nv ? nvTheme(Brightness.dark) : daftarTheme(Brightness.dark),
+      theme: nvTheme(Brightness.light),
+      darkTheme: nvTheme(Brightness.dark),
       // بزرگ‌نمایی متن سیستم تا ۱٫۳ برابر؛ بالاتر از آن چیدمان صفحه‌ی اسکن و شیت می‌شکند.
       builder: (context, child) => MediaQuery.withClampedTextScaling(maxScaleFactor: 1.3, child: child!),
-      home: nv ? const NvRoot() : const _Root(),
+      home: NvRoot(desk: !isAndroid),
     );
-  }
-}
-
-class _Root extends StatelessWidget {
-  const _Root();
-
-  @override
-  Widget build(BuildContext context) {
-    final store = StoreScope.of(context);
-    if (!store.loaded) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (!store.loggedIn || store.needsLogin) return const SetupScreen();
-    return const HomeScreen();
   }
 }

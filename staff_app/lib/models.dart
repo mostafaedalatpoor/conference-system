@@ -220,6 +220,10 @@ class LogEvent {
   final int? seq;
   final String? flag;
 
+  /// فقط روی گوشی: دسترسی (توکن) نیرویی که این کار را ثبت کرد. بعد از «تعویض نیرو»
+  /// کارهای ارسال‌نشده‌ی نیروی قبلی با دسترسی خودش فرستاده می‌شوند تا به نام او ثبت شوند.
+  final String? sendToken;
+
   LogEvent({
     required this.uuid,
     required this.kind,
@@ -231,7 +235,22 @@ class LogEvent {
     this.staffId,
     this.seq,
     this.flag,
+    this.sendToken,
   });
+
+  LogEvent withSendToken(String? t) => LogEvent(
+        uuid: uuid,
+        kind: kind,
+        cardToken: cardToken,
+        attendeeId: attendeeId,
+        mealId: mealId,
+        payload: payload,
+        deviceTime: deviceTime,
+        staffId: staffId,
+        seq: seq,
+        flag: flag,
+        sendToken: t,
+      );
 
   factory LogEvent.fromJson(Map<String, dynamic> j) => LogEvent(
         uuid: _str(j['uuid']).toLowerCase(),
@@ -244,6 +263,7 @@ class LogEvent {
         staffId: _int(j['staff_id']),
         seq: _int(j['seq']),
         flag: j['flag']?.toString(),
+        sendToken: j['send_token']?.toString(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -257,6 +277,7 @@ class LogEvent {
         'staff_id': staffId,
         'seq': seq,
         'flag': flag,
+        if (sendToken != null) 'send_token': sendToken,
       };
 
   /// شکلی که به /device/sync فرستاده می‌شود.

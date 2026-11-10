@@ -7,7 +7,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../main.dart';
 import '../models.dart';
 import '../normalize.dart';
-import '../screens/checkin.dart' show batchLetter, showCompleteInfo, showLinkCard;
+import 'attendee_dialogs.dart';
 import '../store.dart';
 import '../theme/widgets.dart' show verdictHaptic;
 import 'meal.dart' show NvCameraPermission;
@@ -418,22 +418,29 @@ Future<bool?> showCheckinSheet(BuildContext context, String attendeeId) =>
     showNvSheet<bool>(context, (c) => NvCheckinPanel(attendeeId: attendeeId, onNext: () => Navigator.of(c).pop(true)));
 
 /// محتوای شیت پذیرش: آماده، «پذیرش شد» با برگرداندن، یا «قبلاً پذیرش شده».
+/// [desk]: پنل کناری ویندوز؛ دکمه‌ها پایین می‌چسبند و کلیدها (Enter، Ctrl+Z) از بیرون با [NvCheckinPanelState] صدا زده می‌شوند.
 class NvCheckinPanel extends StatefulWidget {
   final String attendeeId;
   final VoidCallback onNext;
   final Widget? footer;
-  const NvCheckinPanel({super.key, required this.attendeeId, required this.onNext, this.footer});
+  final bool desk;
+
+  /// بعد از «تیک پذیرش» (ویندوز جستجو را پاک می‌کند).
+  final VoidCallback? onCheckedIn;
+  const NvCheckinPanel({super.key, required this.attendeeId, required this.onNext, this.footer, this.desk = false, this.onCheckedIn});
 
   @override
-  State<NvCheckinPanel> createState() => _NvCheckinPanelState();
+  State<NvCheckinPanel> createState() => NvCheckinPanelState();
 }
 
-class _NvCheckinPanelState extends State<NvCheckinPanel> {
+class NvCheckinPanelState extends State<NvCheckinPanel> {
   bool _done = false;
   DateTime? _doneAt;
   Timer? _undoTimer;
   static const _undoSeconds = 8;
   int _left = _undoSeconds;
+
+  bool get done => _done;
 
   @override
   void dispose() {
@@ -441,9 +448,31 @@ class _NvCheckinPanelState extends State<NvCheckinPanel> {
     super.dispose();
   }
 
+  /// Enter: پذیرش، یا بعد از پذیرش و برای فرد تکراری، نفر بعدی.
+  void primary() {
+    final s = StoreScope.read(context);
+    final a = s.attendees[widget.attendeeId];
+    if (a == null) return;
+    if (_done || s.checkins[a.id] != null) {
+      widget.onNext();
+    } else {
+      _checkin(s, a);
+    }
+  }
+
+  /// Ctrl+Z: در ۸ ثانیه‌ی اول بعد از پذیرش، برگرداندن. true اگر برگردانده شد.
+  bool undo() {
+    final s = StoreScope.read(context);
+    final a = s.attendees[widget.attendeeId];
+    if (a == null || !_done || _left <= 0) return false;
+    _undo(s, a);
+    return true;
+  }
+
   void _checkin(AppStore s, Attendee a) {
     s.checkin(a);
     verdictHaptic(true);
+    widget.onCheckedIn?.call();
     setState(() {
       _done = true;
       _doneAt = DateTime.now();
@@ -467,6 +496,56 @@ class _NvCheckinPanelState extends State<NvCheckinPanel> {
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('پذیرش ${a.fullName} برگردانده شد.')));
   }
 
+  Widget _kbdLabel(String text, String key, Color fg) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(text),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: fg.withValues(alpha: .7))),
+          child: Text(key, textDirection: TextDirection.ltr, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fg)),
+        ),
+      ]);
+
+  /// دکمه‌ی اصلی؛ در ویندوز ۶۸ بلند با نشان کلید.
+  Widget _main(String label, {IconData? icon, Color? color, String? key, double height = Nv.button}) {
+    if (!widget.desk) {
+      return NvButton(label: label, icon: icon, color: color, height: height, onPressed: primary);
+    }
+    final c = NvColors.of(context);
+    return SizedBox(
+      height: 68,
+      child: FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: color ?? c.brand,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Nv.r18)),
+          textStyle: nvText(context, 20, w: FontWeight.w800),
+        ),
+        onPressed: primary,
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          if (icon != null) ...[Icon(icon, size: 30), const SizedBox(width: 10)],
+          _kbdLabel(label, key ?? 'Enter', Colors.white),
+        ]),
+      ),
+    );
+  }
+
+  Widget _layout(List<Widget> top, List<Widget> bottom) {
+    if (widget.desk) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(child: ListView(padding: EdgeInsets.zero, children: top)),
+        const SizedBox(height: 12),
+        ...bottom,
+        if (widget.footer != null) ...[const SizedBox(height: 12), widget.footer!],
+      ]);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+      ...top,
+      ...bottom,
+      if (widget.footer != null) ...[const SizedBox(height: 12), widget.footer!],
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = StoreScope.of(context);
@@ -476,6 +555,7 @@ class _NvCheckinPanelState extends State<NvCheckinPanel> {
     final state = s.checkins[a.id];
     final card = s.usesCards ? s.cardOf(a.id) : null;
     final letter = batchLetter(a);
+    final desk = widget.desk;
     final tags = [
       s.typeName(a.registrationTypeId),
       s.roleName(a.roleId),
@@ -486,22 +566,52 @@ class _NvCheckinPanelState extends State<NvCheckinPanel> {
     ].where((e) => e.isNotEmpty).toList();
 
     if (_done) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+      final undoRow = _left > 0
+          ? <Widget>[
+              Container(
+                height: desk ? 54 : 52,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(color: c.field, borderRadius: BorderRadius.circular(Nv.r16)),
+                child: Row(children: [
+                  Icon(Icons.undo_rounded, size: 20, color: c.muted),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('اشتباه زدم؟', style: nvText(context, 14, color: c.muted))),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40), padding: const EdgeInsets.symmetric(horizontal: 14)),
+                    onPressed: () => _undo(s, a),
+                    child: desk
+                        ? _kbdLabel('برگردان (${faDigits(_left)} ثانیه)', 'Ctrl+Z', c.muted)
+                        : Text.rich(TextSpan(children: [
+                            const TextSpan(text: 'برگردان '),
+                            TextSpan(text: '${faDigits(_left)} ثانیه', style: nvText(context, 13, color: c.muted)),
+                          ])),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 4),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(value: _left / _undoSeconds, minHeight: 4, color: c.line, backgroundColor: c.lineSoft),
+              ),
+            ]
+          : <Widget>[];
+      final plate = desk ? 96.0 : 84.0;
+      final top = <Widget>[
         Container(
-          padding: const EdgeInsets.all(14),
+          padding: EdgeInsets.all(desk ? 16 : 14),
           decoration: BoxDecoration(color: c.goSoft, borderRadius: BorderRadius.circular(Nv.r18)),
           child: Row(children: [
             Container(
-              width: 48,
-              height: 48,
+              width: desk ? 52 : 48,
+              height: desk ? 52 : 48,
               decoration: BoxDecoration(color: c.go, shape: BoxShape.circle),
-              child: const Icon(Icons.check_rounded, size: 32, color: Colors.white),
+              child: Icon(Icons.check_rounded, size: desk ? 34 : 32, color: Colors.white),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('پذیرش شد', style: nvText(context, 20, w: FontWeight.w800, color: c.goInk)),
-                Text('${a.displayName} · ${faDigits(hm(_doneAt!))}', style: nvText(context, 14, color: c.goInk)),
+                Text('پذیرش شد', style: nvText(context, desk ? 22 : 20, w: FontWeight.w800, color: c.goInk)),
+                Text('${a.displayName}، ساعت ${faDigits(hm(_doneAt!))}', style: nvText(context, 14, color: c.goInk)),
               ]),
             ),
           ]),
@@ -513,67 +623,45 @@ class _NvCheckinPanelState extends State<NvCheckinPanel> {
           if (card != null) ...[
             const SizedBox(height: 12),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              NvLetter(letter, size: 84),
-              const SizedBox(width: 12),
+              NvLetter(letter, size: plate),
+              const SizedBox(width: 14),
               Container(
-                height: 84,
-                padding: const EdgeInsets.symmetric(horizontal: 22),
+                height: plate,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
                 decoration: BoxDecoration(borderRadius: BorderRadius.circular(Nv.r18), border: Border.all(color: c.ink, width: 3)),
                 child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Text('کارت', style: nvText(context, 12, w: FontWeight.w600, color: c.muted)),
-                  Text(faDigits(card.serial), style: nvText(context, 40, w: FontWeight.w800, height: 1.1)),
+                  Text(faDigits(card.serial), style: nvText(context, desk ? 48 : 40, w: FontWeight.w800, height: 1.1)),
                 ]),
               ),
             ]),
           ],
           const SizedBox(height: 16),
         ],
-        NvButton(label: 'نفر بعدی', height: Nv.buttonXl, onPressed: widget.onNext),
-        if (_left > 0) ...[
-          const SizedBox(height: 12),
-          Container(
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(color: c.field, borderRadius: BorderRadius.circular(Nv.r16)),
-            child: Row(children: [
-              Icon(Icons.undo_rounded, size: 20, color: c.muted),
-              const SizedBox(width: 8),
-              Expanded(child: Text('اشتباه زدم؟', style: nvText(context, 14, color: c.muted))),
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40), padding: const EdgeInsets.symmetric(horizontal: 14)),
-                onPressed: () => _undo(s, a),
-                child: Text.rich(TextSpan(children: [
-                  const TextSpan(text: 'برگردان '),
-                  TextSpan(text: '${faDigits(_left)} ثانیه', style: nvText(context, 13, color: c.muted)),
-                ])),
-              ),
-            ]),
-          ),
-          const SizedBox(height: 4),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: LinearProgressIndicator(value: _left / _undoSeconds, minHeight: 4, color: c.line, backgroundColor: c.lineSoft),
-          ),
-        ],
-      ]);
+      ];
+      final next = _main('نفر بعدی', key: desk ? 'Enter' : null, height: Nv.buttonXl);
+      return _layout(top, desk ? [...undoRow, const SizedBox(height: 12), next] : [next, if (undoRow.isNotEmpty) const SizedBox(height: 12), ...undoRow]);
     }
 
-    final children = <Widget>[
-      Text(a.displayName, style: nvText(context, 28, w: FontWeight.w800, height: 1.4)),
+    final top = <Widget>[
+      Text(a.displayName, style: nvText(context, desk ? 30 : 28, w: FontWeight.w800, height: 1.4)),
       if (tags.isNotEmpty) ...[
         const SizedBox(height: 8),
         Wrap(spacing: 6, runSpacing: 6, children: [for (final t in tags) NvTag(t, outline: t.startsWith('ارائه') || t.startsWith('ثبت‌نام'))]),
       ],
-      if (a.organization.isNotEmpty) ...[
+      if (desk)
+        ..._deskInfo(context, s, a)
+      else if (a.organization.isNotEmpty) ...[
         const SizedBox(height: 6),
         Text(a.organization, style: nvText(context, 15, color: c.muted)),
       ],
       ..._warnings(context, s, a),
     ];
+    final bottom = <Widget>[];
 
     if (state != null) {
       final by = state.staffId != null ? s.staffNames[state.staffId] : null;
-      children.addAll([
+      top.addAll([
         const SizedBox(height: 14),
         NvBanner(
           tone: NvTone.wait,
@@ -585,51 +673,77 @@ class _NvCheckinPanelState extends State<NvCheckinPanel> {
           const SizedBox(height: 14),
           NvPlateRow(letter: letter, title: 'کارت ${faDigits(card.serial)}', hint: 'کارت گم‌شده دوباره صادر نمی‌شود'),
         ],
-        const SizedBox(height: 14),
-        NvButton(label: 'باشه، نفر بعدی', onPressed: widget.onNext),
-        const SizedBox(height: 12),
-        if (s.isAdmin)
-          NvSoftButton(
-            label: 'لغو پذیرش (مدیر)',
-            icon: Icons.admin_panel_settings_rounded,
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (d) => AlertDialog(
-                  title: const Text('لغو پذیرش'),
-                  content: Text('پذیرش ${a.fullName} لغو شود؟ در گزارش ثبت می‌شود.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('انصراف')),
-                    FilledButton(style: FilledButton.styleFrom(backgroundColor: c.stop), onPressed: () => Navigator.pop(d, true), child: const Text('لغو پذیرش')),
-                  ],
-                ),
-              );
-              if (ok == true) s.undoCheckin(a);
-            },
-          )
-        else
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(color: c.field, borderRadius: BorderRadius.circular(Nv.r16)),
-            child: Row(children: [
-              Icon(Icons.admin_panel_settings_rounded, size: 20, color: c.muted),
-              const SizedBox(width: 10),
-              Expanded(child: Text('لغو پذیرش فقط برای نیروی «مدیر» است و در گزارش ثبت می‌شود.', style: nvText(context, 13, color: c.muted, height: 1.5))),
-            ]),
-          ),
       ]);
+      final adminPart = s.isAdmin
+          ? NvSoftButton(
+              label: 'لغو پذیرش (مدیر)',
+              icon: Icons.admin_panel_settings_rounded,
+              onPressed: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (d) => AlertDialog(
+                    title: const Text('لغو پذیرش'),
+                    content: Text('پذیرش ${a.fullName} لغو شود؟ در گزارش ثبت می‌شود.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('انصراف')),
+                      FilledButton(style: FilledButton.styleFrom(backgroundColor: c.stop), onPressed: () => Navigator.pop(d, true), child: const Text('لغو پذیرش')),
+                    ],
+                  ),
+                );
+                if (ok == true) s.undoCheckin(a);
+              },
+            )
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(color: c.field, borderRadius: BorderRadius.circular(Nv.r16)),
+              child: Row(children: [
+                Icon(Icons.admin_panel_settings_rounded, size: 20, color: c.muted),
+                const SizedBox(width: 10),
+                Expanded(child: Text('لغو پذیرش فقط برای نیروی «مدیر» است و در گزارش ثبت می‌شود.', style: nvText(context, 13, color: c.muted, height: 1.5))),
+              ]),
+            );
+      final ok = _main('باشه، نفر بعدی', key: desk ? 'Enter' : null);
+      bottom.addAll(desk ? [adminPart, const SizedBox(height: 12), ok] : [const SizedBox(height: 14), ok, const SizedBox(height: 12), adminPart]);
     } else {
-      children.addAll([
-        if (card != null) ...[
+      if (card != null) {
+        top.addAll([
           const SizedBox(height: 14),
           NvPlateRow(letter: letter, title: 'دسته‌ی «$letter» · کارت ${faDigits(card.serial)}', hint: 'کارت چاپی را از این دسته بردارید'),
-        ],
-        const SizedBox(height: 14),
-        NvButton(label: 'تیک پذیرش', icon: Icons.check_rounded, color: c.go, height: 64, onPressed: () => _checkin(s, a)),
+        ]);
+      }
+      bottom.addAll([
+        if (!desk) const SizedBox(height: 14),
+        _main('تیک پذیرش', icon: Icons.check_rounded, color: c.go, key: desk ? 'Enter' : null, height: 64),
       ]);
     }
-    if (widget.footer != null) children.addAll([const SizedBox(height: 12), widget.footer!]);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: children);
+    return _layout(top, bottom);
+  }
+
+  /// ویندوز: سازمان، موبایل و وعده‌های امروز در یک جدول کوچک.
+  List<Widget> _deskInfo(BuildContext context, AppStore s, Attendee a) {
+    final c = NvColors.of(context);
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final today = '${now.year}-${two(now.month)}-${two(now.day)}';
+    final rows = <(String, String)>[
+      if (a.organization.isNotEmpty) ('سازمان', a.organization),
+      if (a.mobile.isNotEmpty) ('موبایل', faDigits(a.mobile)),
+      for (final m in s.meals.where((m) => m.day != null && m.day!.startsWith(today)))
+        (m.name, m.entitles(a) ? 'دارد' : 'ندارد'),
+    ];
+    if (rows.isEmpty) return const [];
+    return [
+      const SizedBox(height: 14),
+      for (final r in rows)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(width: 90, child: Text(r.$1, style: nvText(context, 15, color: c.muted, height: 1.6))),
+            const SizedBox(width: 12),
+            Expanded(child: Text(r.$2, style: nvText(context, 15, w: FontWeight.w600, height: 1.6))),
+          ]),
+        ),
+    ];
   }
 
   /// اطلاعات ناقص، تماس مشترک، تسویه در روز اجرا، بدون کارت.

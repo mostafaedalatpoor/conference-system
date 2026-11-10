@@ -1,5 +1,6 @@
 // ثبت‌نام در محل روی اندروید (طرح ۹ تا ۱۱): کارت QR (اول کارت)، کارت بدون QR (اول مشخصات)، رزرو تمام‌شده.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../main.dart';
@@ -10,10 +11,15 @@ import 'checkin.dart' show NvCornersPainter;
 import 'meal.dart' show NvCameraPermission;
 import 'nv_theme.dart';
 import 'nv_widgets.dart';
+import '../desk/scan_field.dart' show NvScanField;
 
 class NvWalkinScreen extends StatefulWidget {
   final String initialName;
-  const NvWalkinScreen({super.key, this.initialName = ''});
+
+  /// ویندوز: پنل کناری ۵۶۰ (بدون سربرگ)؛ کارت رزرو با بارکدخوان، Ctrl+Enter ثبت و Esc برگشت.
+  final bool panel;
+  final VoidCallback? onClose;
+  const NvWalkinScreen({super.key, this.initialName = '', this.panel = false, this.onClose});
 
   @override
   State<NvWalkinScreen> createState() => _NvWalkinScreenState();
@@ -24,6 +30,7 @@ class _NvWalkinScreenState extends State<NvWalkinScreen> {
   final _last = TextEditingController();
   final _mobile = TextEditingController();
   final _serial = TextEditingController();
+  final _scanFocus = FocusNode();
   PassCard? _card;
   int? _typeId;
   String? _firstError, _lastError, _cardError;
@@ -59,6 +66,7 @@ class _NvWalkinScreenState extends State<NvWalkinScreen> {
     for (final c in [_first, _last, _mobile, _serial]) {
       c.dispose();
     }
+    _scanFocus.dispose();
     super.dispose();
   }
 
@@ -116,8 +124,13 @@ class _NvWalkinScreenState extends State<NvWalkinScreen> {
       card: s.usesCards ? _card : null,
     );
     if (!mounted) return;
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    if (widget.panel) {
+      widget.onClose?.call();
+    } else {
+      Navigator.of(context).pop();
+    }
+    messenger.showSnackBar(SnackBar(
       content: Text(_card == null
           ? '${a.fullName} ثبت و پذیرش شد${s.usesCards ? '، بدون کارت' : ''}.'
           : '${a.fullName} ثبت و پذیرش شد — کارت رزرو R${faDigits(_card!.serial)} را بدهید.'),
@@ -148,13 +161,25 @@ class _NvWalkinScreenState extends State<NvWalkinScreen> {
     final c = NvColors.of(context);
     final free = s.freeReserveCards.length;
     final noCards = s.usesCards && free == 0 && _card == null;
-    final qrFirst = s.usesCards && s.cameraScan && !noCards;
-    final numberLast = s.usesCards && !s.cameraScan && !noCards;
+    final canScan = s.cameraScan || (widget.panel && s.scanEnabled);
+    final qrFirst = s.usesCards && canScan && !noCards;
+    final numberLast = s.usesCards && !canScan && !noCards;
+    final names = widget.panel
+        ? <Widget>[
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: _text(_first, 'نام', error: _firstError)),
+              const SizedBox(width: 14),
+              Expanded(child: _text(_last, 'نام خانوادگی', error: _lastError, hint: 'بنویسید')),
+            ]),
+          ]
+        : <Widget>[
+            _text(_first, 'نام', error: _firstError),
+            const SizedBox(height: 14),
+            _text(_last, 'نام خانوادگی', error: _lastError, hint: 'نام خانوادگی را بنویسید'),
+          ];
 
     final fields = <Widget>[
-      _text(_first, 'نام', error: _firstError),
-      const SizedBox(height: 14),
-      _text(_last, 'نام خانوادگی', error: _lastError, hint: 'نام خانوادگی را بنویسید'),
+      ...names,
       const SizedBox(height: 14),
       _text(_mobile, 'موبایل', optional: true, ltr: true, hint: '09…'),
       if (s.types.length > 1) ...[
@@ -290,6 +315,21 @@ class _NvWalkinScreenState extends State<NvWalkinScreen> {
               Text('${faDigits(free)} آزاد', style: nvText(context, 12, color: c.muted)),
             ]),
             const SizedBox(height: 10),
+            if (widget.panel) ...[
+              NvScanField(
+                controller: _serial,
+                focusNode: _scanFocus,
+                hint: 'کارت رزرو را اسکن کنید یا شماره را بنویسید',
+                scanEnabled: true,
+                showScannerChip: false,
+                onChanged: (_) => setState(() => _cardError = null),
+                onSubmitted: _setCard,
+                onScan: (raw) {
+                  _setCard(raw);
+                  return _card != null;
+                },
+              ),
+            ] else ...[
             NvButton(label: 'اسکن کارت رزرو', icon: Icons.qr_code_scanner_rounded, onPressed: _scanCard),
             const SizedBox(height: 10),
             Row(children: [
@@ -306,6 +346,7 @@ class _NvWalkinScreenState extends State<NvWalkinScreen> {
               const SizedBox(width: 8),
               SizedBox(height: Nv.field, child: OutlinedButton(onPressed: () => _setCard(_serial.text), child: const Text('انتخاب'))),
             ]),
+            ],
             if (_cardError != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -348,6 +389,45 @@ class _NvWalkinScreenState extends State<NvWalkinScreen> {
     ];
 
     final label = noCards ? 'ثبت و پذیرش بدون کارت' : (s.usesCards ? 'ثبت، پذیرش و تحویل کارت' : 'ثبت و پذیرش');
+
+    if (widget.panel) {
+      return CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.enter, control: true): _save,
+          const SingleActivator(LogicalKeyboardKey.escape): () => widget.onClose?.call(),
+        },
+        child: FocusScope(
+          autofocus: true,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(child: ListView(padding: EdgeInsets.zero, children: body)),
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 64,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: c.go,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Nv.r18)),
+                  textStyle: nvText(context, 19, w: FontWeight.w800),
+                ),
+                onPressed: _save,
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Icon(Icons.check_rounded, size: 28),
+                  const SizedBox(width: 10),
+                  Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white70)),
+                    child: const Text('Ctrl+Enter', textDirection: TextDirection.ltr, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  ),
+                ]),
+              ),
+            ),
+          ]),
+        ),
+      );
+    }
 
     return Scaffold(
       body: Column(children: [

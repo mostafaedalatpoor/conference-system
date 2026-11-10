@@ -12,7 +12,9 @@ const _defaultServer = 'https://newvisionteam.ir';
 const _deviceSuggestions = ['میز پذیرش ۱', 'میز پذیرش ۲', 'پذیرایی ۱', 'پذیرایی ۲'];
 
 class NvLoginScreen extends StatefulWidget {
-  const NvLoginScreen({super.key});
+  /// ویندوز: «نام این رایانه».
+  final bool desk;
+  const NvLoginScreen({super.key, this.desk = false});
 
   @override
   State<NvLoginScreen> createState() => _NvLoginScreenState();
@@ -141,7 +143,7 @@ class _NvLoginScreenState extends State<NvLoginScreen> {
                 ),
                 const SizedBox(height: 14),
                 NvField(
-                  label: 'نام این گوشی',
+                  label: widget.desk ? 'نام این رایانه' : 'نام این گوشی',
                   child: TextField(
                     controller: _label,
                     focusNode: _labelFocus,
