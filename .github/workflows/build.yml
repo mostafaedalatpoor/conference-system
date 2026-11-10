@@ -278,8 +278,9 @@ jobs:
         run: |
           find wp-plugin -name '*.php' -print0 | xargs -0 -n1 php -l
 
-      # conference-day.zip پوشه‌ی conference-day را در ریشه دارد و همان را در وردپرس بارگذاری کنید
-      # تا جای نسخه‌ی قبلی بنشیند.
+      # گیت‌هاب هر artifact را خودش zip می‌کند؛ پس پوشه‌ی conference-day (نه یک zip) بارگذاری می‌شود
+      # تا همان فایلی که از گیت‌هاب دانلود می‌شود مستقیم در وردپرس نصب شود و جای نسخه‌ی قبلی بنشیند.
+      # (قبلاً zip داخل zip بود و بارگذاری فایل بیرونی «هیچ افزونه‌ی معتبری یافت نشد» می‌داد.)
       # نسخه‌ی افزونه در هر ساخت «نسخه.شماره‌ی ساخت» می‌شود (مثلاً 0.3.0.57) تا در وردپرس معلوم باشد کدام نصب است.
       - name: ساخت zip افزونه
         run: |
@@ -289,9 +290,9 @@ jobs:
           sed -i -E "s/( \* Version: ).*/\1$FULL/; s/define\('CD_VERSION', '[^']*'\)/define('CD_VERSION', '$FULL')/" $F
           grep -n "Version:\|CD_VERSION'" $F
           echo "PV=$FULL" >> "$GITHUB_ENV"
-          mkdir dist
-          cd wp-plugin
-          zip -r "../dist/RoydadYar-WordPress-plugin-$FULL.zip" conference-day
+          mkdir -p dist
+          cp -r wp-plugin/conference-day dist/
+          test -f dist/conference-day/conference-day.php
 
       - uses: actions/upload-artifact@v4
         with:
@@ -323,14 +324,14 @@ jobs:
         with:
           path: artifacts
 
-      # نام هر artifact همان نام فایل نهایی است (با نسخه و شماره‌ی ساخت)؛ پوشه‌های ویندوز zip می‌شوند.
+      # نام هر artifact همان نام فایل نهایی است (با نسخه و شماره‌ی ساخت)؛ پوشه‌های ویندوز و افزونه zip می‌شوند.
       - name: آماده‌کردن فایل‌ها
         run: |
           mkdir out
           for d in artifacts/*; do
             n=$(basename "$d")
             case "$n" in
-              *-windows) (cd "$d" && zip -qr "../../out/$n.zip" .) ;;
+              *-windows|*WordPress-plugin*) (cd "$d" && zip -qr "../../out/$n.zip" .) ;;
               *) cp "$d"/* out/ ;;
             esac
           done
