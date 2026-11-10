@@ -340,27 +340,40 @@
     var label = btn.textContent;
     btn.textContent = 'در حال ثبت…';
     var body = Object.assign({}, d, { page: C.page, submit_id: submitId, mobile: mobileNorm(d.mobile), email: latin(d.email) });
+    var failed = function (text) {
+      // اطلاعات فرم حفظ می‌شود؛ همان submit_id دوباره فرستاده می‌شود تا ثبت تکراری نسازد.
+      summary.textContent = '';
+      summary.appendChild(el('span', null, el('b', { text: 'ثبت انجام نشد' }),
+        text || 'اینترنت قطع است یا سرور در دسترس نیست. اطلاعات شما حفظ شده؛ دوباره «' + label + '» را بزنید.'));
+      summary.hidden = false;
+      summary.focus();
+    };
+    var restore = function () {
+      if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = label; }
+    };
     post('submit', body).then(function (r) {
+      restore();
       var j = r.body || {};
-      if (r.status === 429) throw { text: j.message || 'تلاش زیاد بود. ده دقیقه بعد دوباره امتحان کنید.', keep: true };
-      if (r.status >= 500 || !j.state) throw { text: 'سرور جواب درستی نداد.', keep: true };
-      if (j.state === 'invalid') { showErrors(form, summary, j.errors || {}); return; }
+      if (r.status === 429) return failed(j.message || 'تلاش زیاد بود. ده دقیقه بعد دوباره امتحان کنید.');
+      if (r.status >= 500 || !j.state) return failed('سرور جواب درستی نداد. اطلاعات شما حفظ شده؛ دوباره امتحان کنید.');
+      if (j.state === 'invalid') return showErrors(form, summary, j.errors || {});
       if (j.state === 'duplicate') return showDuplicate(j.masked);
       if (j.state === 'closed') return showClosed();
+      // ثبت انجام شده؛ از اینجا به بعد خطای نمایش نباید «ثبت انجام نشد» نشان دهد.
       submitId = uuid();
       draft = null;
       setUrl(j.code, j.key);
       j.fresh = true; // بعد از ثبت، رفتن خودکار به درگاه بدون کلیک دوم
-      showResult(j);
-    }).catch(function (err) {
-      // اطلاعات فرم حفظ می‌شود؛ همان submit_id دوباره فرستاده می‌شود تا ثبت تکراری نسازد.
-      summary.textContent = '';
-      summary.appendChild(el('span', null, el('b', { text: 'ثبت انجام نشد' }),
-        (err && err.text) || 'اینترنت قطع است یا سرور در دسترس نیست. اطلاعات شما حفظ شده؛ دوباره «' + label + '» را بزنید.'));
-      summary.hidden = false;
-      summary.focus();
-    }).then(function () {
-      if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = label; }
+      try {
+        showResult(j);
+      } catch (e) {
+        if (window.console) console.error(e);
+        show(el('div', { class: 'state' }, icon('ok'), el('h1', { text: 'ثبت شد' }), codeBox(j),
+          el('p', { text: 'برای دیدن وضعیت، صفحه را دوباره باز کنید.' })));
+      }
+    }, function () {
+      restore();
+      failed();
     });
   }
 
@@ -544,7 +557,7 @@
     var summary = el('div', { class: 'alert', role: 'alert', hidden: true });
     form.appendChild(el('h2', { text: 'پیگیری ثبت‌نام' }));
     form.appendChild(summary);
-    form.appendChild(field('t_code', 'کد ثبت‌نام', el('input', { id: 't_code', name: 't_code', dir: 'ltr', class: 'ltr', placeholder: 'RY-XXXXXX', autocomplete: 'off' })));
+    form.appendChild(field('t_code', 'کد ثبت‌نام', el('input', { id: 't_code', name: 't_code', type: 'text', dir: 'ltr', class: 'ltr', placeholder: 'RY-XXXXXX', autocomplete: 'off' })));
     form.appendChild(field('t_mobile', 'شماره موبایل', el('input', { id: 't_mobile', name: 't_mobile', type: 'tel', dir: 'ltr', class: 'ltr', placeholder: '09xx xxx xxxx' })));
     var btn = el('button', { type: 'submit', class: 'btn' }, 'نمایش وضعیت');
     form.appendChild(btn);
@@ -579,8 +592,11 @@
   if (q.get('code') && q.get('k')) {
     show(el('p', { text: 'در حال خواندن وضعیت ثبت‌نام…' }));
     post('status', { page: C.page, code: q.get('code'), k: q.get('k') }).then(function (r) {
-      if (r.body && r.body.status) showResult(r.body);
-      else if (C.open) show(buildForm()); else showTrack();
+      if (r.body && r.body.status) {
+        // برگشت ناموفق از درگاه: اگر پیام سرور نبود، پیام پیش‌فرض.
+        if (q.get('pay') === 'fail' && r.body.status === 'pending_payment' && !r.body.pay_message) r.body.pay_message = 'پرداخت انجام نشد یا لغو شد. اگر پولی کم شده، تا ۷۲ ساعت برمی‌گردد.';
+        showResult(r.body);
+      } else if (C.open) show(buildForm()); else showTrack();
     }).catch(function () {
       show(el('div', { class: 'alert', role: 'alert' }, el('span', null, el('b', { text: 'وضعیت خوانده نشد' }), 'اینترنت یا سرور در دسترس نیست. صفحه را دوباره باز کنید.')));
     });

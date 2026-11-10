@@ -233,6 +233,9 @@ function cd_reg_datetime($v) {
         return '';
     }
     [$y, $mo, $d] = [(int) $m[1], (int) $m[2], (int) $m[3]];
+    if ($mo < 1 || $mo > 12 || $d < 1 || $d > 31 || (int) ($m[4] ?? 0) > 23 || (int) ($m[5] ?? 0) > 59) {
+        return '';
+    }
     if ($y < 1700) {
         [$y, $mo, $d] = cd_jalali_to_gregorian($y, $mo, $d);
     }

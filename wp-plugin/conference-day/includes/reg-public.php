@@ -158,7 +158,7 @@ function cd_rest_reg_proof(WP_REST_Request $r) {
         $errors['tracking'] = 'شماره‌ی پیگیری واریز را وارد کنید.';
     }
     $stored = '';
-    if ($file && !empty($file['tmp_name']) && is_uploaded_file($file['tmp_name'])) {
+    if ($file && !empty($file['tmp_name']) && (is_uploaded_file($file['tmp_name']) || (defined('CD_TESTING') && is_file($file['tmp_name'])))) {
         $stored = cd_reg_store_receipt($file);
         if (is_wp_error($stored)) {
             $errors['receipt'] = $stored->get_error_message();
@@ -211,7 +211,9 @@ function cd_reg_store_receipt(array $file) {
         return new WP_Error('cd_receipt', 'رسید باید تصویر JPG یا PNG یا فایل PDF باشد.');
     }
     $name = bin2hex(random_bytes(16)) . '.' . $ext;
-    if (!@move_uploaded_file($file['tmp_name'], cd_reg_receipts_dir() . '/' . $name)) {
+    $dest = cd_reg_receipts_dir() . '/' . $name;
+    $moved = defined('CD_TESTING') ? @copy($file['tmp_name'], $dest) : @move_uploaded_file($file['tmp_name'], $dest);
+    if (!$moved) {
         return new WP_Error('cd_receipt', 'ذخیره‌ی رسید روی سرور ناموفق بود.');
     }
     return $name;
@@ -403,7 +405,7 @@ h2{margin:0;font-size:17px;font-weight:800;display:flex;align-items:center;gap:8
 .foot{margin-top:28px;padding:18px max(16px,env(safe-area-inset-left,0px));border-top:2px solid var(--highlight);background:var(--surface);display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:center}
 .foot a{min-height:44px;display:inline-flex;align-items:center;color:var(--ink);text-decoration:none;font-weight:800;font-size:14px}
 .maker{display:block;text-align:center;padding:14px;color:var(--muted);font-size:12px;text-decoration:none}
-.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.hp{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 .track{font-size:14px;text-align:center}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:no-preference){.btn,.choice{transition:background-color .15s,border-color .15s}}
