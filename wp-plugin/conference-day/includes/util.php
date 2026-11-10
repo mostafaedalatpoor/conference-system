@@ -32,6 +32,16 @@ function cd_to_utc_datetime($value) {
     return cd_now();
 }
 
+/** شروع امروز به وقت تهران، به‌صورت DATETIME با UTC (برای «امروز»ِ گزارش). */
+function cd_tehran_day_start_utc() {
+    try {
+        $d = new DateTimeImmutable('today', new DateTimeZone('Asia/Tehran'));
+        return $d->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    } catch (Exception $e) {
+        return gmdate('Y-m-d 00:00:00');
+    }
+}
+
 /** DATETIME ذخیره‌شده (UTC) به ISO 8601. */
 function cd_iso($datetime) {
     if (!$datetime) {

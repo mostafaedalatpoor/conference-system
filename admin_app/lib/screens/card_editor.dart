@@ -797,7 +797,27 @@ class CardPreview extends StatelessWidget {
           clipBehavior: Clip.hardEdge,
           child: Stack(children: [
             if (image.isNotEmpty && File(image).existsSync())
-              Positioned.fill(child: Image.file(File(image), fit: BoxFit.cover)),
+              Positioned.fill(child: Image.file(File(image), fit: BoxFit.cover))
+            else if ((side == 'front' ? t.frontImageUrl : t.backImageUrl).isNotEmpty)
+              Positioned.fill(child: Image.network(side == 'front' ? t.frontImageUrl : t.backImageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox())),
+            for (final sh in t.shapes)
+              if (sh.side == side)
+                Positioned(
+                  left: (t.widthMm * sh.x / 100 - sh.widthMm / 2) * pxPerMm,
+                  top: (t.heightMm * sh.y / 100 - sh.heightMm / 2) * pxPerMm,
+                  width: sh.widthMm * pxPerMm,
+                  height: sh.heightMm * pxPerMm,
+                  child: DecoratedBox(decoration: BoxDecoration(color: col(sh.color), borderRadius: BorderRadius.circular(sh.radiusMm * pxPerMm))),
+                ),
+            for (final im in t.images)
+              if (im.side == side)
+                Positioned(
+                  left: (t.widthMm * im.x / 100 - im.widthMm / 2) * pxPerMm,
+                  top: (t.heightMm * im.y / 100 - im.heightMm / 2) * pxPerMm,
+                  width: im.widthMm * pxPerMm,
+                  height: im.heightMm * pxPerMm,
+                  child: Image.network(im.url, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.image_rounded)),
+                ),
             Positioned.fill(
               child: Padding(
                 padding: EdgeInsets.all(_safeMm * pxPerMm),

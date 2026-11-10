@@ -76,6 +76,9 @@ class CardText {
   /// روی کارت‌های رزرو (که صاحب ندارند) هم چاپ شود؟
   bool onReserve;
 
+  /// مبدأ جا در ویرایشگر گوشی: c (مرکز، درصد)، tr، tl، tc، br، bl، bc. جای واقعی همیشه x و y است.
+  String anchor;
+
   CardText({
     required this.id,
     this.side = 'front',
@@ -93,6 +96,7 @@ class CardText {
     this.color = '10141A',
     this.maxLines = 1,
     bool? onReserve,
+    this.anchor = 'c',
   }) : onReserve = onReserve ?? source == 'static';
 
   CardText copy() => CardText.fromJson(toJson());
@@ -114,6 +118,7 @@ class CardText {
         'color': color,
         'max_lines': maxLines,
         'on_reserve': onReserve,
+        'anchor': anchor,
       };
 
   factory CardText.fromJson(Map<String, dynamic> j) {
@@ -137,6 +142,7 @@ class CardText {
       color: s('color', '10141A').replaceAll('#', ''),
       maxLines: ((j['max_lines'] as num?)?.toInt() ?? 1).clamp(1, 5),
       onReserve: j['on_reserve'] is bool ? j['on_reserve'] as bool : null,
+      anchor: cardAnchors.contains(j['anchor']) ? j['anchor'] as String : 'c',
     );
   }
 
@@ -208,4 +214,110 @@ Map<String, Map<String, String>> matchExtraFile({
     };
   }
   return out;
+}
+
+/// مبدأهای جای عنصر در ویرایشگر: مرکز، و شش گوشه/لبه.
+const cardAnchors = ['c', 'tr', 'tl', 'tc', 'br', 'bl', 'bc'];
+const cardAnchorLabels = {
+  'tr': 'بالا-راست',
+  'tc': 'بالا-وسط',
+  'tl': 'بالا-چپ',
+  'c': 'وسط',
+  'br': 'پایین-راست',
+  'bc': 'پایین-وسط',
+  'bl': 'پایین-چپ',
+};
+
+/// جای یک کادر (عرض w و ارتفاع h، میلی‌متر) به‌صورت فاصله‌ی گوشه‌ی هم‌نام کادر از گوشه‌ی هم‌نام کارت.
+/// از مرکز درصدی (cx٪، cy٪) به (X، Y) میلی‌متری و برعکس. در «وسط» X و Y فاصله از مرکز کارت است.
+(double, double) anchorFromCenter(String a, double cxPct, double cyPct, double w, double h, double cardW, double cardH) {
+  final cx = cardW * cxPct / 100, cy = cardH * cyPct / 100;
+  final double x = switch (a[a.length - 1]) {
+    'r' => cardW - (cx + w / 2),
+    'l' => cx - w / 2,
+    _ => cx - cardW / 2,
+  };
+  final double y = switch (a[0]) {
+    't' => cy - h / 2,
+    'b' => cardH - (cy + h / 2),
+    _ => cy - cardH / 2,
+  };
+  return (x, y);
+}
+
+(double, double) centerFromAnchor(String a, double x, double y, double w, double h, double cardW, double cardH) {
+  final double cx = switch (a[a.length - 1]) {
+    'r' => cardW - x - w / 2,
+    'l' => x + w / 2,
+    _ => cardW / 2 + x,
+  };
+  final double cy = switch (a[0]) {
+    't' => y + h / 2,
+    'b' => cardH - y - h / 2,
+    _ => cardH / 2 + y,
+  };
+  return (cx / cardW * 100, cy / cardH * 100);
+}
+
+/// تصویر (مثلاً لوگو) روی کارت؛ فایل روی سرور است.
+class CardImage {
+  String id;
+  String side;
+  String url;
+  double x, y, widthMm, heightMm;
+  String anchor;
+  bool onReserve;
+  CardImage({required this.id, this.side = 'front', required this.url, this.x = 50, this.y = 20, this.widthMm = 20, this.heightMm = 20, this.anchor = 'tc', this.onReserve = true});
+
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'side': side, 'url': url, 'x': x, 'y': y, 'width_mm': widthMm, 'height_mm': heightMm, 'anchor': anchor, 'on_reserve': onReserve};
+
+  factory CardImage.fromJson(Map<String, dynamic> j) => CardImage(
+        id: (j['id'] ?? '').toString(),
+        side: j['side'] == 'back' ? 'back' : 'front',
+        url: (j['url'] ?? '').toString(),
+        x: (j['x'] as num?)?.toDouble() ?? 50,
+        y: (j['y'] as num?)?.toDouble() ?? 20,
+        widthMm: (j['width_mm'] as num?)?.toDouble() ?? 20,
+        heightMm: (j['height_mm'] as num?)?.toDouble() ?? 20,
+        anchor: cardAnchors.contains(j['anchor']) ? j['anchor'] as String : 'c',
+        onReserve: j['on_reserve'] != false,
+      );
+}
+
+/// مستطیل رنگی (نوار، کادر) روی کارت.
+class CardShape {
+  String id;
+  String side;
+  double x, y, widthMm, heightMm, radiusMm;
+  String color;
+  String anchor;
+  bool onReserve;
+  CardShape({required this.id, this.side = 'front', this.x = 50, this.y = 90, this.widthMm = 40, this.heightMm = 6, this.radiusMm = 0, this.color = '0B7A7B', this.anchor = 'bc', this.onReserve = true});
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'side': side,
+        'x': x,
+        'y': y,
+        'width_mm': widthMm,
+        'height_mm': heightMm,
+        'radius_mm': radiusMm,
+        'color': color,
+        'anchor': anchor,
+        'on_reserve': onReserve,
+      };
+
+  factory CardShape.fromJson(Map<String, dynamic> j) => CardShape(
+        id: (j['id'] ?? '').toString(),
+        side: j['side'] == 'back' ? 'back' : 'front',
+        x: (j['x'] as num?)?.toDouble() ?? 50,
+        y: (j['y'] as num?)?.toDouble() ?? 90,
+        widthMm: (j['width_mm'] as num?)?.toDouble() ?? 40,
+        heightMm: (j['height_mm'] as num?)?.toDouble() ?? 6,
+        radiusMm: (j['radius_mm'] as num?)?.toDouble() ?? 0,
+        color: (j['color'] ?? '0B7A7B').toString().replaceAll('#', ''),
+        anchor: cardAnchors.contains(j['anchor']) ? j['anchor'] as String : 'c',
+        onReserve: j['on_reserve'] != false,
+      );
 }

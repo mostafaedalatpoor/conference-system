@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -107,6 +108,8 @@ Future<Uint8List> buildCardsPdf({
   Uint8List? frontImage,
   Uint8List? backImage,
   Map<String, Map<String, String>> fileRows = const {},
+  /// تصویرهای روی کارت (لوگو): آدرس ← بایت‌ها. تصویری که اینجا نیست چاپ نمی‌شود.
+  Map<String, Uint8List> assets = const {},
 }) async {
   final t = s.template;
   final w = t.widthMm * PdfPageFormat.mm;
@@ -116,6 +119,7 @@ Future<Uint8List> buildCardsPdf({
     'back': backImage == null ? null : pw.MemoryImage(backImage),
   };
   final sides = t.doubleSided ? const ['front', 'back'] : const ['front'];
+  final assetImages = {for (final e in assets.entries) e.key: pw.MemoryImage(e.value)};
 
   // سازنده فقط در مشخصات فایل می‌آید، نه روی کارت.
   final doc = pw.Document(
@@ -200,6 +204,32 @@ Future<Uint8List> buildCardsPdf({
     );
   }
 
+  pw.Widget shapeWidget(CardShape x) {
+    const mm = PdfPageFormat.mm;
+    final bw = x.widthMm * mm, bh = x.heightMm * mm;
+    return pw.Positioned(
+      left: w * x.x / 100 - bw / 2,
+      top: h * x.y / 100 - bh / 2,
+      child: pw.Container(
+        width: bw,
+        height: bh,
+        decoration: pw.BoxDecoration(color: color(x.color), borderRadius: pw.BorderRadius.circular(x.radiusMm * mm)),
+      ),
+    );
+  }
+
+  pw.Widget imageWidget(CardImage x) {
+    const mm = PdfPageFormat.mm;
+    final img = assetImages[x.url];
+    final bw = x.widthMm * mm, bh = x.heightMm * mm;
+    if (img == null) return pw.SizedBox();
+    return pw.Positioned(
+      left: w * x.x / 100 - bw / 2,
+      top: h * x.y / 100 - bh / 2,
+      child: pw.SizedBox(width: bw, height: bh, child: pw.Image(img, fit: pw.BoxFit.contain)),
+    );
+  }
+
   pw.Widget card(String side, _CardJob j) {
     final img = images[side];
     return pw.SizedBox(
@@ -214,6 +244,10 @@ Future<Uint8List> buildCardsPdf({
             bottom: 0,
             child: img == null ? pw.Container(color: PdfColors.white) : pw.Image(img, fit: pw.BoxFit.cover, width: w, height: h),
           ),
+          for (final x in t.shapes)
+            if (x.side == side && (!j.subject.isReserve || x.onReserve)) shapeWidget(x),
+          for (final x in t.images)
+            if (x.side == side && (!j.subject.isReserve || x.onReserve)) imageWidget(x),
           if (t.qrEnabled && t.effectiveQrSide == side) qrWidget(j.qrData),
           for (final ct in t.textsFor(side))
             if (resolveCardText(ct, j.subject) case final v?) textWidget(ct, v),
@@ -402,4 +436,25 @@ Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts f
     ));
   }
   return doc.save();
+}
+
+/// تصویر طرح یک سمت: فایل همین دستگاه، وگرنه طرحی که روی سرور است.
+Future<Uint8List?> cardDesignBytes(AdminState s, String side) async {
+  final t = s.template;
+  final local = side == 'front' ? t.frontImage : t.backImage;
+  if (local.isNotEmpty) {
+    final f = File(local);
+    if (await f.exists()) return f.readAsBytes();
+  }
+  return s.assetBytes(side == 'front' ? t.frontImageUrl : t.backImageUrl);
+}
+
+/// همه‌ی تصویرهای روی کارت (لوگوها) از سرور.
+Future<Map<String, Uint8List>> cardAssetBytes(AdminState s) async {
+  final out = <String, Uint8List>{};
+  for (final x in s.template.images) {
+    final b = await s.assetBytes(x.url);
+    if (b != null) out[x.url] = b;
+  }
+  return out;
 }

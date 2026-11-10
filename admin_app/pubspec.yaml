@@ -21,6 +21,7 @@ dependencies:
   # چون پلاگین ویندوزِ local_auth با MSVC تازه کامپایل نمی‌شود و روی ویندوز قفل لازم نیست.
   local_auth_android: ^1.0.46
   local_auth_platform_interface: ^1.0.10
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:

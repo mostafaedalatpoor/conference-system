@@ -146,19 +146,23 @@ function cd_build_report(array $event) {
     }
 
     $flagged = $wpdb->get_results($wpdb->prepare(
-        'SELECT l.seq, l.kind, l.flag, l.device_time, l.card_token, l.payload, a.first_name, a.last_name, s.name AS staff_name
+        'SELECT l.seq, l.kind, l.flag, l.device_time, l.card_token, l.payload, l.attendee_id, l.resolved_at, l.resolved_by, a.first_name, a.last_name, s.name AS staff_name, d.label AS device_label
          FROM ' . cd_table('event_log') . ' l
+         LEFT JOIN ' . cd_table('devices') . ' d ON d.id = l.device_id
          LEFT JOIN ' . cd_table('attendees') . ' a ON a.id = l.attendee_id
          LEFT JOIN ' . cd_table('staff') . ' s ON s.id = l.staff_id
          WHERE l.event_id = %d AND l.flag IS NOT NULL
-         ORDER BY l.seq DESC LIMIT 100',
+         ORDER BY (l.resolved_at IS NULL) DESC, l.seq DESC LIMIT 150',
         $eid
     ), ARRAY_A);
 
     $devices = $wpdb->get_results($wpdb->prepare(
-        'SELECT d.id, d.label, d.last_sync_at, d.revoked, s.name AS staff_name
+        'SELECT d.id, d.label, d.last_sync_at, d.revoked, d.pending, d.app_version, s.name AS staff_name,
+                s.can_checkin, s.can_serve, s.is_admin,
+                (SELECT COUNT(*) FROM ' . cd_table('event_log') . ' l WHERE l.device_id = d.id AND l.received_at >= %s) AS today_count
          FROM ' . cd_table('devices') . ' d LEFT JOIN ' . cd_table('staff') . ' s ON s.id = d.staff_id
          WHERE d.event_id = %d ORDER BY d.last_sync_at DESC',
+        cd_tehran_day_start_utc(),
         $eid
     ), ARRAY_A);
 
@@ -190,7 +194,12 @@ function cd_build_report(array $event) {
                 'name' => trim(($f['first_name'] ?? '') . ' ' . ($f['last_name'] ?? '')),
                 'staff' => $f['staff_name'],
                 'card_token' => $f['card_token'],
+                'attendee_id' => $f['attendee_id'],
+                'device' => $f['device_label'],
                 'device_time' => cd_iso($f['device_time']),
+                // «بررسی شد»: مدیر دیده و علامت را برداشته؛ از «نیاز به توجه» بیرون می‌رود.
+                'resolved_at' => cd_iso($f['resolved_at']),
+                'resolved_by' => $f['resolved_by'],
                 // جزئیات: نام اجازه‌دهنده‌ی مجوز شفاهی، یا متن «خبر به مدیر».
                 'detail' => cd_flag_detail($f),
             ];
@@ -202,6 +211,14 @@ function cd_build_report(array $event) {
                 'staff' => $d['staff_name'],
                 'last_sync_at' => cd_iso($d['last_sync_at']),
                 'revoked' => (bool) $d['revoked'],
+                'pending' => (int) $d['pending'],
+                'app_version' => $d['app_version'],
+                'today_count' => (int) $d['today_count'],
+                'roles' => array_values(array_filter([
+                    !empty($d['can_checkin']) ? 'پذیرش' : null,
+                    !empty($d['can_serve']) ? 'پذیرایی' : null,
+                    !empty($d['is_admin']) ? 'مدیر' : null,
+                ])),
             ];
         }, $devices),
         'generated_at' => gmdate('c'),

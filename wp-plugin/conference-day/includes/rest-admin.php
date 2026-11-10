@@ -151,6 +151,11 @@ add_action('rest_api_init', function () {
     ]);
 
     // قالب کارت روی سرور تا اپ مدیریت ویندوز و موبایل یک قالب ببینند.
+    register_rest_route(CD_NS, "/admin/events/$code/flags/(?P<seq>\d+)/resolve", [
+        'methods' => 'POST',
+        'permission_callback' => $admin,
+        'callback' => 'cd_rest_resolve_flag',
+    ]);
     register_rest_route(CD_NS, "/admin/events/$code/card-template", [
         [
             'methods' => 'GET',
@@ -353,7 +358,7 @@ function cd_rest_timeline(WP_REST_Request $request) {
         return $event;
     }
     $rows = $wpdb->get_results($wpdb->prepare(
-        'SELECT l.seq, l.kind, l.flag, l.device_time, l.meal_id, l.payload, m.name AS meal_name, d.label AS device_label, s.name AS staff_name
+        'SELECT l.seq, l.kind, l.flag, l.device_time, l.meal_id, l.payload, l.resolved_at, m.name AS meal_name, d.label AS device_label, s.name AS staff_name
          FROM ' . cd_table('event_log') . ' l
          LEFT JOIN ' . cd_table('meals') . ' m ON m.id = l.meal_id
          LEFT JOIN ' . cd_table('devices') . ' d ON d.id = l.device_id
@@ -374,6 +379,7 @@ function cd_rest_timeline(WP_REST_Request $request) {
                 'staff' => $r['staff_name'],
                 'flag' => $r['flag'],
                 'flag_label' => $r['flag'] ? (CD_FLAG_LABELS[$r['flag']] ?? $r['flag']) : null,
+                'resolved_at' => cd_iso($r['resolved_at']),
                 // در «تکمیل اطلاعات»: کدام فیلدها چه شدند.
                 'detail' => $r['kind'] === 'attendee_update' ? cd_completion_detail($r['payload']) : null,
             ];
@@ -648,4 +654,33 @@ function cd_completion_detail($payload) {
         $parts[] = $labels[$k] . ': ' . $v;
     }
     return implode('، ', $parts);
+}
+
+/**
+ * «بررسی شد، علامت را بردار»: مورد مشکوک از «نیاز به توجه» بیرون می‌رود ولی در گزارش و تاریخچه می‌ماند.
+ * resolved=false علامت را برمی‌گرداند.
+ */
+function cd_rest_resolve_flag(WP_REST_Request $request) {
+    global $wpdb;
+    $event = cd_event_from_request($request);
+    if (is_wp_error($event)) {
+        return $event;
+    }
+    $seq = (int) $request['seq'];
+    $row = $wpdb->get_row($wpdb->prepare(
+        'SELECT seq, flag FROM ' . cd_table('event_log') . ' WHERE seq = %d AND event_id = %d',
+        $seq,
+        (int) $event['id']
+    ), ARRAY_A);
+    if (!$row || $row['flag'] === null) {
+        return cd_error('cd_no_flag', 'این مورد مشکوک پیدا نشد.', 404);
+    }
+    $undo = $request->get_param('resolved') === false || $request->get_param('resolved') === 'false';
+    $by = cd_str((string) $request->get_param('by'), 64);
+    $wpdb->update(
+        cd_table('event_log'),
+        $undo ? ['resolved_at' => null, 'resolved_by' => ''] : ['resolved_at' => cd_now(), 'resolved_by' => $by !== '' ? $by : 'مدیر'],
+        ['seq' => $seq]
+    );
+    return ['seq' => $seq, 'resolved' => !$undo];
 }

@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:local_auth_platform_interface/local_auth_platform_interface.dart';
 
+import 'android/nv_admin.dart';
+import 'android/nv_theme.dart';
 import 'screens/cards.dart';
 import 'screens/config.dart';
 import 'screens/connect.dart';
@@ -37,11 +39,31 @@ class StateScope extends InheritedNotifier<AdminState> {
 bool get isDesktopPlatform => Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
 class AdminApp extends StatelessWidget {
-  const AdminApp({super.key});
+
+  /// برای آزمون و پیش‌نمایش؛ پیش‌فرض: ظاهر تازه فقط روی اندروید.
+  final bool? android;
+  const AdminApp({super.key, this.android});
 
   @override
   Widget build(BuildContext context) {
     final desktop = isDesktopPlatform;
+    if (android ?? Platform.isAndroid) {
+      return MaterialApp(
+        title: appName,
+        debugShowCheckedModeBanner: false,
+        locale: const Locale('fa'),
+        supportedLocales: const [Locale('fa'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        theme: nvTheme(Brightness.light),
+        darkTheme: nvTheme(Brightness.dark),
+        builder: (context, child) => MediaQuery.withClampedTextScaling(maxScaleFactor: 1.3, child: child!),
+        home: const NvAdminRoot(),
+      );
+    }
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,

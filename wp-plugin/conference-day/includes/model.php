@@ -269,6 +269,11 @@ function cd_default_settings() {
         'qr_behavior' => 'person',
         'qr_redirect_url' => '',
         'contact_fields' => ['name' => true, 'organization' => true, 'email' => false, 'mobile' => false, 'country' => false],
+        // هر نوع ثبت‌نام جدا: موبایل و ایمیل روی صفحه‌ی شخصی. نوعی که اینجا نیست، از contact_fields پیروی می‌کند.
+        'contact_by_type' => [],
+        // راه ارتباط با برگزارکننده، پایین صفحه‌ی شخصی.
+        'organizer_email' => '',
+        'organizer_url' => '',
         'show_maker_credit' => true,
     ];
 }
@@ -302,6 +307,22 @@ function cd_sanitize_settings(array $in, ?array $base = null) {
                 $s['contact_fields'][$k] = (bool) $in['contact_fields'][$k];
             }
         }
+    }
+    if (isset($in['contact_by_type']) && is_array($in['contact_by_type'])) {
+        $s['contact_by_type'] = [];
+        foreach (array_slice($in['contact_by_type'], 0, 50, true) as $tid => $v) {
+            if (!is_numeric($tid) || !is_array($v)) {
+                continue;
+            }
+            $s['contact_by_type'][(string) (int) $tid] = ['mobile' => !empty($v['mobile']), 'email' => !empty($v['email'])];
+        }
+    }
+    if (isset($in['organizer_email'])) {
+        $em = sanitize_email(trim((string) $in['organizer_email']));
+        $s['organizer_email'] = is_email($em) ? $em : '';
+    }
+    if (isset($in['organizer_url'])) {
+        $s['organizer_url'] = esc_url_raw(trim((string) $in['organizer_url']), ['http', 'https']);
     }
     if (array_key_exists('show_maker_credit', $in)) {
         $s['show_maker_credit'] = (bool) $in['show_maker_credit'];
@@ -372,6 +393,29 @@ function cd_sanitize_card_template(array $t) {
     if (isset($t['qr_side']) && in_array($t['qr_side'], ['front', 'back'], true)) {
         $clean['qr_side'] = $t['qr_side'];
     }
+    // برش و حاشیه‌ی امن (میلی‌متر).
+    foreach (['bleed_mm' => 10, 'safe_mm' => 20] as $k => $max) {
+        if (isset($t[$k]) && is_numeric($t[$k]) && (float) $t[$k] >= 0 && (float) $t[$k] <= $max) {
+            $clean[$k] = (float) $t[$k];
+        }
+    }
+    // تصویر طرح زمینه روی سرور، تا همه‌ی دستگاه‌ها یک طرح ببینند.
+    foreach (['front_image_url', 'back_image_url'] as $k) {
+        if (isset($t[$k])) {
+            $clean[$k] = cd_card_asset_url($t[$k]);
+        }
+    }
+    foreach (['images' => 'cd_sanitize_card_image', 'shapes' => 'cd_sanitize_card_shape'] as $k => $fn) {
+        if (isset($t[$k]) && is_array($t[$k])) {
+            $clean[$k] = [];
+            foreach (array_slice(array_values($t[$k]), 0, 20) as $x) {
+                $one = is_array($x) ? $fn($x) : null;
+                if ($one) {
+                    $clean[$k][] = $one;
+                }
+            }
+        }
+    }
     if (isset($t['texts']) && is_array($t['texts'])) {
         $clean['texts'] = [];
         foreach (array_slice(array_values($t['texts']), 0, 40) as $x) {
@@ -414,7 +458,73 @@ function cd_sanitize_card_text(array $x) {
         'color' => preg_match('/^#?[0-9a-fA-F]{6}$/', $color) ? ltrim($color, '#') : '10141A',
         'max_lines' => (int) $num('max_lines', 1, 5, 1),
         'on_reserve' => !empty($x['on_reserve']),
-    ];
+    ] + cd_card_anchor($x);
+}
+
+/**
+ * جای عنصر: anchor «c» یعنی x و y درصد مرکز (شکل قدیمی)؛ بقیه (tr، tl، tc، br، bl، bc) یعنی
+ * x_mm و y_mm فاصله‌ی همان گوشه‌ی کادر از همان گوشه‌ی کارت.
+ */
+function cd_card_anchor(array $x) {
+    $a = in_array($x['anchor'] ?? 'c', ['c', 'tr', 'tl', 'tc', 'br', 'bl', 'bc'], true) ? ($x['anchor'] ?? 'c') : 'c';
+    $mm = function ($k) use ($x) {
+        return isset($x[$k]) && is_numeric($x[$k]) ? max(-500, min(1000, round((float) $x[$k], 2))) : 0.0;
+    };
+    return ['anchor' => $a, 'x_mm' => $mm('x_mm'), 'y_mm' => $mm('y_mm')];
+}
+
+/** آدرس تصویر کارت فقط از بارگذاری‌های همین سایت. */
+function cd_card_asset_url($v) {
+    $url = esc_url_raw(trim((string) $v), ['http', 'https']);
+    if ($url === '') {
+        return '';
+    }
+    $up = wp_upload_dir();
+    $base = rtrim($up['baseurl'] ?? '', '/') . '/roydadyar-';
+    return strpos($url, $base) === 0 ? $url : '';
+}
+
+function cd_sanitize_card_image(array $x) {
+    $id = (string) ($x['id'] ?? '');
+    $url = cd_card_asset_url($x['url'] ?? '');
+    if (!preg_match('/^[A-Za-z0-9_-]{1,40}$/', $id) || $url === '') {
+        return null;
+    }
+    $num = function ($k, $min, $max, $def) use ($x) {
+        return isset($x[$k]) && is_numeric($x[$k]) ? max($min, min($max, (float) $x[$k])) : $def;
+    };
+    return [
+        'id' => $id,
+        'side' => ($x['side'] ?? '') === 'back' ? 'back' : 'front',
+        'url' => $url,
+        'x' => $num('x', -50, 150, 50),
+        'y' => $num('y', -50, 150, 50),
+        'width_mm' => $num('width_mm', 1, 1000, 20),
+        'height_mm' => $num('height_mm', 1, 1000, 20),
+        'on_reserve' => !array_key_exists('on_reserve', $x) || !empty($x['on_reserve']),
+    ] + cd_card_anchor($x);
+}
+
+function cd_sanitize_card_shape(array $x) {
+    $id = (string) ($x['id'] ?? '');
+    if (!preg_match('/^[A-Za-z0-9_-]{1,40}$/', $id)) {
+        return null;
+    }
+    $num = function ($k, $min, $max, $def) use ($x) {
+        return isset($x[$k]) && is_numeric($x[$k]) ? max($min, min($max, (float) $x[$k])) : $def;
+    };
+    $color = (string) ($x['color'] ?? '');
+    return [
+        'id' => $id,
+        'side' => ($x['side'] ?? '') === 'back' ? 'back' : 'front',
+        'x' => $num('x', -50, 150, 50),
+        'y' => $num('y', -50, 150, 50),
+        'width_mm' => $num('width_mm', 0.2, 1000, 30),
+        'height_mm' => $num('height_mm', 0.2, 1000, 10),
+        'radius_mm' => $num('radius_mm', 0, 500, 0),
+        'color' => preg_match('/^#?[0-9a-fA-F]{6}$/', $color) ? ltrim($color, '#') : '0B7A7B',
+        'on_reserve' => !array_key_exists('on_reserve', $x) || !empty($x['on_reserve']),
+    ] + cd_card_anchor($x);
 }
 
 function cd_affix($v) {

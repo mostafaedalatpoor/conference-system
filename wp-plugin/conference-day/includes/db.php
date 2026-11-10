@@ -161,6 +161,8 @@ function cd_install_tables() {
   created_at datetime NOT NULL,
   last_sync_at datetime NULL,
   revoked tinyint(1) NOT NULL DEFAULT 0,
+  pending int(11) NOT NULL DEFAULT 0,
+  app_version varchar(32) NOT NULL DEFAULT '',
   PRIMARY KEY  (id),
   UNIQUE KEY token_hash (token_hash),
   KEY event_id (event_id)
@@ -180,6 +182,8 @@ function cd_install_tables() {
   flag varchar(32) NULL,
   device_time datetime NOT NULL,
   received_at datetime NOT NULL,
+  resolved_at datetime NULL,
+  resolved_by varchar(64) NOT NULL DEFAULT '',
   PRIMARY KEY  (seq),
   UNIQUE KEY uuid (uuid),
   KEY event_seq (event_id,seq),

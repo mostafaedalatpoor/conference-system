@@ -184,21 +184,25 @@ function cd_rest_reg_asset(WP_REST_Request $r) {
     if ($bytes === false || strlen($bytes) < 100) {
         return cd_error('cd_asset', 'تصویر خراب رسید.');
     }
-    if (strlen($bytes) > 3 * 1024 * 1024) {
-        return cd_error('cd_asset', 'تصویر بزرگ‌تر از ۳ مگابایت است.');
+    // طرح کارت چاپی (۳۰۰ DPI) بزرگ‌تر است: تا ۱۲ مگابایت.
+    $card = $r->get_param('kind') === 'card';
+    $limit = $card ? 12 : 3;
+    if (strlen($bytes) > $limit * 1024 * 1024) {
+        return cd_error('cd_asset', 'تصویر بزرگ‌تر از ' . cd_fa_digits((string) $limit) . ' مگابایت است.');
     }
     $ext = strncmp($bytes, "\x89PNG", 4) === 0 ? 'png' : (strncmp($bytes, "\xFF\xD8\xFF", 3) === 0 ? 'jpg' : (substr($bytes, 8, 4) === 'WEBP' ? 'webp' : ''));
     if ($ext === '') {
         return cd_error('cd_asset', 'فقط PNG، JPG یا WebP.');
     }
     $up = wp_upload_dir();
-    $dir = rtrim($up['basedir'], '/') . '/roydadyar-reg';
+    $folder = $card ? 'roydadyar-card' : 'roydadyar-reg';
+    $dir = rtrim($up['basedir'], '/') . '/' . $folder;
     wp_mkdir_p($dir);
     $name = bin2hex(random_bytes(12)) . '.' . $ext;
     if (@file_put_contents("$dir/$name", $bytes) === false) {
         return cd_error('cd_asset', 'ذخیره‌ی تصویر روی سرور ناموفق بود.', 500);
     }
-    return ['url' => rtrim($up['baseurl'], '/') . '/roydadyar-reg/' . $name];
+    return ['url' => rtrim($up['baseurl'], '/') . '/' . $folder . '/' . $name];
 }
 
 // ---------------------------------------------------------------- خروجی اکسل

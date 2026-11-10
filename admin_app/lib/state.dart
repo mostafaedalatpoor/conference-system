@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show FontLoader;
 import 'package:pdf/pdf.dart' show TtfParser;
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -236,6 +237,21 @@ class CardTemplate {
   /// فایل اکسل جدا برای متن‌هایی با منبع «فایل جدا»؛ مثل تصویر طرح روی همین دستگاه می‌ماند.
   String extraFile = '';
 
+  /// تصویر طرح روی سرور (همه‌ی دستگاه‌ها)؛ اگر خالی است، تصویر محلی همین دستگاه.
+  String frontImageUrl = '';
+  String backImageUrl = '';
+
+  /// تصویرها (لوگو) و مستطیل‌های رنگی روی کارت.
+  List<CardImage> images = [];
+  List<CardShape> shapes = [];
+
+  /// حاشیه‌ی برش (bleed) و حاشیه‌ی امن، میلی‌متر.
+  double bleedMm = 3;
+  double safeMm = 4;
+
+  /// مبدأ جای QR در ویرایشگر گوشی (فقط نمایش؛ جای واقعی qrX و qrY است).
+  String qrAnchor = 'c';
+
   CardTemplate() {
     texts = _migratedTexts(const {});
   }
@@ -299,6 +315,13 @@ class CardTemplate {
         'sheet_margin': sheetMargin,
         'duplex': duplex,
         'auto_rotate': autoRotate,
+        'front_image_url': frontImageUrl,
+        'back_image_url': backImageUrl,
+        'images': [for (final i in images) i.toJson()],
+        'shapes': [for (final x in shapes) x.toJson()],
+        'bleed_mm': bleedMm,
+        'safe_mm': safeMm,
+        'qr_anchor': qrAnchor,
       };
 
   void load(Map<String, dynamic> j) {
@@ -328,6 +351,13 @@ class CardTemplate {
     doubleSided = j['double_sided'] != false;
     qrEnabled = j['qr_enabled'] != false;
     qrSide = j['qr_side'] == 'front' ? 'front' : 'back';
+    frontImageUrl = (j['front_image_url'] ?? frontImageUrl).toString();
+    backImageUrl = (j['back_image_url'] ?? backImageUrl).toString();
+    bleedMm = d('bleed_mm', bleedMm);
+    safeMm = d('safe_mm', safeMm);
+    qrAnchor = cardAnchors.contains(j['qr_anchor']) ? j['qr_anchor'] as String : qrAnchor;
+    if (j['images'] is List) images = [for (final e in j['images'] as List) if (e is Map) CardImage.fromJson(e.cast<String, dynamic>())];
+    if (j['shapes'] is List) shapes = [for (final e in j['shapes'] as List) if (e is Map) CardShape.fromJson(e.cast<String, dynamic>())];
     final list = j['texts'];
     texts = list is List
         ? [for (final e in list) if (e is Map) CardText.fromJson(e.cast<String, dynamic>())]
@@ -444,6 +474,14 @@ class EventSettings {
   /// خط «ساخته‌شده با رویدادیار» در صفحه‌ی عمومی.
   bool showMakerCredit = true;
 
+  /// موبایل و ایمیل روی صفحه‌ی شخصی، برای هر نوع ثبت‌نام جدا (کد نوع ← (موبایل، ایمیل)).
+  /// نوعی که اینجا نیست، از shareMobile و shareEmail پیروی می‌کند.
+  Map<String, (bool, bool)> contactByType = {};
+
+  /// راه ارتباط با برگزارکننده، پایین صفحه‌ی شخصی.
+  String organizerEmail = '';
+  String organizerUrl = '';
+
   Map<String, dynamic> toJson() => {
         'identify_mode': identifyMode,
         'qr_behavior': qrBehavior,
@@ -456,6 +494,14 @@ class EventSettings {
           'country': shareCountry,
         },
         'show_maker_credit': showMakerCredit,
+        'organizer_email': organizerEmail,
+        'organizer_url': organizerUrl,
+      };
+
+  /// بخش «برای هر نوع جدا» با شناسه‌ی سرور نوع‌ها (برای ارسال به سرور).
+  Map<String, dynamic> contactByTypeJson(Map<String, int> typeIds) => {
+        for (final e in contactByType.entries)
+          if (typeIds[e.key] != null) '${typeIds[e.key]}': {'mobile': e.value.$1, 'email': e.value.$2},
       };
 
   void load(Map<String, dynamic> j) {
@@ -474,6 +520,8 @@ class EventSettings {
     shareMobile = c['mobile'] as bool? ?? shareMobile;
     shareCountry = c['country'] as bool? ?? shareCountry;
     showMakerCredit = j['show_maker_credit'] as bool? ?? showMakerCredit;
+    organizerEmail = (j['organizer_email'] ?? organizerEmail).toString();
+    organizerUrl = (j['organizer_url'] ?? organizerUrl).toString();
   }
 
   bool get usesCards => identifyMode != 'none';
@@ -738,6 +786,7 @@ class AdminState extends ChangeNotifier {
     for (final r in list('roles')) {
       roleById[r['id'] as int] = r['code'].toString();
     }
+    mealIds = [for (final m in list('meals')) (m['id'] as num?)?.toInt() ?? 0];
     meals = [
       for (final m in list('meals'))
         MealDef(
@@ -799,9 +848,22 @@ class AdminState extends ChangeNotifier {
             .map((e) => StaffDef.fromJson((e as Map).cast<String, dynamic>()))
             .toList();
     final byName = {for (final s in saved) s.name: s};
+    // دسترسی‌ها از سرور (اگر افزونه‌ی تازه است)؛ PIN تازه‌ی ذخیره‌نشده‌ی همین دستگاه می‌ماند.
     staff = [
-      for (final st in list('staff')) byName[st['name'].toString()] ?? StaffDef(st['name'].toString(), hasPin: true),
+      for (final st in list('staff'))
+        if (st['active'] != false)
+          st.containsKey('can_checkin')
+              ? (StaffDef(
+                  st['name'].toString(),
+                  canCheckin: st['can_checkin'] == true,
+                  canServe: st['can_serve'] == true,
+                  isAdmin: st['is_admin'] == true,
+                  hasPin: st['has_pin'] == true,
+                )..newPin = byName[st['name'].toString()]?.newPin ?? '')
+              : byName[st['name'].toString()] ?? StaffDef(st['name'].toString(), hasPin: true),
     ];
+    typeIdByCode = {for (final e in typeById.entries) e.value: e.key};
+    _applyLog(list('log'));
     for (final s in saved) {
       if (!staff.any((x) => x.name == s.name)) staff.add(s);
     }
@@ -816,7 +878,17 @@ class AdminState extends ChangeNotifier {
     final local = _settingsByEvent[code];
     if (local is Map) settings.load(local.cast<String, dynamic>());
     final remote = (s['settings'] as Map?) ?? ((s['event'] as Map?)?['settings'] as Map?);
-    if (remote != null) settings.load(remote.cast<String, dynamic>());
+    if (remote != null) {
+      settings.load(remote.cast<String, dynamic>());
+      final byType = remote['contact_by_type'];
+      if (byType is Map) {
+        settings.contactByType = {
+          for (final e in byType.entries)
+            if (typeById[int.tryParse('${e.key}')] != null && e.value is Map)
+              typeById[int.tryParse('${e.key}')]!: ((e.value as Map)['mobile'] == true, (e.value as Map)['email'] == true),
+        };
+      }
+    }
     report = null;
     try {
       await loadFonts();
@@ -842,7 +914,7 @@ class AdminState extends ChangeNotifier {
             for (var i = 0; i < meals.length; i++) {...meals[i].toJson(), 'sort': i},
           ],
           'sessions': sessions.map((s) => s.toJson()).toList(),
-          'settings': settings.toJson(),
+          'settings': {...settings.toJson(), 'contact_by_type': settings.contactByTypeJson(typeIdByCode)},
         }) as Map)
             .cast<String, dynamic>();
         final errors = (r['errors'] as List?) ?? [];
@@ -1036,6 +1108,72 @@ class AdminState extends ChangeNotifier {
           ..remove('extra_file');
         await api.post('/admin/events/$eventCode/card-template', {'template': j});
       });
+
+  /// وضعیت هر نفر از دفتر رخدادها: زمان پذیرش و وعده‌های گرفته‌شده (شناسه‌ی وعده ← زمان).
+  Map<String, DateTime> checkinAt = {};
+  Map<String, Map<int, DateTime>> mealsServed = {};
+
+  /// شناسه‌ی سرور هر وعده (هم‌ترتیب [meals]).
+  List<int> mealIds = [];
+
+  /// آخرین پذیرش‌ها، تازه‌ترین اول (شناسه‌ی نفر).
+  List<String> recentCheckins = [];
+
+  void _applyLog(List<Map<String, dynamic>> log) {
+    checkinAt = {};
+    mealsServed = {};
+    final order = <String>[];
+    for (final e in log) {
+      final aid = e['attendee_id']?.toString();
+      if (aid == null) continue;
+      final at = DateTime.tryParse('${e['device_time']}')?.toLocal() ?? DateTime.now();
+      switch (e['kind']) {
+        case 'checkin':
+        case 'walkin_register':
+          checkinAt.putIfAbsent(aid, () => at);
+          order.remove(aid);
+          order.add(aid);
+        case 'checkin_undo':
+          checkinAt.remove(aid);
+          order.remove(aid);
+        case 'meal_served':
+          final mid = (e['meal_id'] as num?)?.toInt();
+          if (mid != null) (mealsServed[aid] ??= {}).putIfAbsent(mid, () => at);
+      }
+    }
+    recentCheckins = order.reversed.take(30).toList();
+  }
+
+  /// شناسه‌ی سرور هر نوع ثبت‌نام (برای تنظیم‌هایی که با شناسه ذخیره می‌شوند).
+  Map<String, int> typeIdByCode = {};
+
+  /// «بررسی شد، علامت را بردار» (یا برگرداندن علامت).
+  Future<void> resolveFlag(int seq, {bool resolved = true}) => run(resolved ? 'علامت برداشته شد.' : 'علامت برگشت.', () async {
+        await api.post('/admin/events/$eventCode/flags/$seq/resolve', {'resolved': resolved, 'by': 'اپ مدیریت'});
+        report = (await api.get('/admin/events/$eventCode/report') as Map).cast<String, dynamic>();
+      });
+
+  /// بارگذاری تصویر طرح کارت یا لوگو روی سرور؛ آدرس آن را برمی‌گرداند.
+  Future<String?> uploadCardAsset(Uint8List bytes) =>
+      run('', () async => (await api.post('/admin/reg-assets', {'data': base64Encode(bytes), 'kind': 'card'}) as Map)['url'].toString());
+
+  final Map<String, Uint8List> _assetCache = {};
+
+  /// بایت‌های تصویری که روی سرور است (برای پیش‌نمایش و PDF)؛ یک بار گرفته می‌شود.
+  Future<Uint8List?> assetBytes(String url) async {
+    if (url.isEmpty) return null;
+    final hit = _assetCache[url];
+    if (hit != null) return hit;
+    try {
+      final r = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 60));
+      if (r.statusCode != 200) return null;
+      return _assetCache[url] = r.bodyBytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Uint8List? cachedAsset(String url) => _assetCache[url];
 
   /// باطل‌کردن دسترسی یک دستگاه نیرو.
   Future<void> revokeDevice(int id) => run('دستگاه باطل شد.', () async {

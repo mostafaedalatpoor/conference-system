@@ -149,6 +149,21 @@ function cd_rest_device_sync(WP_REST_Request $request) {
         $wpdb->update(cd_table('devices'), ['last_sync_at' => cd_now()], ['id' => (int) $device['id']]);
     }
 
+    // گزارش گوشی: کارهای ارسال‌نشده (بعد از این دور) و نسخه‌ی اپ، برای «گوشی‌ها»ی اپ مدیریت.
+    $left = $request->get_param('pending_after');
+    $ver = (string) $request->get_param('app_version');
+    $report = [];
+    if (is_numeric($left)) {
+        $report['pending'] = max(0, min(100000, (int) $left));
+    }
+    if ($ver !== '' && preg_match('/^[0-9A-Za-z .()+_-]{1,32}$/u', $ver)) {
+        $report['app_version'] = $ver;
+    }
+    if ($report) {
+        global $wpdb;
+        $wpdb->update(cd_table('devices'), $report, ['id' => (int) $device['id']]);
+    }
+
     $since = max(0, (int) $request->get_param('since'));
     $pull = cd_pull_events((int) $event['id'], $since);
 

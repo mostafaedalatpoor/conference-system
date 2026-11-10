@@ -71,7 +71,7 @@ add_action('template_redirect', function () {
     }
     $person = $wpdb->get_row($wpdb->prepare(
         'SELECT a.title, a.first_name, a.last_name, a.organization, a.presentation_kind, a.email, a.mobile, a.country,
-                a.share_contact, a.website, t.name AS type_name, r.name AS role_name
+                a.registration_type_id, a.share_contact, a.website, t.name AS type_name, r.name AS role_name
          FROM ' . cd_table('attendees') . ' a
          LEFT JOIN ' . cd_table('registration_types') . ' t ON t.id = a.registration_type_id
          LEFT JOIN ' . cd_table('roles') . ' r ON r.id = a.role_id
@@ -112,6 +112,11 @@ function cd_send_public_cache_headers() {
 /** فیلدهای تماسی که برای این نفر مجاز است (تنظیم رویداد، و «خیر» خود فرد بر آن مقدم). */
 function cd_allowed_contact(array $person, array $settings) {
     $f = $settings['contact_fields'];
+    $tid = isset($person['registration_type_id']) ? (string) (int) $person['registration_type_id'] : '';
+    if ($tid !== '' && isset($settings['contact_by_type'][$tid])) {
+        $f['mobile'] = (bool) $settings['contact_by_type'][$tid]['mobile'];
+        $f['email'] = (bool) $settings['contact_by_type'][$tid]['email'];
+    }
     if ($person['share_contact'] !== null && !(int) $person['share_contact']) {
         // کسی که «خیر» دارد فقط نام و سازمان را به اشتراک می‌گذارد.
         return ['name' => true, 'organization' => true, 'email' => false, 'mobile' => false, 'country' => false];
@@ -312,6 +317,8 @@ details.day > summary { cursor:pointer; color:var(--muted); font-weight:800; fon
 .badge { display:inline-block; font-size:12px; font-weight:800; border-radius:4px; padding:0 6px; margin-inline-start:6px; }
 .badge.now { background:var(--stamp); color:var(--surface); }
 .badge.next { border:1px solid var(--line-strong); color:var(--ink); }
+.organizer { margin-top:28px; text-align:center; font-size:14px; }
+.organizer a { color:inherit; }
 .maker { margin-top:32px; text-align:center; color:var(--muted); font-size:12px; }
 </style>
 </head>
@@ -377,6 +384,13 @@ details.day > summary { cursor:pointer; color:var(--muted); font-weight:800; fon
     <?php endforeach; ?>
 <?php endif; ?>
 
+<?php if ($settings['organizer_email'] !== '' || $settings['organizer_url'] !== '') : ?>
+  <p class="organizer">ارتباط با برگزارکننده:
+    <?php if ($settings['organizer_email'] !== '') : ?><a href="mailto:<?php echo esc_attr($settings['organizer_email']); ?>" dir="ltr"><?php echo $e($settings['organizer_email']); ?></a><?php endif; ?>
+    <?php if ($settings['organizer_email'] !== '' && $settings['organizer_url'] !== '') : ?> · <?php endif; ?>
+    <?php if ($settings['organizer_url'] !== '') : ?><a href="<?php echo esc_url($settings['organizer_url']); ?>" rel="noopener">صفحه‌ی پشتیبانی</a><?php endif; ?>
+  </p>
+<?php endif; ?>
 <?php if ($settings['show_maker_credit']) : ?>
   <p class="maker">ساخته‌شده با رویدادیار · نگاه جدید</p>
 <?php endif; ?>

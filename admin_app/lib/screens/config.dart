@@ -10,7 +10,9 @@ import '../state.dart';
 
 /// انواع ثبت‌نام، نقش‌ها، وعده‌ها و برنامه.
 class ConfigScreen extends StatefulWidget {
-  const ConfigScreen({super.key});
+  /// گوشی: فقط یک بخش ('types'، 'roles'، 'meals'، 'sessions')؛ null = همه.
+  final String? section;
+  const ConfigScreen({super.key, this.section});
 
   @override
   State<ConfigScreen> createState() => _ConfigScreenState();
@@ -67,6 +69,48 @@ class _ConfigScreenState extends State<ConfigScreen> {
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     final empty = s.types.isEmpty && s.roles.isEmpty && s.meals.isEmpty;
+
+    final sec = widget.section;
+    if (sec != null) {
+      return PageBody(title: 'پیکربندی', children: [
+        if (sec == 'types') _CodeNameList(items: s.types, onChanged: s.notify, addLabel: 'نوع جدید'),
+        if (sec == 'roles') _CodeNameList(items: s.roles, onChanged: s.notify, addLabel: 'نقش جدید'),
+        if (sec == 'meals') ...[
+          for (final m in s.meals) _MealEditor(key: ObjectKey(m), meal: m),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('وعده‌ی جدید'),
+              onPressed: () {
+                s.meals.add(MealDef('meal${s.meals.length + 1}', '', s.event?.startDate ?? '', {}, {}));
+                s.notify();
+              },
+            ),
+          ),
+        ],
+        if (sec == 'sessions') ...[
+          for (final x in s.sessions) _SessionRow(key: ObjectKey(x), session: x),
+          Wrap(spacing: 8, children: [
+            TextButton.icon(
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('جلسه‌ی جدید'),
+              onPressed: () {
+                s.sessions.add(SessionDef(s.event?.startDate ?? '', '09:00', '', '', 'سالن اصلی', 'keynote'));
+                s.notify();
+              },
+            ),
+            TextButton.icon(icon: const Icon(Icons.upload_file_rounded), label: const Text('ورود از اکسل'), onPressed: () => _importSessions(s)),
+          ]),
+        ],
+        const SizedBox(height: 24),
+        FilledButton.icon(
+          icon: const Icon(Icons.cloud_upload_rounded),
+          onPressed: s.busy ? null : s.pushConfig,
+          label: const Text('ذخیره روی سرور'),
+        ),
+      ]);
+    }
 
     return PageBody(title: 'پیکربندی', children: [
       if (empty)

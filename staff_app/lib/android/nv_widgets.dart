@@ -511,14 +511,14 @@ class NvCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = NvColors.of(context);
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
+    // Material، تا ListTile و Switch داخلش اثر لمس و رنگ درست داشته باشند.
+    return DecoratedBox(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(raised ? Nv.r22 : Nv.r18), boxShadow: raised ? Nv.raised(c) : null),
+      child: Material(
         color: c.surface,
         borderRadius: BorderRadius.circular(raised ? Nv.r22 : Nv.r18),
-        boxShadow: raised ? Nv.raised(c) : null,
+        child: Padding(padding: padding, child: child),
       ),
-      child: child,
     );
   }
 }

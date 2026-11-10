@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import 'api.dart';
+import 'brand.dart' show appVersionLabel;
 import 'models.dart';
 import 'normalize.dart';
 
@@ -652,6 +653,9 @@ class AppStore extends ChangeNotifier {
           r = await api.post('/device/sync', {
             'events': batch.map((e) => e.toPush()).toList(),
             'since': cursor,
+            // گزارش برای «گوشی‌ها»ی اپ مدیریت: بعد از این دور چند کار می‌ماند، و نسخه‌ی اپ.
+            'pending_after': pending.length - batch.length,
+            'app_version': appVersionLabel,
           });
         } on ApiException catch (e) {
           if (!e.isAuth || useToken == token) rethrow;

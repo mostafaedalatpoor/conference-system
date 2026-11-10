@@ -37,12 +37,6 @@ class _CardsScreenState extends State<CardsScreen> {
     await s.save();
   }
 
-  Future<Uint8List?> _read(String path) async {
-    if (path.isEmpty) return null;
-    final f = File(path);
-    return await f.exists() ? f.readAsBytes() : null;
-  }
-
   /// اندازه‌ی کارت هر بار پیش از ساخت PDF پرسیده می‌شود.
   Future<bool> _askSize(AdminState s) async {
     final w = TextEditingController(text: s.template.widthMm.toStringAsFixed(0));
@@ -131,9 +125,10 @@ class _CardsScreenState extends State<CardsScreen> {
         fonts: fonts,
         people: s.sortedPeople,
         reserves: s.reserveCards.where((r) => !r.used).toList(),
-        frontImage: await _read(s.template.frontImage),
-        backImage: s.template.doubleSided ? await _read(s.template.backImage) : null,
+        frontImage: await cardDesignBytes(s, 'front'),
+        backImage: s.template.doubleSided ? await cardDesignBytes(s, 'back') : null,
         fileRows: (await loadExtraFile(s)).rows,
+        assets: await cardAssetBytes(s),
       );
     });
     if (bytes == null || !mounted) return;
@@ -151,9 +146,10 @@ class _CardsScreenState extends State<CardsScreen> {
         fonts: fonts,
         people: const [],
         reserves: s.reserveCards.where((r) => !r.used).toList(),
-        frontImage: await _read(s.template.frontImage),
-        backImage: s.template.doubleSided ? await _read(s.template.backImage) : null,
+        frontImage: await cardDesignBytes(s, 'front'),
+        backImage: s.template.doubleSided ? await cardDesignBytes(s, 'back') : null,
         fileRows: (await loadExtraFile(s)).rows,
+        assets: await cardAssetBytes(s),
       );
     });
     if (bytes == null || !mounted) return;
@@ -561,4 +557,15 @@ class _SheetPreview extends StatelessWidget {
       ),
     ]);
   }
+}
+
+/// تنظیم چیدمان چاپ (بوم، حاشیه، برگشت دورو) برای استفاده در صفحه‌های گوشی.
+class CardSheetSettings extends StatelessWidget {
+  final AdminState s;
+  final int cards;
+  final VoidCallback onChanged;
+  const CardSheetSettings({super.key, required this.s, required this.cards, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) => _SheetSettings(s: s, cards: cards, onChanged: onChanged);
 }

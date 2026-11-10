@@ -110,7 +110,9 @@ Future<void> saveBytesAs(AdminState s, String name, String ext, Uint8List bytes)
 // ================================================================ صفحه‌ی ثبت‌نام
 
 class RegPageScreen extends StatefulWidget {
-  const RegPageScreen({super.key});
+  /// گوشی: فقط یک بخش (۱ تا ۹) با دکمه‌ی ذخیره؛ null = همه.
+  final int? section;
+  const RegPageScreen({super.key, this.section});
 
   @override
   State<RegPageScreen> createState() => _RegPageScreenState();
@@ -326,7 +328,7 @@ class _RegPageScreenState extends State<RegPageScreen> {
     final surface = t['mode'] == 'dark' ? const Color(0xFF161A21) : Colors.white;
     final lowContrast = accent != null && _contrast(accent, surface) < 3;
 
-    return PageBody(title: 'صفحه‌ی ثبت‌نام', children: [
+    final all = <Widget>[
       if (_loadError != null) Notice(tone: NoticeTone.stop, text: _loadError!),
       if (url != null)
         Container(
@@ -607,7 +609,9 @@ class _RegPageScreenState extends State<RegPageScreen> {
         subtitle: const Text('فقط وقتی ثبت‌نام قطعی شده و فرد وارد لیست شده.'),
       ),
       _text((cfg['success'] as Map), 'text', 'متن اضافه', lines: 2, optional: true),
-
+    ];
+    return PageBody(title: 'صفحه‌ی ثبت‌نام', children: [
+      ..._sectionOf(all, widget.section),
       const SizedBox(height: DaftarSize.space5),
       Wrap(spacing: DaftarSize.space3, runSpacing: DaftarSize.space3, children: [
         FilledButton.icon(
@@ -618,6 +622,16 @@ class _RegPageScreenState extends State<RegPageScreen> {
         TextButton(onPressed: s.busy ? null : _load, child: const Text('خواندن دوباره از سرور')),
       ]),
     ]);
+  }
+
+  /// در حالت یک‌بخشی، ویجت‌های بین سرفصل n و سرفصل بعدی (بدون خود سرفصل).
+  List<Widget> _sectionOf(List<Widget> all, int? n) {
+    if (n == null) return all;
+    final starts = [for (var i = 0; i < all.length; i++) if (all[i] is SectionTitle) i];
+    if (n < 1 || n > starts.length) return all;
+    final from = starts[n - 1] + 1;
+    final to = n < starts.length ? starts[n] : all.length;
+    return [if (_loadError != null) Notice(tone: NoticeTone.stop, text: _loadError!), ...all.sublist(from, to)];
   }
 
   Widget _typeChips(Map item, List<Map> types, StateSetter set) {

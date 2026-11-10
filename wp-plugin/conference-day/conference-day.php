@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
 
 // نام‌های فنی (پوشه‌ی افزونه، مسیر API conf/v1، پیشوند جدول‌ها wp_cd_) عوض نمی‌شوند تا داده و اپ‌های نصب‌شده بمانند.
 define('CD_VERSION', '0.4.0');
-define('CD_DB_VERSION', '5');
+define('CD_DB_VERSION', '6');
 define('CD_NS', 'conf/v1');
 define('CD_DIR', plugin_dir_path(__FILE__));
 

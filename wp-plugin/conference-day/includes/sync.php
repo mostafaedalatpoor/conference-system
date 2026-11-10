@@ -17,7 +17,7 @@ function cd_build_snapshot(array $event, $for_admin = false) {
 
     $attendees = $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cd_table('attendees') . ' WHERE event_id = %d', $eid), ARRAY_A);
     $cards = $wpdb->get_results($wpdb->prepare('SELECT token, attendee_id, serial, is_reserve FROM ' . cd_table('cards') . ' WHERE event_id = %d', $eid), ARRAY_A);
-    $staff = $wpdb->get_results($wpdb->prepare('SELECT id, name FROM ' . cd_table('staff') . ' WHERE event_id = %d', $eid), ARRAY_A);
+    $staff = $wpdb->get_results($wpdb->prepare('SELECT id, name, can_checkin, can_serve, is_admin, active, (pin_hash <> \'\') AS has_pin FROM ' . cd_table('staff') . ' WHERE event_id = %d', $eid), ARRAY_A);
     $log = $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cd_table('event_log') . ' WHERE event_id = %d ORDER BY seq', $eid), ARRAY_A);
     $cursor = 0;
     foreach ($log as $l) {
@@ -39,8 +39,19 @@ function cd_build_snapshot(array $event, $for_admin = false) {
                     'is_reserve' => (bool) $c['is_reserve'],
                 ];
             }, $cards),
-            'staff' => array_map(function ($s) {
-                return ['id' => (int) $s['id'], 'name' => $s['name']];
+            'staff' => array_map(function ($s) use ($for_admin) {
+                $out = ['id' => (int) $s['id'], 'name' => $s['name']];
+                // اپ مدیریت دسترسی‌ها را هم می‌گیرد تا ذخیره از دستگاه دیگر آن‌ها را عوض نکند.
+                if ($for_admin) {
+                    $out += [
+                        'can_checkin' => (bool) $s['can_checkin'],
+                        'can_serve' => (bool) $s['can_serve'],
+                        'is_admin' => (bool) $s['is_admin'],
+                        'active' => (bool) $s['active'],
+                        'has_pin' => (bool) $s['has_pin'],
+                    ];
+                }
+                return $out;
             }, $staff),
             'log' => array_map('cd_log_out', $log),
             'cursor' => $cursor,
