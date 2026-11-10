@@ -69,6 +69,13 @@ function cd_build_report(array $event) {
     $checked_in = 0;
     $walkins = 0;
     $walkins_no_card = 0;
+    // «تسویه در روز اجرا»: مبلغ کل و آنچه نیروها «تسویه شد» زده‌اند.
+    $onsite_due = 0;
+    $onsite_settled = 0;
+    $settled_ids = array_flip($wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT attendee_id FROM " . cd_table('event_log') . " WHERE event_id = %d AND kind = 'onsite_settled' AND attendee_id IS NOT NULL",
+        $eid
+    )) ?: []);
     $with_card = array_flip($wpdb->get_col($wpdb->prepare(
         'SELECT attendee_id FROM ' . cd_table('cards') . ' WHERE event_id = %d AND attendee_id IS NOT NULL',
         $eid
@@ -82,6 +89,12 @@ function cd_build_report(array $event) {
         $in = isset($states[$a['id']]) && $states[$a['id']]['checked_in_at'] !== null;
         if ($in) {
             $checked_in++;
+        }
+        if ((int) $a['onsite_due'] > 0) {
+            $onsite_due += (int) $a['onsite_due'];
+            if (isset($settled_ids[$a['id']])) {
+                $onsite_settled += (int) $a['onsite_due'];
+            }
         }
         if ($a['source'] === 'walkin') {
             $walkins++;
@@ -157,6 +170,8 @@ function cd_build_report(array $event) {
             'attendees' => count($attendees),
             'checked_in' => $checked_in,
             'walkins' => $walkins,
+            'onsite_due' => $onsite_due,
+            'onsite_settled' => $onsite_settled,
             // در رویداد کارت‌دار: ثبت‌نام‌هایی که کارت رزرو نداشتند (هنوز کارتی وصل نشده).
             'walkins_no_card' => cd_event_settings($event)['identify_mode'] !== 'none' ? $walkins_no_card : 0,
             'reserve_cards_free' => $reserve_free,

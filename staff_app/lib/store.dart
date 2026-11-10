@@ -215,6 +215,7 @@ class AppStore extends ChangeNotifier {
     }
     final chk = <String, CheckState>{};
     final served = <String, Map<int, List<DateTime>>>{};
+    final settled = <String, CheckState>{};
 
     final all = [...serverLog, ...pending];
     for (final e in all) {
@@ -234,6 +235,9 @@ class AppStore extends ChangeNotifier {
           break;
         case 'checkin_undo':
           if (aid != null) chk.remove(aid);
+          break;
+        case 'onsite_settled':
+          if (aid != null) settled.putIfAbsent(aid, () => CheckState(e.deviceTime, e.staffId));
           break;
         case 'card_link':
           // کارت رزرو که بعداً به کسی وصل شد که بدون کارت ثبت‌نام کرده بود.
@@ -267,7 +271,17 @@ class AppStore extends ChangeNotifier {
     cardOwner = owner;
     checkins = chk;
     mealsServed = served;
+    onsiteSettled = settled;
   }
+
+  /// «تسویه در روز اجرا»ی گزینه‌های صفحه‌ی ثبت‌نام: چه کسی، کی، توسط چه نیرویی.
+  Map<String, CheckState> onsiteSettled = {};
+
+  /// مبلغی که این فرد باید در روز اجرا بدهد و هنوز «تسویه شد» نخورده.
+  int onsiteOwed(Attendee a) => a.onsiteDue > 0 && !onsiteSettled.containsKey(a.id) ? a.onsiteDue : 0;
+
+  void settleOnsite(Attendee a) =>
+      _record('onsite_settled', attendeeId: a.id, payload: {'amount': a.onsiteDue, 'note': a.onsiteNote});
 
   // ---------------------------------------------------------------- پرس‌وجو
 

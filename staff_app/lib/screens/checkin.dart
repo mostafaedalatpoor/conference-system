@@ -580,6 +580,7 @@ class AttendeePanel extends StatelessWidget {
       store.roleName(a.roleId),
       presentationLabel(a.presentationKind),
       if (a.source == 'walkin') 'ثبت‌نام در محل',
+      if (a.source == 'register') 'ثبت‌نام سایت',
     ].where((s) => s.isNotEmpty).toList();
 
     final details = <(String, String, bool)>[
@@ -705,6 +706,7 @@ class AttendeePanel extends StatelessWidget {
               ]),
             ),
           ..._warnings(context, store, a),
+          ..._onsite(context, store, a),
           if (cards && card == null) ...[
             const SizedBox(height: DaftarSize.space3),
             Notice(
@@ -728,6 +730,48 @@ class AttendeePanel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// مبلغ «تسویه در روز اجرا» (گزینه‌هایی مثل ناهار در صفحه‌ی ثبت‌نام): یادآوری و «تسویه شد».
+List<Widget> _onsite(BuildContext context, AppStore store, Attendee a) {
+  if (a.onsiteDue <= 0) return const [];
+  final owed = store.onsiteOwed(a);
+  final amount = '${faDigits(a.onsiteDue.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+$)'), (_) => '٬'))} تومان';
+  final what = a.onsiteNote.isEmpty ? '' : ' برای ${a.onsiteNote}';
+  if (owed == 0) {
+    final s = store.onsiteSettled[a.id]!;
+    final by = s.staffId != null ? store.staffNames[s.staffId] : null;
+    return [
+      const SizedBox(height: DaftarSize.space3),
+      Notice(tone: NoticeTone.go, text: '$amount$what تسویه شده، ساعت ${hm(s.at)}${by != null ? '، نیرو: $by' : ''}.'),
+    ];
+  }
+  return [
+    const SizedBox(height: DaftarSize.space3),
+    Notice(
+      tone: NoticeTone.wait,
+      title: 'تسویه در روز اجرا',
+      text: '$amount$what تسویه نشده است. مبلغ را بگیرید و «تسویه شد» را بزنید.',
+      action: OutlinedButton.icon(
+        icon: const Icon(Icons.payments_rounded),
+        label: const Text('تسویه شد'),
+        onPressed: () async {
+          final ok = await showDialog<bool>(
+            context: context,
+            builder: (c) => AlertDialog(
+              title: const Text('تسویه شد؟'),
+              content: Text('$amount$what از ${a.fullName} گرفته شد؟ در گزارش ثبت می‌شود.'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
+                FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('تسویه شد')),
+              ],
+            ),
+          );
+          if (ok == true) store.settleOnsite(a);
+        },
+      ),
+    ),
+  ];
 }
 
 /// نام خالی، یا نام جایگزین «بی‌نام (ردیف N)» که اپ مدیریت برای ردیف بی‌نام و بی‌تماس می‌گذارد.

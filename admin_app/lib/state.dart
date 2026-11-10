@@ -137,6 +137,11 @@ class Person {
   /// ستون‌های دیگر فایل اکسل ورود (نام ستون → مقدار) برای متن‌های دلخواه کارت.
   Map<String, String> extra;
 
+  /// از صفحه‌ی ثبت‌نام (فقط خواندنی؛ سرور نگه می‌دارد): کد ثبت‌نام و مبلغ «تسویه در روز اجرا».
+  String regCode;
+  int onsiteDue;
+  String onsiteNote;
+
   Person({
     required this.id,
     this.title = '',
@@ -155,6 +160,9 @@ class Person {
     this.shareContact,
     this.website = '',
     Map<String, String>? extra,
+    this.regCode = '',
+    this.onsiteDue = 0,
+    this.onsiteNote = '',
   }) : extra = extra ?? {};
 
   String get fullName => '$firstName $lastName'.trim();
@@ -774,6 +782,9 @@ class AdminState extends ChangeNotifier {
         shareContact: a['share_contact'] as bool?,
         website: (a['website'] ?? '').toString(),
         extra: ((a['extra'] as Map?) ?? const {}).map((k, v) => MapEntry(k.toString(), (v ?? '').toString())),
+        regCode: (a['reg_code'] ?? '').toString(),
+        onsiteDue: (a['onsite_due'] as num?)?.toInt() ?? 0,
+        onsiteNote: (a['onsite_note'] ?? '').toString(),
       );
     }
 
@@ -806,6 +817,13 @@ class AdminState extends ChangeNotifier {
       await loadFonts();
     } catch (_) {
       // افزونه‌ی قدیمی مسیر فونت ندارد؛ فقط وزیرمتن در دسترس است.
+    }
+    // صفحه‌ی ثبت‌نام و ثبت‌نام‌ها؛ افزونه‌ی قدیمی این‌ها را ندارد.
+    try {
+      await loadRegPage();
+      await loadRegistrations();
+    } catch (_) {
+      regEditor = null;
     }
   }
 
@@ -1099,6 +1117,60 @@ class AdminState extends ChangeNotifier {
 
   /// تاریخچه‌ی یک نفر (PersonTimeline): پذیرش، وعده‌ها و موارد مشکوک به ترتیب زمان.
   /// نیازمند مسیر `GET /admin/events/{code}/attendees/{id}/timeline` در افزونه.
+  // ---------------------------------------------------------------- صفحه‌ی ثبت‌نام
+
+  /// تنظیم صفحه + نوع‌ها، وعده‌ها و درگاه‌ها برای ویرایشگر. page null یعنی هنوز ساخته نشده.
+  Map<String, dynamic>? regEditor;
+
+  /// آخرین فهرست ثبت‌نام‌ها و شمارش هر وضعیت.
+  List<Map<String, dynamic>> registrations = [];
+  Map<String, int> regByStatus = {};
+
+  Future<void> loadRegPage() async {
+    regEditor = (await api.get('/admin/events/$eventCode/reg-page') as Map).cast<String, dynamic>();
+    notifyListeners();
+  }
+
+  Future<void> saveRegPage(Map<String, dynamic> config) => run('صفحه‌ی ثبت‌نام ذخیره شد.', () async {
+        regEditor = (await api.post('/admin/events/$eventCode/reg-page', {'config': config}) as Map).cast<String, dynamic>();
+      });
+
+  /// لوگو، سربرگ یا تصویر کارت‌به‌کارت؛ نشانی عمومی برمی‌گردد.
+  Future<String?> uploadRegAsset(Uint8List bytes) async {
+    final r = await run('', () async => (await api.post('/admin/reg-assets', {'data': base64Encode(bytes)}) as Map)['url'].toString());
+    message = null;
+    notifyListeners();
+    return r;
+  }
+
+  Future<void> loadRegistrations() async {
+    final r = (await api.get('/admin/events/$eventCode/registrations') as Map).cast<String, dynamic>();
+    registrations = [for (final x in (r['registrations'] as List? ?? const [])) (x as Map).cast<String, dynamic>()];
+    regByStatus = ((r['by_status'] as Map?) ?? const {}).map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
+    notifyListeners();
+  }
+
+  /// approve | mark_paid | reject
+  Future<void> regAction(int id, String action, {String reason = ''}) => run(
+        const {'approve': 'تأیید شد.', 'mark_paid': 'پرداخت ثبت شد.', 'reject': 'رد شد.'}[action] ?? 'انجام شد.',
+        () async {
+          await api.post('/admin/registrations/$id/action', {'action': action, 'reason': reason});
+          await loadRegistrations();
+          // تأییدشده‌ها شرکت‌کننده شده‌اند.
+          if (action != 'reject') await _loadEvent(eventCode!);
+        },
+      );
+
+  Future<(String, Uint8List)?> loadReceipt(int id) async {
+    final r = (await api.get('/admin/registrations/$id/receipt') as Map);
+    return (r['mime'].toString(), base64Decode(r['data'].toString()));
+  }
+
+  Future<(String, Uint8List)> exportRegistrations() async {
+    final r = (await api.get('/admin/events/$eventCode/registrations/export') as Map);
+    return (r['filename'].toString(), base64Decode(r['data'].toString()));
+  }
+
   Future<List<Map<String, dynamic>>> loadTimeline(String attendeeId) async {
     final r = await api.get('/admin/events/$eventCode/attendees/$attendeeId/timeline');
     final list = r is Map ? (r['events'] as List? ?? const []) : (r as List);

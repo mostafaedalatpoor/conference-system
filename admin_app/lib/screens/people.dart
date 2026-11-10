@@ -31,7 +31,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
     final digits = normalizeMobile(_q.text);
     final out = <Person>[];
     for (final p in s.sortedPeople) {
-      final key = normalizeText('${p.firstName} ${p.lastName} ${p.mobile} ${p.email} ${p.organization} ${p.serial ?? ''}');
+      final key = normalizeText('${p.firstName} ${p.lastName} ${p.mobile} ${p.email} ${p.organization} ${p.serial ?? ''} ${p.regCode}');
       if (words.every(key.contains) || (digits.length >= 4 && normalizeMobile(p.mobile).contains(digits))) out.add(p);
       if (out.length >= 60) break;
     }

@@ -102,6 +102,13 @@ class _ReportScreenState extends State<ReportScreen> {
               value: faDigits(r['totals']['walkins']),
             ),
             StatTile(width: w, label: 'کارت رزرو آزاد', value: faDigits(r['totals']['reserve_cards_free'])),
+            if ((r['totals']['onsite_due'] ?? 0) > 0)
+              StatTile(
+                width: w,
+                label: 'تسویه در روز اجرا (هزار تومان)',
+                value: faDigits(((r['totals']['onsite_settled'] ?? 0) as num) ~/ 1000),
+                of: faDigits(((r['totals']['onsite_due'] as num) ~/ 1000)),
+              ),
             StatTile(
               width: w,
               label: 'موارد مشکوک',

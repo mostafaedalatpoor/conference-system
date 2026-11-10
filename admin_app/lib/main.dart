@@ -10,6 +10,7 @@ import 'screens/config.dart';
 import 'screens/connect.dart';
 import 'screens/import.dart';
 import 'screens/people.dart';
+import 'screens/registration.dart';
 import 'screens/report.dart';
 import 'screens/staff.dart';
 import 'brand.dart';
@@ -69,6 +70,8 @@ List<(int, String, IconData, Widget)> adminSteps(AdminState s) => [
       (2, 'نیروها', Icons.badge_rounded, const StaffScreen()),
       (3, 'شرکت‌کننده‌ها', Icons.upload_file_rounded, const ImportScreen()),
       if (s.settings.usesCards) (4, 'کارت‌ها', Icons.style_rounded, const CardsScreen()),
+      (6, 'صفحه‌ی ثبت‌نام', Icons.public_rounded, const RegPageScreen()),
+      (7, 'ثبت‌نام‌ها', Icons.how_to_reg_rounded, const RegistrationsScreen()),
     ];
 
 /// خط وضعیت واقعی هر مرحله، تا مدیر بدون باز کردن هر بخش بداند آماده است یا نه.
@@ -93,6 +96,17 @@ List<(int, String, IconData, Widget)> adminSteps(AdminState s) => [
       final free = s.reserveCards.where((r) => !r.used).length;
       if (s.event?.locked == true) return ('PDF ساخته شد، ${faDigits(free)} رزرو آزاد', true, false);
       return (s.reserveCards.isEmpty ? 'کارت رزرو ساخته نشده' : '${faDigits(free)} کارت رزرو آزاد', false, false);
+    case 6:
+      final page = s.regEditor?['page'] as Map?;
+      if (page == null) return ('ساخته نشده (اختیاری)', false, false);
+      final st = const {'open': 'باز', 'closed': 'بسته', 'draft': 'پیش‌نویس'}[page['status']] ?? '';
+      return ('$st، ${page['use_prefix'] == true ? 'register/' : ''}${page['path']}', page['status'] == 'open', false);
+    case 7:
+      final waiting = (s.regByStatus['pending_review'] ?? 0) + (s.regByStatus['pending_approval'] ?? 0);
+      final done = s.regByStatus['confirmed'] ?? 0;
+      if (s.regEditor?['page'] == null) return ('بدون صفحه‌ی ثبت‌نام', false, false);
+      if (waiting > 0) return ('${faDigits(waiting)} منتظر تصمیم، ${faDigits(done)} تأییدشده', false, true);
+      return ('${faDigits(done)} تأییدشده', done > 0, false);
     default:
       return ('شمارش زنده‌ی روز اجرا', false, false);
   }

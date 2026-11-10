@@ -45,8 +45,11 @@ class Meal {
         'rules': {'registration_type_ids': typeIds.toList(), 'role_ids': roleIds.toList()},
       };
 
+  /// حق وعده: نوع ثبت‌نام، نقش، یا گزینه‌ی اضافه‌ی صفحه‌ی ثبت‌نام که به این وعده وصل است.
   bool entitles(Attendee a) =>
-      typeIds.contains(a.registrationTypeId) || (a.roleId != null && roleIds.contains(a.roleId));
+      typeIds.contains(a.registrationTypeId) ||
+      (a.roleId != null && roleIds.contains(a.roleId)) ||
+      a.extraMeals.contains(code);
 }
 
 class Attendee {
@@ -63,6 +66,12 @@ class Attendee {
   final int? roleId;
   final String source;
   late final String searchKey;
+
+  /// از صفحه‌ی ثبت‌نام: کد وعده‌های گزینه‌های اضافه، مبلغ «تسویه در روز اجرا» و کد ثبت‌نام.
+  final List<String> extraMeals;
+  final int onsiteDue;
+  final String onsiteNote;
+  final String regCode;
 
   /// نامی که کارت با آن چاپ و در دسته چیده شده؛ اگر نیرو بعداً نام را تکمیل کند، دسته عوض نمی‌شود.
   String? printedLast;
@@ -81,8 +90,12 @@ class Attendee {
     this.presentationKind = '',
     this.roleId,
     this.source = 'import',
+    this.extraMeals = const [],
+    this.onsiteDue = 0,
+    this.onsiteNote = '',
+    this.regCode = '',
   }) {
-    searchKey = normalizeText('$firstName $lastName $mobile $email $organization');
+    searchKey = normalizeText('$firstName $lastName $mobile $email $organization $regCode');
   }
 
   /// نام یا نام خانوادگی در ثبت‌نام خالی مانده؛ هنگام پذیرش هشدار داده می‌شود.
@@ -123,6 +136,10 @@ class Attendee {
       presentationKind: presentationKind,
       roleId: roleId,
       source: source,
+      extraMeals: extraMeals,
+      onsiteDue: onsiteDue,
+      onsiteNote: onsiteNote,
+      regCode: regCode,
     )
       ..printedFirst = printedFirst ?? firstName
       ..printedLast = printedLast ?? lastName;
@@ -141,6 +158,10 @@ class Attendee {
         presentationKind: _str(j['presentation_kind']),
         roleId: _int(j['role_id']),
         source: _str(j['source']).isEmpty ? 'import' : _str(j['source']),
+        extraMeals: ((j['extra_meals'] as List?) ?? const []).map((e) => e.toString()).toList(),
+        onsiteDue: _int(j['onsite_due']) ?? 0,
+        onsiteNote: _str(j['onsite_note']),
+        regCode: _str(j['reg_code']),
       );
 
   Map<String, dynamic> toJson() => {
@@ -156,6 +177,10 @@ class Attendee {
         'presentation_kind': presentationKind,
         'role_id': roleId,
         'source': source,
+        'extra_meals': extraMeals,
+        'onsite_due': onsiteDue,
+        'onsite_note': onsiteNote,
+        'reg_code': regCode,
       };
 }
 
