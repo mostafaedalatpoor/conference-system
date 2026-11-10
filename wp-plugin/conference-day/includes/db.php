@@ -23,6 +23,8 @@ function cd_install_tables() {
     $staff = cd_table('staff');
     $devices = cd_table('devices');
     $log = cd_table('event_log');
+    $reg_pages = cd_table('reg_pages');
+    $regs = cd_table('registrations');
 
     $sql = [];
 
@@ -112,6 +114,10 @@ function cd_install_tables() {
   share_contact tinyint(1) NULL,
   website varchar(255) NOT NULL DEFAULT '',
   extra longtext NULL,
+  extra_meals varchar(1024) NOT NULL DEFAULT '',
+  onsite_due int(11) NOT NULL DEFAULT 0,
+  onsite_note varchar(255) NOT NULL DEFAULT '',
+  reg_code varchar(16) NOT NULL DEFAULT '',
   search_key varchar(512) NOT NULL DEFAULT '',
   created_at datetime NOT NULL,
   updated_at datetime NOT NULL,
@@ -178,6 +184,52 @@ function cd_install_tables() {
   KEY event_seq (event_id,seq),
   KEY attendee_id (attendee_id),
   KEY card_token (card_token)
+) ENGINE=InnoDB $c;";
+
+    // صفحه‌ی ثبت‌نام هر رویداد: یک ردیف، تنظیم‌ها به JSON (cd_sanitize_reg_config).
+    $sql[] = "CREATE TABLE $reg_pages (
+  event_id bigint(20) unsigned NOT NULL,
+  path varchar(191) NOT NULL,
+  status varchar(16) NOT NULL DEFAULT 'draft',
+  config longtext NOT NULL,
+  updated_at datetime NOT NULL,
+  PRIMARY KEY  (event_id),
+  UNIQUE KEY path (path)
+) ENGINE=InnoDB $c;";
+
+    // هر ثبت‌نام از صفحه‌ی عمومی. وضعیت‌ها: cd_reg_statuses().
+    $sql[] = "CREATE TABLE $regs (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  event_id bigint(20) unsigned NOT NULL,
+  code varchar(16) NOT NULL,
+  submit_id char(36) NOT NULL,
+  status varchar(24) NOT NULL,
+  type_code varchar(64) NOT NULL,
+  first_name varchar(191) NOT NULL DEFAULT '',
+  last_name varchar(191) NOT NULL DEFAULT '',
+  mobile varchar(32) NOT NULL DEFAULT '',
+  email varchar(191) NOT NULL DEFAULT '',
+  organization varchar(191) NOT NULL DEFAULT '',
+  answers longtext NULL,
+  addons longtext NULL,
+  amount_online int(11) NOT NULL DEFAULT 0,
+  amount_onsite int(11) NOT NULL DEFAULT 0,
+  pay_method varchar(16) NOT NULL DEFAULT '',
+  pay_authority varchar(191) NOT NULL DEFAULT '',
+  pay_ref varchar(191) NOT NULL DEFAULT '',
+  pay_tracking varchar(191) NOT NULL DEFAULT '',
+  receipt_file varchar(191) NOT NULL DEFAULT '',
+  reject_reason varchar(500) NOT NULL DEFAULT '',
+  attendee_id char(36) NULL,
+  hold_until datetime NULL,
+  ip varchar(64) NOT NULL DEFAULT '',
+  created_at datetime NOT NULL,
+  updated_at datetime NOT NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY code (code),
+  UNIQUE KEY submit_id (submit_id),
+  KEY event_status (event_id,status),
+  KEY mobile (mobile)
 ) ENGINE=InnoDB $c;";
 
     foreach ($sql as $s) {

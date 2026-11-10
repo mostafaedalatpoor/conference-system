@@ -23,6 +23,7 @@ const CD_KIND_LABELS = [
     'meal_served' => 'تحویل وعده',
     'attendee_update' => 'تکمیل اطلاعات',
     'card_link' => 'وصل‌کردن کارت رزرو',
+    'onsite_settled' => 'تسویه در روز اجرا',
 ];
 
 /**
@@ -60,7 +61,7 @@ function cd_build_report(array $event) {
     $eid = (int) $event['id'];
     $config = cd_event_config($eid);
     $attendees = $wpdb->get_results($wpdb->prepare(
-        'SELECT id, first_name, last_name, registration_type_id, role_id, source FROM ' . cd_table('attendees') . ' WHERE event_id = %d',
+        'SELECT id, first_name, last_name, registration_type_id, role_id, source, extra_meals, onsite_due FROM ' . cd_table('attendees') . ' WHERE event_id = %d',
         $eid
     ), ARRAY_A);
     $states = cd_attendee_states($eid);
@@ -103,7 +104,7 @@ function cd_build_report(array $event) {
         $extra = 0;
         foreach ($attendees as $a) {
             $role = $a['role_id'] !== null ? (int) $a['role_id'] : null;
-            if (cd_is_entitled($m['rules'], $a['registration_type_id'], $role)) {
+            if (cd_is_entitled($m['rules'], $a['registration_type_id'], $role, $m['code'], $a['extra_meals'])) {
                 $entitled++;
             }
             $count = $states[$a['id']]['meals'][$m['id']] ?? 0;

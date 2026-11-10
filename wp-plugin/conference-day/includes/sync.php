@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served', 'attendee_update', 'card_link'];
+const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served', 'attendee_update', 'card_link', 'onsite_settled'];
 
 /** فیلدهایی که نیرو می‌تواند برای فردِ ناقص تکمیل کند. */
 const CD_COMPLETABLE_FIELDS = ['first_name', 'last_name', 'mobile', 'email'];
@@ -237,6 +237,12 @@ function cd_validate_event_item($e, array $meals, $cards_required = true) {
             }
             // کارت رزرو تمام شده باشد، بدون کارت هم ثبت می‌شود (با flag برای گزارش).
             break;
+        case 'onsite_settled':
+            // «تسویه شد» برای مبلغ گزینه‌های «تسویه در روز اجرا».
+            if (!$has_att) {
+                return 'missing_target';
+            }
+            break;
         case 'card_link':
             // وصل‌کردن کارت رزرو به کسی که بدون کارت ثبت‌نام شده بود.
             if (!$has_card || !$has_att) {
@@ -353,14 +359,14 @@ function cd_checkin_flag($event_id, $attendee_id, $seq) {
 function cd_meal_flag($event_id, $attendee_id, array $meal, $seq) {
     global $wpdb;
     $a = $wpdb->get_row($wpdb->prepare(
-        'SELECT registration_type_id, role_id FROM ' . cd_table('attendees') . ' WHERE id = %s AND event_id = %d',
+        'SELECT registration_type_id, role_id, extra_meals FROM ' . cd_table('attendees') . ' WHERE id = %s AND event_id = %d',
         $attendee_id,
         $event_id
     ), ARRAY_A);
     if (!$a) {
         return 'unknown_attendee';
     }
-    if (!cd_is_entitled($meal['rules'], $a['registration_type_id'], $a['role_id'] !== null ? (int) $a['role_id'] : null)) {
+    if (!cd_is_entitled($meal['rules'], $a['registration_type_id'], $a['role_id'] !== null ? (int) $a['role_id'] : null, $meal['code'], $a['extra_meals'])) {
         return 'not_entitled';
     }
     $before = $wpdb->get_var($wpdb->prepare(

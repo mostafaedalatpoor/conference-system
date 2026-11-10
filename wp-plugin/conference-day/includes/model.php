@@ -45,6 +45,7 @@ function cd_search_key(array $a) {
         $a['mobile'] ?? '',
         $a['email'] ?? '',
         $a['organization'] ?? '',
+        $a['reg_code'] ?? '',
     ]));
 }
 
@@ -80,6 +81,14 @@ function cd_upsert_attendee($event_id, array $a, $source, $only_insert = false) 
         $extra = cd_sanitize_extra($a['extra']);
         $row['extra'] = $extra ? wp_json_encode($extra) : null;
     }
+    foreach (['extra_meals', 'onsite_note', 'reg_code'] as $k) {
+        if (array_key_exists($k, $a)) {
+            $row[$k] = cd_str($a[$k], $k === 'extra_meals' ? 1024 : 255);
+        }
+    }
+    if (array_key_exists('onsite_due', $a)) {
+        $row['onsite_due'] = max(0, (int) $a['onsite_due']);
+    }
     $row['search_key'] = cd_search_key($row);
 
     $table = cd_table('attendees');
@@ -113,6 +122,10 @@ function cd_upsert_attendee($event_id, array $a, $source, $only_insert = false) 
         $sql .= ' ON DUPLICATE KEY UPDATE ' . implode(', ', $updates);
     }
     return $wpdb->query($wpdb->prepare($sql, $values)) !== false;
+}
+
+function cd_split_codes($s) {
+    return array_values(array_filter(explode(',', (string) $s), 'strlen'));
 }
 
 /** ستون‌های اضافه‌ی یک نفر: حداکثر ۵۰ ستون، نام ستون ۱۰۰ و مقدار ۵۰۰ نویسه. */
@@ -152,6 +165,11 @@ function cd_attendee_out(array $r, $with_extra = false) {
         'source' => $r['source'],
         'share_contact' => isset($r['share_contact']) && $r['share_contact'] !== null ? (bool) $r['share_contact'] : null,
         'website' => $r['website'] ?? '',
+        // از صفحه‌ی ثبت‌نام: وعده‌های گزینه‌های اضافه (کد وعده)، مبلغ تسویه در روز اجرا، کد ثبت‌نام.
+        'extra_meals' => cd_split_codes($r['extra_meals'] ?? ''),
+        'onsite_due' => (int) ($r['onsite_due'] ?? 0),
+        'onsite_note' => $r['onsite_note'] ?? '',
+        'reg_code' => $r['reg_code'] ?? '',
     ];
     if ($with_extra) {
         $extra = !empty($r['extra']) ? json_decode($r['extra'], true) : null;
@@ -305,8 +323,12 @@ function cd_event_out(array $e) {
 }
 
 /** آیا نوع ثبت‌نام یا نقش این فرد شامل این وعده است؟ */
-function cd_is_entitled(array $meal_rules, $registration_type_id, $role_id) {
+function cd_is_entitled(array $meal_rules, $registration_type_id, $role_id, $meal_code = null, $extra_meals = '') {
     if (in_array((int) $registration_type_id, $meal_rules['registration_type_ids'], true)) {
+        return true;
+    }
+    // گزینه‌ی اضافه‌ی صفحه‌ی ثبت‌نام (مثلاً «ناهار روز اول») که به این وعده وصل است.
+    if ($meal_code !== null && in_array($meal_code, cd_split_codes($extra_meals), true)) {
         return true;
     }
     return $role_id !== null && in_array((int) $role_id, $meal_rules['role_ids'], true);
