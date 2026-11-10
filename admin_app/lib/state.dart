@@ -51,10 +51,13 @@ class MealDef {
   String day;
   Set<String> types;
   Set<String> roles;
-  MealDef(this.code, this.name, this.day, this.types, this.roles);
+
+  /// ساعت شروع اختیاری «۱۳:۰۰»؛ اپ نیروها وعده‌ی «الان» را با آن انتخاب می‌کند.
+  String time;
+  MealDef(this.code, this.name, this.day, this.types, this.roles, [this.time = '']);
 
   Map<String, dynamic> toJson() =>
-      {'code': code, 'name': name, 'day': day, 'registration_types': types.toList(), 'roles': roles.toList()};
+      {'code': code, 'name': name, 'day': day, 'time': time, 'registration_types': types.toList(), 'roles': roles.toList()};
 
   factory MealDef.fromJson(Map<String, dynamic> j) => MealDef(
         j['code'].toString(),
@@ -62,6 +65,7 @@ class MealDef {
         (j['day'] ?? '').toString(),
         ((j['registration_types'] as List?) ?? []).map((e) => e.toString()).toSet(),
         ((j['roles'] as List?) ?? []).map((e) => e.toString()).toSet(),
+        (j['time'] ?? '').toString(),
       );
 }
 
@@ -745,6 +749,7 @@ class AdminState extends ChangeNotifier {
               .whereType<String>()
               .toSet(),
           (((m['rules'] as Map?)?['role_ids'] as List?) ?? []).map((id) => roleById[id as int]).whereType<String>().toSet(),
+          (m['time'] ?? '').toString(),
         ),
     ];
     sessions = list('sessions').map(SessionDef.fromJson).toList();

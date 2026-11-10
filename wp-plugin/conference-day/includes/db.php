@@ -69,6 +69,7 @@ function cd_install_tables() {
   code varchar(64) NOT NULL,
   day date NULL,
   name varchar(191) NOT NULL,
+  start_time varchar(5) NOT NULL DEFAULT '',
   sort int(11) NOT NULL DEFAULT 0,
   PRIMARY KEY  (id),
   UNIQUE KEY event_code (event_id,code)

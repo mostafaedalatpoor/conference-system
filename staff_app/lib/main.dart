@@ -1,6 +1,11 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'android/android_app.dart';
+import 'android/nv_theme.dart';
 import 'screens/home.dart';
 import 'screens/setup.dart';
 import 'brand.dart';
@@ -25,11 +30,17 @@ class StoreScope extends InheritedNotifier<AppStore> {
       context.getInheritedWidgetOfExactType<StoreScope>()!.notifier!;
 }
 
+/// ظاهر تازه فقط روی اندروید؛ ویندوز تا طراحی کاملش همان دفتر می‌ماند.
+bool get useAndroidDesign => !kIsWeb && Platform.isAndroid;
+
 class StaffApp extends StatelessWidget {
-  const StaffApp({super.key});
+  /// برای تست و پیش‌نمایش؛ پیش‌فرض بر اساس سکو.
+  final bool? android;
+  const StaffApp({super.key, this.android});
 
   @override
   Widget build(BuildContext context) {
+    final nv = android ?? useAndroidDesign;
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,
@@ -40,11 +51,11 @@ class StaffApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: daftarTheme(Brightness.light),
-      darkTheme: daftarTheme(Brightness.dark),
+      theme: nv ? nvTheme(Brightness.light) : daftarTheme(Brightness.light),
+      darkTheme: nv ? nvTheme(Brightness.dark) : daftarTheme(Brightness.dark),
       // بزرگ‌نمایی متن سیستم تا ۱٫۳ برابر؛ بالاتر از آن چیدمان صفحه‌ی اسکن و شیت می‌شکند.
       builder: (context, child) => MediaQuery.withClampedTextScaling(maxScaleFactor: 1.3, child: child!),
-      home: const _Root(),
+      home: nv ? const NvRoot() : const _Root(),
     );
   }
 }

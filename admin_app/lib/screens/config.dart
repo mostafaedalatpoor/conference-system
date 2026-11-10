@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../excel_import.dart';
 import '../main.dart';
+import '../normalize.dart';
 import '../theme/daftar.dart';
 import '../theme/widgets.dart';
 import '../state.dart';
@@ -205,7 +206,7 @@ class _MealEditor extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             SizedBox(
-              width: narrow ? c.maxWidth - 140 - 12 - 4 : c.maxWidth - 140 - 150 - 24 - 64,
+              width: narrow ? c.maxWidth - 140 - 12 - 4 : c.maxWidth - 140 - 150 - 24 - 64 - 112,
               child: TextFormField(
                 initialValue: meal.name,
                 decoration: const InputDecoration(labelText: 'نام وعده', isDense: true),
@@ -220,6 +221,17 @@ class _MealEditor extends StatelessWidget {
                 decoration: const InputDecoration(labelText: 'روز (میلادی)', isDense: true),
                 textDirection: TextDirection.ltr,
                 onChanged: (v) => meal.day = v.trim(),
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 100,
+              child: TextFormField(
+                initialValue: faDigits(meal.time),
+                decoration: const InputDecoration(labelText: 'ساعت (اختیاری)', hintText: '۱۳:۰۰', isDense: true),
+                textDirection: TextDirection.ltr,
+                keyboardType: TextInputType.datetime,
+                onChanged: (v) => meal.time = latinDigits(v.trim()),
               ),
             ),
             IconButton(

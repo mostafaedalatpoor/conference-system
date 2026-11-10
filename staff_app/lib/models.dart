@@ -23,7 +23,10 @@ class Meal {
   final Set<int> typeIds;
   final Set<int> roleIds;
 
-  Meal(this.id, this.code, this.name, this.day, this.typeIds, this.roleIds);
+  /// ساعت شروع «13:00» (اختیاری).
+  final String time;
+
+  Meal(this.id, this.code, this.name, this.day, this.typeIds, this.roleIds, [this.time = '']);
 
   factory Meal.fromJson(Map<String, dynamic> j) {
     final rules = (j['rules'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -34,6 +37,7 @@ class Meal {
       j['day']?.toString(),
       ((rules['registration_type_ids'] as List?) ?? const []).map((e) => _int(e)!).toSet(),
       ((rules['role_ids'] as List?) ?? const []).map((e) => _int(e)!).toSet(),
+      _str(j['time']),
     );
   }
 
@@ -42,6 +46,7 @@ class Meal {
         'code': code,
         'name': name,
         'day': day,
+        'time': time,
         'rules': {'registration_type_ids': typeIds.toList(), 'role_ids': roleIds.toList()},
       };
 

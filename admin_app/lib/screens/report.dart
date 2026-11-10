@@ -155,7 +155,10 @@ class _ReportScreenState extends State<ReportScreen> {
             dense: true,
             leading: Icon(Icons.warning_rounded, color: x.wait),
             title: Text('${f['flag_label']} — ${(f['name'] as String?)?.isNotEmpty == true ? f['name'] : 'بدون نام'}'),
-            subtitle: Text('ساعت ${_time(f['device_time'] as String?)}${f['staff'] != null ? '، ${f['staff']}' : ''}'),
+            subtitle: Text([
+              'ساعت ${_time(f['device_time'] as String?)}${f['staff'] != null ? '، ${f['staff']}' : ''}',
+              if ('${f['detail'] ?? ''}'.isNotEmpty) '${f['detail']}',
+            ].join('\n')),
           ),
         const SectionTitle('گوشی‌ها'),
         for (final d in r['devices'] as List) DeviceRow(device: (d as Map).cast<String, dynamic>()),

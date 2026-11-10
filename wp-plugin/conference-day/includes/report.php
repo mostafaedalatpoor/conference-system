@@ -12,6 +12,8 @@ const CD_FLAG_LABELS = [
     'possible_duplicate' => 'موبایل تکراری (احتمالاً ثبت دوباره)',
     'unknown_attendee' => 'کارت به کسی وصل نیست',
     'bad_registration_type' => 'نوع ثبت‌نام نامعتبر',
+    'meal_override' => 'تحویل با مجوز شفاهی',
+    'staff_note' => 'خبر از نیرو',
     'walkin_no_card' => 'ثبت‌نام در محل بدون کارت (کارت رزرو تمام شده بود)',
     'attendee_has_card' => 'این فرد از قبل کارت دارد',
 ];
@@ -24,6 +26,7 @@ const CD_KIND_LABELS = [
     'attendee_update' => 'تکمیل اطلاعات',
     'card_link' => 'وصل‌کردن کارت رزرو',
     'onsite_settled' => 'تسویه در روز اجرا',
+    'staff_note' => 'خبر به مدیر',
 ];
 
 /**
@@ -127,7 +130,7 @@ function cd_build_report(array $event) {
             }
         }
         $not_entitled = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM " . cd_table('event_log') . " WHERE event_id = %d AND meal_id = %d AND flag = 'not_entitled'",
+            "SELECT COUNT(*) FROM " . cd_table('event_log') . " WHERE event_id = %d AND meal_id = %d AND flag IN ('not_entitled', 'meal_override')",
             $eid,
             $m['id']
         ));
@@ -143,7 +146,7 @@ function cd_build_report(array $event) {
     }
 
     $flagged = $wpdb->get_results($wpdb->prepare(
-        'SELECT l.seq, l.kind, l.flag, l.device_time, l.card_token, a.first_name, a.last_name, s.name AS staff_name
+        'SELECT l.seq, l.kind, l.flag, l.device_time, l.card_token, l.payload, a.first_name, a.last_name, s.name AS staff_name
          FROM ' . cd_table('event_log') . ' l
          LEFT JOIN ' . cd_table('attendees') . ' a ON a.id = l.attendee_id
          LEFT JOIN ' . cd_table('staff') . ' s ON s.id = l.staff_id
@@ -188,6 +191,8 @@ function cd_build_report(array $event) {
                 'staff' => $f['staff_name'],
                 'card_token' => $f['card_token'],
                 'device_time' => cd_iso($f['device_time']),
+                // جزئیات: نام اجازه‌دهنده‌ی مجوز شفاهی، یا متن «خبر به مدیر».
+                'detail' => cd_flag_detail($f),
             ];
         }, $flagged),
         'devices' => array_map(function ($d) {
@@ -254,4 +259,18 @@ function cd_export_csv(array $event) {
     $csv = stream_get_contents($out);
     fclose($out);
     return $csv;
+}
+
+function cd_flag_detail(array $f) {
+    $p = !empty($f['payload']) ? json_decode($f['payload'], true) : null;
+    if (!is_array($p)) {
+        return '';
+    }
+    if ($f['flag'] === 'meal_override') {
+        return 'اجازه: ' . cd_str($p['override_by'] ?? '', 100);
+    }
+    if ($f['flag'] === 'staff_note') {
+        return cd_str($p['text'] ?? '', 500);
+    }
+    return '';
 }

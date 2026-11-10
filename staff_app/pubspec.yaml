@@ -1,7 +1,7 @@
 name: conference_staff
 description: رویداد یار (Roydadyar) — اپ نیروهای اجرایی روز کنفرانس — پذیرش، ثبت‌نام در محل و پذیرایی، آفلاین.
 publish_to: 'none'
-version: 0.3.0+3
+version: 0.4.0+4
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -33,5 +33,7 @@ flutter:
         - asset: assets/fonts/Vazirmatn-Regular.ttf
         - asset: assets/fonts/Vazirmatn-SemiBold.ttf
           weight: 600
+        - asset: assets/fonts/Vazirmatn-Bold.ttf
+          weight: 700
         - asset: assets/fonts/Vazirmatn-ExtraBold.ttf
           weight: 800

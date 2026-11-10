@@ -272,14 +272,17 @@ function cd_rest_config(WP_REST_Request $request) {
             $c = $m['code'] ?? null;
             $n = cd_str($m['name'] ?? '');
             $day = $m['day'] ?? null;
+            // ساعت شروع اختیاری؛ اپ نیروها وعده‌ی «الان» را با آن پیدا می‌کند.
+            $tm = cd_latin_digits((string) ($m['time'] ?? ''));
+            $time = preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $tm) ? $tm : '';
             if (!cd_is_code($c) || $n === '' || ($day !== null && $day !== '' && !cd_valid_date($day))) {
                 $errors[] = ['section' => 'meals', 'index' => $i, 'reason' => 'bad_meal'];
                 continue;
             }
             $wpdb->query($wpdb->prepare(
-                'INSERT INTO ' . cd_table('meals') . ' (event_id, code, day, name, sort) VALUES (%d, %s, ' . ($day ? '%s' : 'NULL') . ', %s, %d)
-                 ON DUPLICATE KEY UPDATE day = VALUES(day), name = VALUES(name), sort = VALUES(sort)',
-                array_values(array_filter([$eid, $c, $day ?: null, $n, (int) ($m['sort'] ?? $i)], function ($v) {
+                'INSERT INTO ' . cd_table('meals') . ' (event_id, code, day, name, start_time, sort) VALUES (%d, %s, ' . ($day ? '%s' : 'NULL') . ', %s, %s, %d)
+                 ON DUPLICATE KEY UPDATE day = VALUES(day), name = VALUES(name), start_time = VALUES(start_time), sort = VALUES(sort)',
+                array_values(array_filter([$eid, $c, $day ?: null, $n, $time, (int) ($m['sort'] ?? $i)], function ($v) {
                     return $v !== null;
                 }))
             ));

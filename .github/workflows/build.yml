@@ -3,7 +3,7 @@ name: build
 # رویدادیار: اپ نیروها و اپ مدیریت، هر کدام روی اندروید و ویندوز.
 on:
   push:
-    branches: [main, design-system-daftar]
+    branches: [main, design-system-daftar, staff-android-redesign]
     # تگ نسخه (مثلاً v0.2.0) همه را می‌سازد و در Releases منتشر می‌کند.
     tags: ['v*']
   workflow_dispatch:
@@ -85,7 +85,7 @@ jobs:
       - name: فونت وزیرمتن (OFL)
         run: |
           mkdir -p assets/fonts
-          for w in Regular SemiBold ExtraBold; do
+          for w in Regular SemiBold Bold ExtraBold; do
             curl -fsSL -o "assets/fonts/Vazirmatn-$w.ttf" "$VAZIRMATN/Vazirmatn-$w.ttf"
           done
 
@@ -143,7 +143,7 @@ jobs:
       - name: فونت وزیرمتن (OFL)
         run: |
           mkdir -p assets/fonts
-          for w in Regular SemiBold ExtraBold; do
+          for w in Regular SemiBold Bold ExtraBold; do
             curl -fsSL -o "assets/fonts/Vazirmatn-$w.ttf" "$VAZIRMATN/Vazirmatn-$w.ttf"
           done
 

@@ -1,7 +1,7 @@
 name: conference_admin
 description: رویداد یار (Roydadyar) — اپ مدیریت کنفرانس برای ویندوز — ورود اکسل، ساخت کارت و PDF، تنظیم رویداد و گزارش.
 publish_to: 'none'
-version: 0.3.0+3
+version: 0.4.0+4
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

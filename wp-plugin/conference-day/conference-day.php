@@ -3,7 +3,7 @@
  * Plugin Name: رویدادیار (RoydadYar)
  * Plugin URI: https://newvisionteam.ir
  * Description: سامانه‌ی روز اجرای رویداد: API همگام‌سازی برای اپ نیروها و اپ مدیریت، صفحه‌ی عمومی /c/&lt;token&gt;، و داشبورد زنده.
- * Version: 0.3.0
+ * Version: 0.4.0
  * Author: NewVisionteam - تیم راهکارهای نرم‌افزاری نگاه جدید
  * Author URI: https://newvisionteam.ir
  * Requires at least: 5.6
@@ -16,8 +16,8 @@ if (!defined('ABSPATH')) {
 }
 
 // نام‌های فنی (پوشه‌ی افزونه، مسیر API conf/v1، پیشوند جدول‌ها wp_cd_) عوض نمی‌شوند تا داده و اپ‌های نصب‌شده بمانند.
-define('CD_VERSION', '0.3.0');
-define('CD_DB_VERSION', '4');
+define('CD_VERSION', '0.4.0');
+define('CD_DB_VERSION', '5');
 define('CD_NS', 'conf/v1');
 define('CD_DIR', plugin_dir_path(__FILE__));
 

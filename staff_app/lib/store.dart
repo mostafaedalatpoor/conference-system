@@ -144,6 +144,7 @@ class AppStore extends ChangeNotifier {
         'cursor': cursor,
         'last_sync_ok': lastSyncOk?.toIso8601String(),
         'selected_meal_id': selectedMealId,
+        'approvers': approvers,
         'settings': {'identify_mode': identifyMode},
       };
 
@@ -167,6 +168,7 @@ class AppStore extends ChangeNotifier {
     cursor = (j['cursor'] as int?) ?? 0;
     lastSyncOk = DateTime.tryParse((j['last_sync_ok'] as String?) ?? '');
     selectedMealId = j['selected_meal_id'] as int?;
+    approvers = ((j['approvers'] as List?) ?? const []).map((e) => e.toString()).toList();
   }
 
   /// فقط برای آزمون: داده‌ی ذخیره‌شده را بدون شبکه بار می‌کند.
@@ -174,6 +176,7 @@ class AppStore extends ChangeNotifier {
   void loadForTest(Map<String, dynamic> j) {
     _fromJson(j);
     _recompute();
+    _loaded = true;
   }
 
   static List<Map<String, dynamic>> _list(dynamic v) =>
@@ -438,8 +441,66 @@ class AppStore extends ChangeNotifier {
     ];
   }
 
-  void serveMeal(Attendee a, Meal m) =>
-      _record('meal_served', attendeeId: a.id, mealId: m.id, cardToken: cardOf(a.id)?.token);
+  /// [overrideBy]: «تحویل با مجوز شفاهی»؛ نام کسی که اجازه داد. در گزارش مدیر علامت می‌خورد.
+  void serveMeal(Attendee a, Meal m, {String? overrideBy}) {
+    final by = overrideBy?.trim() ?? '';
+    if (by.isNotEmpty) {
+      approvers = [by, ...approvers.where((x) => x != by)].take(6).toList();
+    }
+    _record('meal_served', attendeeId: a.id, mealId: m.id, cardToken: cardOf(a.id)?.token,
+        payload: by.isEmpty ? null : {'override_by': by});
+  }
+
+  /// نام‌های اجازه‌دهنده‌ی اخیر برای انتخاب سریع.
+  List<String> approvers = [];
+
+  /// «خبر به مدیر» برای کاری که سرور نپذیرفت؛ در موارد مشکوک گزارش می‌آید.
+  void reportToAdmin(Map<String, dynamic> rejectedItem, String text) {
+    _record('staff_note', attendeeId: rejectedItem['attendee_id']?.toString(), payload: {
+      'text': text,
+      'reason': rejectedItem['reason'],
+      'uuid': rejectedItem['uuid'],
+    });
+    dismissRejected(rejectedItem);
+  }
+
+  void dismissRejected(Map<String, dynamic> item) {
+    rejected.remove(item);
+    _scheduleSave();
+    notifyListeners();
+  }
+
+  /// کارهای ارسال‌نشده به تفکیک: «۲ پذیرش و ۱ تحویل ناهار».
+  String pendingSummary() {
+    final parts = <String, int>{};
+    for (final e in pending) {
+      final label = switch (e.kind) {
+        'checkin' => 'پذیرش',
+        'checkin_undo' => 'لغو پذیرش',
+        'walkin_register' => 'ثبت‌نام در محل',
+        'meal_served' => 'تحویل ${meals.where((m) => m.id == e.mealId).firstOrNull?.name ?? 'وعده'}',
+        'attendee_update' => 'تکمیل اطلاعات',
+        'card_link' => 'وصل کارت',
+        'onsite_settled' => 'تسویه',
+        _ => 'کار دیگر',
+      };
+      parts[label] = (parts[label] ?? 0) + 1;
+    }
+    return parts.entries.map((e) => '${faDigits(e.value)} ${e.key}').join(' و ');
+  }
+
+  /// وعده‌ی «الان» امروز: آخرین وعده‌ای که ساعتش رسیده، وگرنه اولین وعده‌ی امروز.
+  Meal? currentMealFor(DateTime now) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    final today = '${now.year}-${two(now.month)}-${two(now.day)}';
+    final hm = '${two(now.hour)}:${two(now.minute)}';
+    final list = meals.where((m) => m.day != null && m.day!.startsWith(today)).toList()
+      // وعده‌ی بی‌ساعت آخر می‌آید.
+      ..sort((a, b) => (a.time.isEmpty ? '99' : a.time).compareTo(b.time.isEmpty ? '99' : b.time));
+    if (list.isEmpty) return null;
+    final started = list.where((m) => m.time.isNotEmpty && m.time.compareTo(hm) <= 0).toList();
+    return started.isNotEmpty ? started.last : list.first;
+  }
 
   /// ثبت‌نام در محل: شرکت‌کننده‌ی جدید + وصل‌کردن کارت رزرو + پذیرش.
   Attendee walkin({

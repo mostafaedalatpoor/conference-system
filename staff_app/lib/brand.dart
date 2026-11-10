@@ -5,7 +5,7 @@ const appName = 'رویدادیار نیروها';
 const appNameLatin = 'RoydadYar Staff';
 
 /// نسخه از pubspec.yaml؛ ساخت گیت‌هاب آن را با --dart-define می‌دهد. پیش‌فرض برای ساخت محلی است.
-const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '0.3.0');
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '0.4.0');
 
 /// شماره‌ی ساخت گیت‌هاب؛ هر ساخت شماره‌ی جدا دارد تا نسخه‌ها هنگام نصب قاطی نشوند.
 const appBuild = String.fromEnvironment('APP_BUILD');

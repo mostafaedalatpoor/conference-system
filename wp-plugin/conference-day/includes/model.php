@@ -200,7 +200,7 @@ function cd_event_config($event_id) {
     global $wpdb;
     $types = $wpdb->get_results($wpdb->prepare('SELECT id, code, name FROM ' . cd_table('registration_types') . ' WHERE event_id = %d ORDER BY id', $event_id), ARRAY_A);
     $roles = $wpdb->get_results($wpdb->prepare('SELECT id, code, name FROM ' . cd_table('roles') . ' WHERE event_id = %d ORDER BY id', $event_id), ARRAY_A);
-    $meals = $wpdb->get_results($wpdb->prepare('SELECT id, code, day, name, sort FROM ' . cd_table('meals') . ' WHERE event_id = %d ORDER BY day, sort, id', $event_id), ARRAY_A);
+    $meals = $wpdb->get_results($wpdb->prepare('SELECT id, code, day, name, start_time, sort FROM ' . cd_table('meals') . ' WHERE event_id = %d ORDER BY day, start_time, sort, id', $event_id), ARRAY_A);
     $sessions = $wpdb->get_results($wpdb->prepare('SELECT id, day, start_time, end_time, title, hall, kind FROM ' . cd_table('sessions') . ' WHERE event_id = %d ORDER BY day, start_time, sort, id', $event_id), ARRAY_A);
 
     $meal_ids = array_map(function ($m) {
@@ -238,6 +238,7 @@ function cd_event_config($event_id) {
             'id' => $mid,
             'code' => $m['code'],
             'day' => $m['day'],
+            'time' => $m['start_time'] ?? '',
             'name' => $m['name'],
             'rules' => $rules_by_meal[$mid] ?? ['registration_type_ids' => [], 'role_ids' => []],
         ];

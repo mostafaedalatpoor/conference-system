@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served', 'attendee_update', 'card_link', 'onsite_settled'];
+const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served', 'attendee_update', 'card_link', 'onsite_settled', 'staff_note'];
 
 /** فیلدهایی که نیرو می‌تواند برای فردِ ناقص تکمیل کند. */
 const CD_COMPLETABLE_FIELDS = ['first_name', 'last_name', 'mobile', 'email'];
@@ -169,6 +169,13 @@ function cd_push_events(array $event, array $device, array $items) {
             $flag = cd_apply_attendee_update($eid, $attendee_id, $payload);
         } elseif ($kind === 'meal_served') {
             $flag = $attendee_id === null ? 'unknown_attendee' : cd_meal_flag($eid, $attendee_id, $meals[$meal_id], $seq);
+            // «تحویل با مجوز شفاهی»: نیرو می‌دانست شامل نیست و با اجازه‌ی کسی تحویل داد.
+            if ($flag === 'not_entitled' && cd_str($payload['override_by'] ?? '', 100) !== '') {
+                $flag = 'meal_override';
+            }
+        } elseif ($kind === 'staff_note') {
+            // «خبر به مدیر» از گوشی نیرو؛ در موارد مشکوک گزارش می‌آید.
+            $flag = 'staff_note';
         }
 
         if ($flag !== null) {
@@ -236,6 +243,11 @@ function cd_validate_event_item($e, array $meals, $cards_required = true) {
                 return 'walkin_missing_name';
             }
             // کارت رزرو تمام شده باشد، بدون کارت هم ثبت می‌شود (با flag برای گزارش).
+            break;
+        case 'staff_note':
+            if (cd_str($e['payload']['text'] ?? '', 500) === '') {
+                return 'bad_note';
+            }
             break;
         case 'onsite_settled':
             // «تسویه شد» برای مبلغ گزینه‌های «تسویه در روز اجرا».
