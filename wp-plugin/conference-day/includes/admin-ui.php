@@ -41,10 +41,11 @@ add_action('admin_post_cd_export_csv', function () {
     if (!$event) {
         wp_die('رویداد پیدا نشد.', 404);
     }
+    $opts = cd_export_opts_from_request($_GET);
     nocache_headers();
     header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . sanitize_file_name($event['code'] . '-' . gmdate('Ymd-His') . '.csv') . '"');
-    echo cd_export_csv($event); // phpcs:ignore WordPress.Security.EscapeOutput
+    header('Content-Disposition: attachment; filename="' . sanitize_file_name($event['code'] . '-' . gmdate('Ymd-His') . ($opts['custom'] ? '-custom' : '') . '.csv') . '"');
+    echo cd_export_csv($event, $opts); // phpcs:ignore WordPress.Security.EscapeOutput
     exit;
 });
 
@@ -182,6 +183,7 @@ function cd_render_dashboard() {
 
     $csv = wp_nonce_url(admin_url('admin-post.php?action=cd_export_csv&event=' . (int) $current['id']), 'cd_export_csv');
     printf('<p style="margin-top:20px"><a class="button button-primary" href="%s">دانلود CSV شرکت‌کننده‌ها و وضعیتشان</a></p>', esc_url($csv));
+    cd_render_custom_export((int) $current['id']);
     echo '</div>';
 }
 
@@ -277,4 +279,54 @@ function cd_render_settings() {
     echo '<p style="margin:4px 0 0"><a href="https://newvisionteam.ir" target="_blank" rel="noopener" dir="ltr">newvisionteam.ir</a></p>';
     echo '</div>';
     echo '</div>';
+}
+
+/** فیلتر خروجی از پارامترهای فرم: «n دقیقه/ساعت اخیر»، یا از تا (وقت تهران)، و بازه‌ی ردیف. */
+function cd_export_opts_from_request(array $q) {
+    $opts = ['custom' => false];
+    $last = (int) cd_latin_digits((string) ($q['last'] ?? ''));
+    $unit = ($q['unit'] ?? 'h') === 'm' ? 'm' : 'h';
+    $from = cd_local_to_utc($q['from'] ?? '');
+    $to = cd_local_to_utc($q['to'] ?? '');
+    if ($from || $to) {
+        // از تا بر «n اخیر» مقدم است.
+        $opts['since'] = $from;
+        $opts['until'] = $to;
+    } elseif ($last > 0) {
+        $sec = $last * ($unit === 'm' ? 60 : 3600);
+        $opts['since'] = gmdate('Y-m-d H:i:s', time() - min($sec, 400 * 86400));
+    }
+    if (!empty($opts['since']) || !empty($opts['until'])) {
+        $opts['basis'] = ($q['basis'] ?? 'checkin') === 'activity' ? 'activity' : 'checkin';
+        $opts['custom'] = true;
+    }
+    $rf = (int) cd_latin_digits((string) ($q['row_from'] ?? ''));
+    $rt = (int) cd_latin_digits((string) ($q['row_to'] ?? ''));
+    if ($rf > 0 || $rt > 0) {
+        $opts['row_from'] = max(1, $rf);
+        $opts['row_to'] = max(0, $rt);
+        $opts['custom'] = true;
+    }
+    return $opts;
+}
+
+/** فرم «خروجی دلخواه»: زمان (یک ساعت اخیر، یا از تا) و ردیف از تا. */
+function cd_render_custom_export($event_id) {
+    $nonce = wp_create_nonce('cd_export_csv');
+    echo '<div style="margin-top:24px;max-width:760px;background:#fff;border:1px solid #ccd0d4;padding:16px 20px">';
+    echo '<h3 style="margin-top:0">خروجی دلخواه</h3>';
+    echo '<form method="get" action="' . esc_url(admin_url('admin-post.php')) . '">';
+    echo '<input type="hidden" name="action" value="cd_export_csv">';
+    echo '<input type="hidden" name="event" value="' . (int) $event_id . '">';
+    echo '<input type="hidden" name="_wpnonce" value="' . esc_attr($nonce) . '">';
+    echo '<p><b>زمان</b> (خالی = همه)<br>';
+    echo 'آخرین <input type="number" name="last" min="1" max="99999" style="width:80px" placeholder="۱"> ';
+    echo '<select name="unit"><option value="h">ساعت</option><option value="m">دقیقه</option></select> ';
+    echo '&nbsp; یا از <input type="datetime-local" name="from"> تا <input type="datetime-local" name="to"> ';
+    echo '<span class="description">(وقت تهران؛ «از تا» بر «آخرین» مقدم است)</span></p>';
+    echo '<p>بر اساس <select name="basis"><option value="checkin">زمان پذیرش</option><option value="activity">هر فعالیت (پذیرش یا تحویل وعده)</option></select></p>';
+    echo '<p><b>ردیف</b> (به ترتیب نام خانوادگی، بعد از فیلتر زمان؛ خالی = همه)<br>';
+    echo 'از ردیف <input type="number" name="row_from" min="1" style="width:90px"> تا ردیف <input type="number" name="row_to" min="1" style="width:90px"></p>';
+    echo '<p><button class="button button-primary" type="submit">دانلود CSV دلخواه</button></p>';
+    echo '</form></div>';
 }

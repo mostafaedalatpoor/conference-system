@@ -225,8 +225,43 @@ function cd_build_report(array $event) {
     ];
 }
 
-/** خروجی CSV: هر نفر با زمان پذیرش و وعده‌های گرفته‌شده. */
-function cd_export_csv(array $event) {
+/**
+ * فیلتر خروجی: بازه‌ی زمانی («یک ساعت اخیر» یا از تا) و بازه‌ی ردیف.
+ * $opts: since/until (DATETIME به UTC)، basis (checkin | activity)، row_from/row_to (از ۱).
+ * اول زمان اعمال می‌شود، بعد ردیف روی نتیجه (به همان ترتیب نام).
+ */
+function cd_export_time_ids($eid, $since, $until, $basis) {
+    global $wpdb;
+    $kinds = $basis === 'activity' ? "'checkin','walkin_register','meal_served'" : "'checkin','walkin_register'";
+    $sql = 'SELECT DISTINCT attendee_id FROM ' . cd_table('event_log') . " WHERE event_id = %d AND attendee_id IS NOT NULL AND kind IN ($kinds)";
+    $args = [$eid];
+    if ($since) {
+        $sql .= ' AND device_time >= %s';
+        $args[] = $since;
+    }
+    if ($until) {
+        $sql .= ' AND device_time <= %s';
+        $args[] = $until;
+    }
+    return array_flip($wpdb->get_col($wpdb->prepare($sql, $args)));
+}
+
+/** «۲۰۲۶-۱۱-۱۰T14:30» به وقت تهران ← DATETIME به UTC؛ نامعتبر = null. */
+function cd_local_to_utc($v) {
+    $v = trim(cd_latin_digits((string) $v));
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}$/', $v)) {
+        return null;
+    }
+    try {
+        $d = new DateTimeImmutable(str_replace('T', ' ', $v) . ':00', new DateTimeZone('Asia/Tehran'));
+        return $d->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
+/** خروجی CSV: هر نفر با زمان پذیرش و وعده‌های گرفته‌شده. $opts: فیلتر زمان و ردیف (cd_export_time_ids). */
+function cd_export_csv(array $event, array $opts = []) {
     global $wpdb;
     $eid = (int) $event['id'];
     $config = cd_event_config($eid);
@@ -245,6 +280,18 @@ function cd_export_csv(array $event) {
         $eid
     ), ARRAY_A);
     $states = cd_attendee_states($eid);
+
+    if (!empty($opts['since']) || !empty($opts['until'])) {
+        $ids = cd_export_time_ids($eid, $opts['since'] ?? null, $opts['until'] ?? null, $opts['basis'] ?? 'checkin');
+        $attendees = array_values(array_filter($attendees, function ($a) use ($ids) {
+            return isset($ids[$a['id']]);
+        }));
+    }
+    $from = max(1, (int) ($opts['row_from'] ?? 1));
+    $to = (int) ($opts['row_to'] ?? 0);
+    if ($from > 1 || $to > 0) {
+        $attendees = array_slice($attendees, $from - 1, $to > 0 ? max(0, $to - $from + 1) : null);
+    }
 
     $out = fopen('php://temp', 'r+');
     fwrite($out, "\xEF\xBB\xBF"); // BOM تا اکسل فارسی را درست باز کند
