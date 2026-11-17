@@ -195,7 +195,9 @@ class _ImportScreenState extends State<ImportScreen> {
       if (_preview != null) ...[
         const SectionTitle('پیش‌نمایش'),
         Text('${faDigits(_preview!.people.length)} نفر: ${faDigits(_preview!.created)} جدید، '
-            '${faDigits(_preview!.updated)} به‌روزرسانی. ${faDigits(_preview!.problems.length)} مورد مشکل.'),
+            '${faDigits(_preview!.updated)} به‌روزرسانی'
+            '${_preview!.possibleDuplicates > 0 ? '، ${faDigits(_preview!.possibleDuplicates)} احتمال تکراری (جدا وارد می‌شوند)' : ''}. '
+            '${faDigits(_preview!.problems.length)} مورد مشکل.'),
         const SizedBox(height: 8),
         if (_preview!.problems.isNotEmpty)
           // ردیف‌های مشکل‌دار: پس‌زمینه‌ی wait-soft با آیکن هشدار.

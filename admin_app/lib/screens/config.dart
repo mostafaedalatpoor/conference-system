@@ -652,6 +652,14 @@ class _EventSettingsEditor extends StatelessWidget {
           ]),
         ],
       ],
+      const SectionTitle('روز اجرا'),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        value: st.dailyAttendance,
+        onChanged: (v) => set(() => st.dailyAttendance = v),
+        title: const Text('حضور روزانه'),
+        subtitle: const Text('پذیرش هر روز جدا ثبت می‌شود؛ «قبلاً پذیرش شده» فقط همان روز را می‌بیند. برای رویداد چندروزه.'),
+      ),
       const SectionTitle('صفحه‌ی عمومی'),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,

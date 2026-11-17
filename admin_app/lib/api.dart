@@ -43,6 +43,14 @@ class AdminApi {
     return _decode(r);
   }
 
+  /// PATCH به شکل POST با X-HTTP-Method-Override (وردپرس می‌پذیرد)، چون بعضی هاست‌ها PATCH را می‌بندند.
+  Future<dynamic> patch(String path, Object body) async {
+    final r = await http
+        .post(_uri(path), headers: {..._headers, 'X-HTTP-Method-Override': 'PATCH'}, body: jsonEncode(body))
+        .timeout(const Duration(seconds: 90));
+    return _decode(r);
+  }
+
   Future<dynamic> delete(String path, [Object? body]) async {
     final r = await http
         .delete(_uri(path), headers: _headers, body: body == null ? null : jsonEncode(body))

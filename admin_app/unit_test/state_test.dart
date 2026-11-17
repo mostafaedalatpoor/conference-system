@@ -1,5 +1,6 @@
 // آزمون‌های واحد منطق خالص. پوشه‌ی test/ در CI بعد از flutter create پاک می‌شود، پس این‌ها اینجاست:
 // flutter test unit_test
+import 'package:conference_admin/excel_import.dart';
 import 'package:conference_admin/state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -68,5 +69,58 @@ void main() {
   test('MealDef sends active', () {
     final m = MealDef('l1', 'ناهار', '', {}, {}, active: false);
     expect(m.toJson()['active'], isFalse);
+  });
+
+  group('group 2', () {
+    test('daily: check-in only for that day', () {
+      final ev = [
+        {'seq': 1, 'kind': 'checkin', 'day': '2026-11-20'},
+        {'seq': 2, 'kind': 'checkin', 'day': '2026-11-21'},
+        {'seq': 3, 'kind': 'checkin_undo', 'day': '2026-11-21'},
+      ];
+      expect(isCheckedInFromTimeline(ev, day: '2026-11-20'), isTrue);
+      expect(isCheckedInFromTimeline(ev, day: '2026-11-21'), isFalse);
+      expect(isCheckedInFromTimeline(ev), isFalse);
+    });
+
+    test('meal counts subtract undo', () {
+      final c = mealCountsFromTimeline([
+        {'kind': 'meal_served', 'meal_id': 5},
+        {'kind': 'meal_served', 'meal_id': 5},
+        {'kind': 'meal_undo', 'meal_id': 5},
+        {'kind': 'meal_undo', 'meal_id': 6},
+        {'kind': 'checkin'},
+      ]);
+      expect(c[5], 1);
+      expect(c[6], 0);
+    });
+
+    test('possible duplicates: same mobile or email, active only, not self', () {
+      final a = Person(id: '1', firstName: 'مریم', lastName: 'رضایی', typeCode: 't', mobile: '09121234567');
+      final b = Person(id: '2', firstName: 'دکتر مریم', lastName: 'رضایی‌نژاد', typeCode: 't', mobile: '+98 912 123 4567');
+      final c = Person(id: '3', firstName: 'x', lastName: 'y', typeCode: 't', email: 'M@x.ir');
+      final d = Person(id: '4', firstName: 'z', lastName: 'w', typeCode: 't', email: 'm@x.ir', status: 'inactive');
+      final e = Person(id: '5', firstName: 'q', lastName: 'r', typeCode: 't', email: 'm@x.ir');
+      expect(findPossibleDuplicates(a, [a, b, c]).map((p) => p.id), ['2']);
+      expect(findPossibleDuplicates(e, [c, d, e]).map((p) => p.id), ['3']);
+    });
+
+    test('excel import: shared contact with another name is kept, not dropped', () {
+      final s = AdminState()..eventCode = 'ev';
+      final t = SheetTable('s', ['first', 'last', 'mobile'], [
+        ['علی', 'محمدی', '09120000000'],
+        ['زهرا', 'احمدی', '09120000000'],
+        ['علی', 'محمدی', '09120000000'],
+      ]);
+      final r = s.buildImport(t, {'first_name': 0, 'last_name': 1, 'mobile': 2}, 'p');
+      expect(r.people.length, 2);
+      expect(r.possibleDuplicates, 1);
+      expect(r.people.map((p) => p.id).toSet().length, 2);
+      // ورود دوباره همان شناسه‌ها را می‌دهد.
+      final again = s.buildImport(t, {'first_name': 0, 'last_name': 1, 'mobile': 2}, 'p');
+      expect(again.people.map((p) => p.id).toSet(), r.people.map((p) => p.id).toSet());
+    });
+
+    test('todayIso', () => expect(todayIso(DateTime(2026, 1, 5)), '2026-01-05'));
   });
 }

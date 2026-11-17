@@ -83,6 +83,19 @@ class _ReportScreenState extends State<ReportScreen> {
           action: FilledButton(onPressed: s.busy ? null : s.loadReport, child: const Text('به‌روزرسانی')),
         )
       else ...[
+        // حضور روزانه یا رویداد چندروزه: «همه» و هر روز.
+        if (r['daily_attendance'] == true && ((r['by_day'] as List?) ?? const []).isNotEmpty) ...[
+          const SizedBox(height: DaftarSize.space3),
+          Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+            ChoiceChip(label: const Text('همه'), selected: s.reportDay == null, onSelected: (_) => s.setReportDay(null)),
+            for (final d in (r['by_day'] as List).cast<Map>())
+              ChoiceChip(
+                label: Text('${s.dayName('${d['day']}')} · ${faDigits(d['checked_in'])}'),
+                selected: s.reportDay == d['day'],
+                onSelected: (_) => s.setReportDay('${d['day']}'),
+              ),
+          ]),
+        ],
         const SectionTitle('خلاصه'),
         LayoutBuilder(builder: (context, c) {
           final cols = c.maxWidth >= 760 ? 4 : 2;
@@ -125,6 +138,7 @@ class _ReportScreenState extends State<ReportScreen> {
           DataColumn(label: Text('تحویل‌شده')),
           DataColumn(label: Text('تکراری')),
           DataColumn(label: Text('بدون حق')),
+          DataColumn(label: Text('')),
         ], rows: [
           for (final m in r['meals'] as List)
             DataRow(cells: [
@@ -133,8 +147,20 @@ class _ReportScreenState extends State<ReportScreen> {
               DataCell(Text(faDigits(m['served']))),
               DataCell(Text(faDigits(m['duplicates']))),
               DataCell(Text(faDigits(m['not_entitled']))),
+              DataCell(TextButton(
+                onPressed: () {
+                  final code = s.meals.where((x) => x.id == m['id']).map((x) => x.code).firstOrNull;
+                  if (code == null) return;
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => MealPeoplePage(code: code, name: '${m['name']}'),
+                  ));
+                },
+                child: const Text('دیدن فهرست'),
+              )),
             ]),
         ]),
+        Text('حق دارند: فقط افراد فعال؛ غیرفعال‌ها شمرده نمی‌شوند.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: x.inkMuted)),
         const SectionTitle('موارد مشکوک'),
         if ((r['flagged'] as List).isEmpty) const Hint('موردی نیست.'),
         for (final f in r['flagged'] as List)
@@ -283,6 +309,95 @@ class DeviceRow extends StatelessWidget {
               child: const Text('باطل کن'),
             ),
         ]),
+      ),
+    );
+  }
+}
+
+/// «دیدن فهرست» یک وعده: افراد فعال دارای حق و هر کس تحویل گرفته، با فیلتر.
+class MealPeoplePage extends StatefulWidget {
+  final String code;
+  final String name;
+  const MealPeoplePage({super.key, required this.code, required this.name});
+
+  @override
+  State<MealPeoplePage> createState() => _MealPeoplePageState();
+}
+
+class _MealPeoplePageState extends State<MealPeoplePage> {
+  late Future<List<Map<String, dynamic>>> _people;
+  String _filter = 'waiting';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _people = StateScope.read(context).mealPeople(widget.code);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.name)),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _people,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) return const LinearProgressIndicator();
+          if (snap.hasError) {
+            return const Padding(
+              padding: EdgeInsets.all(DaftarSize.space4),
+              child: Notice(tone: NoticeTone.neutral, text: 'این فهرست از سرور نیامد. افزونه‌ی سایت باید به‌روز شود.'),
+            );
+          }
+          final all = snap.data!;
+          bool match(Map<String, dynamic> p, String f) => switch (f) {
+                'waiting' => p['entitled'] == true && (p['served'] as int? ?? 0) == 0,
+                'served' => (p['served'] as int? ?? 0) > 0,
+                'not_entitled' => p['entitled'] != true,
+                _ => true,
+              };
+          int count(String f) => all.where((p) => match(p, f)).length;
+          final list = all.where((p) => match(p, _filter)).toList();
+          return ListView(padding: const EdgeInsets.all(DaftarSize.space4), children: [
+            Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+              for (final (f, label) in const [
+                ('waiting', 'حق دارند، نگرفته'),
+                ('served', 'گرفته'),
+                ('not_entitled', 'بدون حق، گرفته'),
+                ('all', 'همه'),
+              ])
+                ChoiceChip(
+                  label: Text('$label ${faDigits(count(f))}'),
+                  selected: _filter == f,
+                  onSelected: (_) => setState(() => _filter = f),
+                ),
+            ]),
+            const SizedBox(height: DaftarSize.space3),
+            if (list.isEmpty) const Hint('کسی نیست.'),
+            for (final p in list)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: DaftarSize.space2),
+                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('${p['name']}', style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                      if ('${p['organization'] ?? ''}'.isNotEmpty)
+                        Text('${p['organization']}', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+                    ]),
+                  ),
+                  if ((p['served'] as int? ?? 0) > 0)
+                    Text(
+                      DateTime.tryParse('${p['served_at']}') != null ? 'گرفته ${hm(DateTime.parse('${p['served_at']}'))}' : 'گرفته',
+                      style: theme.textTheme.bodySmall?.copyWith(color: x.go),
+                    )
+                  else
+                    Text('هنوز نه', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+                ]),
+              ),
+          ]);
+        },
       ),
     );
   }

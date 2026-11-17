@@ -55,6 +55,9 @@ class MealDef {
 
   /// وعده‌ی غیرفعال در گوشی نیروها دیده نمی‌شود ولی تحویل‌های قبلی‌اش در گزارش می‌ماند.
   bool active;
+
+  /// شناسه‌ی سرور (برای خواندن تاریخچه)؛ وعده‌ی ذخیره‌نشده ندارد.
+  int? id;
   MealDef(this.code, this.name, this.day, this.types, this.roles, {this.active = true});
 
   Map<String, dynamic> toJson() => {
@@ -151,14 +154,46 @@ class StaffDef {
 }
 
 /// آیا فرد با این تاریخچه (خروجی timeline سرور) الان پذیرش‌شده است؟ آخرین پذیرش یا لغو، به ترتیب seq.
-bool isCheckedInFromTimeline(List<Map<String, dynamic>> events) {
+/// با [day] (حضور روزانه) فقط رخدادهای همان روز.
+bool isCheckedInFromTimeline(List<Map<String, dynamic>> events, {String? day}) {
   final l = [...events]..sort((a, b) => ((a['seq'] as int?) ?? 0).compareTo((b['seq'] as int?) ?? 0));
   var inNow = false;
   for (final e in l) {
+    if (day != null && e['day'] != null && e['day'] != day) continue;
     if (e['kind'] == 'checkin') inNow = true;
     if (e['kind'] == 'checkin_undo') inNow = false;
   }
   return inNow;
+}
+
+/// شمار فعلی تحویل هر وعده (meal_id) از تاریخچه: تحویل منهای برگردان.
+Map<int, int> mealCountsFromTimeline(List<Map<String, dynamic>> events) {
+  final out = <int, int>{};
+  for (final e in events) {
+    final id = e['meal_id'] as int?;
+    if (id == null) continue;
+    if (e['kind'] == 'meal_served') out[id] = (out[id] ?? 0) + 1;
+    if (e['kind'] == 'meal_undo') out[id] = ((out[id] ?? 0) - 1).clamp(0, 1 << 30);
+  }
+  return out;
+}
+
+/// امروز (وقت این دستگاه) به شکل YYYY-MM-DD.
+String todayIso([DateTime? now]) {
+  final d = now ?? DateTime.now();
+  return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+}
+
+/// افراد فعال دیگری با موبایل یا ایمیل یکسان با [p].
+List<Person> findPossibleDuplicates(Person p, Iterable<Person> all) {
+  final m = normalizeMobile(p.mobile);
+  final e = p.email.trim().toLowerCase();
+  return all
+      .where((o) =>
+          o.id != p.id &&
+          o.isActive &&
+          ((m.isNotEmpty && normalizeMobile(o.mobile) == m) || (e.isNotEmpty && o.email.trim().toLowerCase() == e)))
+      .toList();
 }
 
 /// یک فایل اکسلِ واردشده («ورودی‌های قبلی»).
@@ -313,7 +348,10 @@ class ImportResult {
   final List<String> problems;
   final int updated;
   final int created;
-  ImportResult(this.people, this.problems, this.updated, this.created);
+
+  /// ردیف‌هایی که موبایل یا ایمیلشان با ردیف دیگری یکی است ولی نامشان نه: جدا وارد می‌شوند.
+  final int possibleDuplicates;
+  ImportResult(this.people, this.problems, this.updated, this.created, [this.possibleDuplicates = 0]);
 }
 
 /// تنظیم‌های رویداد که هم اپ نیروها و هم صفحه‌ی عمومی به آن نیاز دارند.
@@ -336,6 +374,9 @@ class EventSettings {
   /// خط «ساخته‌شده با رویدادیار» در صفحه‌ی عمومی.
   bool showMakerCredit = true;
 
+  /// حضور روزانه: پذیرش هر روز جدا ثبت می‌شود و تکراری فقط در همان روز.
+  bool dailyAttendance = false;
+
   Map<String, dynamic> toJson() => {
         'identify_mode': identifyMode,
         'qr_behavior': qrBehavior,
@@ -348,6 +389,7 @@ class EventSettings {
           'country': shareCountry,
         },
         'show_maker_credit': showMakerCredit,
+        'daily_attendance': dailyAttendance,
       };
 
   void load(Map<String, dynamic> j) {
@@ -366,6 +408,7 @@ class EventSettings {
     shareMobile = c['mobile'] as bool? ?? shareMobile;
     shareCountry = c['country'] as bool? ?? shareCountry;
     showMakerCredit = j['show_maker_credit'] as bool? ?? showMakerCredit;
+    dailyAttendance = j['daily_attendance'] as bool? ?? dailyAttendance;
   }
 
   bool get usesCards => identifyMode != 'none';
@@ -395,6 +438,9 @@ class AdminState extends ChangeNotifier {
   Map<String, Person> people = {};
   List<ReserveCard> reserveCards = [];
   Map<String, dynamic>? report;
+
+  /// روز انتخاب‌شده در «امروز» (حضور روزانه)؛ null = همه‌ی روزها.
+  String? reportDay;
 
   final CardTemplate template = CardTemplate();
   EventSettings settings = EventSettings();
@@ -584,6 +630,7 @@ class AdminState extends ChangeNotifier {
     ];
     for (var i = 0; i < meals.length; i++) {
       meals[i].active = list('meals')[i]['active'] != false;
+      meals[i].id = list('meals')[i]['id'] as int?;
     }
     serverTypeCodes = types.map((t) => t.code).toSet();
     serverRoleCodes = roles.map((t) => t.code).toSet();
@@ -720,6 +767,7 @@ class AdminState extends ChangeNotifier {
     var serial = _nextSerial;
     var created = 0;
     var updated = 0;
+    var possibleDuplicates = 0;
     String cell(List<String> row, String field) {
       final i = mapping[field];
       return (i == null || i >= row.length) ? '' : row[i].trim();
@@ -740,11 +788,24 @@ class AdminState extends ChangeNotifier {
       }
       final email = cell(row, 'email').toLowerCase();
       final mobile = normalizeMobile(cell(row, 'mobile'));
-      final key = email.isNotEmpty ? 'e:$email' : (mobile.isNotEmpty ? 'm:$mobile' : 'n:${normalizeText('$first $last')}');
-      final id = _stableId(key);
+      final nameKey = normalizeText('$first $last');
+      final key = email.isNotEmpty ? 'e:$email' : (mobile.isNotEmpty ? 'm:$mobile' : 'n:$nameKey');
+      var id = _stableId(key);
       if (out.containsKey(id)) {
-        problems.add('ردیف ${r + 2}: تکراری ($first $last)؛ فقط یک بار وارد می‌شود.');
-        continue;
+        final other = out[id]!;
+        if (normalizeText('${other.firstName} ${other.lastName}') == nameKey) {
+          problems.add('ردیف ${r + 2}: تکرار همان ردیف ($first $last)؛ فقط یک بار وارد می‌شود.');
+          continue;
+        }
+        // تماس مشترک با نام دیگر (مثلاً موبایل یک دفتر): بی‌صدا حذف نمی‌شود؛ جدا وارد و «احتمال تکراری» گزارش می‌شود.
+        id = _stableId('$key|n:$nameKey');
+        if (out.containsKey(id)) {
+          problems.add('ردیف ${r + 2}: تکرار همان ردیف ($first $last)؛ فقط یک بار وارد می‌شود.');
+          continue;
+        }
+        possibleDuplicates++;
+        problems.add('ردیف ${r + 2}: ${email.isNotEmpty ? 'ایمیل' : 'موبایل'} با «${other.fullName}» یکی است؛ '
+            'جدا وارد شد (احتمال تکراری). بعداً از صفحه‌ی فرد می‌توانید ادغام کنید.');
       }
       final existing = people[id];
       var roleCode = existing?.roleCode;
@@ -782,7 +843,7 @@ class AdminState extends ChangeNotifier {
         updated++;
       }
     }
-    return ImportResult(out.values.toList(), problems, updated, created);
+    return ImportResult(out.values.toList(), problems, updated, created, possibleDuplicates);
   }
 
   /// ارسال افراد. [fileName] اگر باشد، همه‌ی این ارسال یک «ورودی» است تا بعداً یکجا حذف شود.
@@ -915,14 +976,78 @@ class AdminState extends ChangeNotifier {
   /// باطل‌کردن دسترسی یک دستگاه نیرو.
   Future<void> revokeDevice(int id) => run('دستگاه باطل شد.', () async {
         await api.post('/admin/devices/$id/revoke', {});
-        report = (await api.get('/admin/events/$eventCode/report') as Map).cast<String, dynamic>();
+        report = await _fetchReport();
       });
 
   /// لغو پذیرش یک نفر از اپ مدیریت (در دفتر رخدادها با دلیل و فاعل ثبت می‌شود).
   /// سرور فقط برای فرد پذیرش‌شده قبول می‌کند.
   Future<void> undoCheckin(String attendeeId, {String reason = ''}) => run('پذیرش لغو شد.', () async {
-        await api.post('/admin/events/$eventCode/attendees/$attendeeId/checkin-undo', {'reason': reason});
+        await api.post('/admin/events/$eventCode/attendees/$attendeeId/checkin-undo', {
+          'reason': reason,
+          // حضور روزانه: پذیرش امروز لغو می‌شود.
+          if (settings.dailyAttendance) 'day': todayIso(),
+        });
       });
+
+  /// «لغو تحویل…»: برگرداندن یک تحویل وعده.
+  Future<void> undoMeal(String attendeeId, String mealCode, {String reason = ''}) =>
+      run('تحویل برگشت.', () async {
+        await api.post('/admin/events/$eventCode/attendees/$attendeeId/meal-undo', {'meal': mealCode, 'reason': reason});
+      });
+
+  /// ویرایش یک نفر؛ فقط فیلدهای [fields] (کلیدهای API) فرستاده می‌شوند.
+  Future<bool> patchPerson(String id, Map<String, dynamic> fields) async {
+    var ok = false;
+    await run('ذخیره شد.', () async {
+      await api.patch('/admin/events/$eventCode/attendees/$id', fields);
+      await _loadEvent(eventCode!);
+      ok = true;
+    });
+    return ok;
+  }
+
+  /// «افزودن فرد»: ثبت دستی با کارت تازه (اگر رویداد کارت دارد).
+  Future<bool> addPerson(Person p) async {
+    var ok = false;
+    await run('${p.fullName} اضافه شد.', () async {
+      if (settings.usesCards && p.token == null) {
+        p.token = _randomToken();
+        p.serial = _nextSerial;
+      }
+      final r = (await api.post('/admin/events/$eventCode/attendees', {
+        'attendees': [p.toUpload()],
+        'source': 'manual',
+      }) as Map)
+          .cast<String, dynamic>();
+      final errors = (r['errors'] as List?) ?? const [];
+      if (errors.isNotEmpty) throw ApiException('partial', 'ذخیره نشد: ${jsonEncode(errors)}', 200);
+      await _loadEvent(eventCode!);
+      ok = true;
+    });
+    return ok;
+  }
+
+  /// ادغام [fromId] در [keepId]: تاریخچه و کارت منتقل می‌شود و [fromId] حذف می‌شود.
+  Future<bool> mergePeople(String keepId, String fromId) async {
+    var ok = false;
+    await run('ادغام شد.', () async {
+      await api.post('/admin/events/$eventCode/attendees/$keepId/merge', {'from': fromId});
+      await _loadEvent(eventCode!);
+      ok = true;
+    });
+    return ok;
+  }
+
+  /// «روز ۲» برای یک تاریخ در بازه‌ی رویداد، وگرنه خود تاریخ.
+  String dayName(String iso) {
+    final st = DateTime.tryParse(event?.startDate ?? ''), d = DateTime.tryParse(iso);
+    if (st == null || d == null) return iso;
+    final n = d.difference(st).inDays + 1;
+    return n >= 1 ? 'روز ${faDigits(n)}' : iso;
+  }
+
+  /// افراد فعال دیگری که موبایل یا ایمیل یکسان دارند («احتمالاً همان … است»).
+  List<Person> possibleDuplicatesOf(Person p) => findPossibleDuplicates(p, people.values);
 
   Future<void> setLocked(bool locked) => run(locked ? 'آدرس پایه قفل شد.' : 'قفل آدرس پایه برداشته شد.', () async {
         await api.post('/admin/events/$eventCode/lock', {'locked': locked});
@@ -989,9 +1114,24 @@ class AdminState extends ChangeNotifier {
 
   // ---------------------------------------------------------------- گزارش
 
+  Future<Map<String, dynamic>> _fetchReport() async =>
+      (await api.get('/admin/events/$eventCode/report${reportDay == null ? '' : '?day=$reportDay'}') as Map)
+          .cast<String, dynamic>();
+
   Future<void> loadReport() => run('', () async {
-        report = (await api.get('/admin/events/$eventCode/report') as Map).cast<String, dynamic>();
+        report = await _fetchReport();
       });
+
+  Future<void> setReportDay(String? day) {
+    reportDay = day;
+    return loadReport();
+  }
+
+  /// «دیدن فهرست» یک وعده: افراد دارای حق و هر کس تحویل گرفته.
+  Future<List<Map<String, dynamic>>> mealPeople(String mealCode) async {
+    final r = (await api.get('/admin/events/$eventCode/meals/$mealCode/people') as Map).cast<String, dynamic>();
+    return ((r['people'] as List?) ?? const []).map((e) => (e as Map).cast<String, dynamic>()).toList();
+  }
 
   /// تاریخچه‌ی یک نفر (PersonTimeline): پذیرش، وعده‌ها و موارد مشکوک به ترتیب زمان.
   /// نیازمند مسیر `GET /admin/events/{code}/attendees/{id}/timeline` در افزونه.

@@ -5,6 +5,7 @@ import '../normalize.dart';
 import '../state.dart';
 import '../theme/daftar.dart';
 import '../theme/widgets.dart';
+import 'person_edit.dart';
 import 'report.dart';
 
 /// تب «افراد» در اپ مدیریت: جستجو و تاریخچه‌ی هر نفر، برای جواب‌دادن در همان لحظه.
@@ -53,7 +54,8 @@ class _PeopleScreenState extends State<PeopleScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(
         padding: const EdgeInsets.all(DaftarSize.space4),
-        child: TextField(
+        child: Row(children: [
+          Expanded(child: TextField(
           controller: _q,
           autocorrect: false,
           enableSuggestions: false,
@@ -63,7 +65,14 @@ class _PeopleScreenState extends State<PeopleScreen> {
             hintText: 'نام، موبایل یا شماره‌ی کارت',
           ),
           onChanged: (_) => setState(() {}),
-        ),
+        )),
+          const SizedBox(width: DaftarSize.space2),
+          IconButton.filledTonal(
+            tooltip: 'افزودن فرد',
+            icon: const Icon(Icons.person_add_rounded),
+            onPressed: s.event?.archived == true ? null : () => showPersonEditor(context),
+          ),
+        ]),
       ),
       Divider(color: x.line),
       Expanded(
@@ -150,10 +159,56 @@ class _PersonPageState extends State<PersonPage> {
     return switch (kind) {
       'checkin' => 'پذیرش شد',
       'checkin_undo' => reason.isEmpty ? 'پذیرش لغو شد' : 'پذیرش لغو شد · دلیل: $reason',
+      'meal_undo' => '${meal.isEmpty ? 'تحویل وعده' : 'تحویل $meal'} برگشت${reason.isEmpty ? '' : ' · دلیل: $reason'}',
       'meal_served' => meal.isEmpty ? 'وعده تحویل شد' : '$meal تحویل شد',
       'walkin_register' => 'ثبت‌نام در محل',
       _ => '${e['label'] ?? kind}',
     };
+  }
+
+  Future<void> _merge(AdminState s, Person keep, Person from) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('ادغام «${from.displayName}» در «${keep.displayName}»؟'),
+        content: Text('پذیرش، وعده‌ها و کارت «${from.displayName}» به این نفر منتقل می‌شود، '
+            'جاهای خالی اطلاعات این نفر از او پر می‌شود و «${from.displayName}» از فهرست حذف می‌شود.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('ادغام')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (await s.mergePeople(keep.id, from.id) && mounted) setState(_load);
+  }
+
+  Future<void> _undoMeal(AdminState s, Person p, MealDef m) async {
+    const reasons = ['اشتباه زدم', 'ثبت تکراری', 'دیگر'];
+    var reason = reasons.first;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setState) => AlertDialog(
+          title: Text('لغو تحویل ${m.name} به ${p.displayName}؟'),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('در گزارش ثبت می‌شود و گوشی‌ها با همگام‌سازی بعدی می‌بینند.'),
+            const SizedBox(height: DaftarSize.space3),
+            Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+              for (final r in reasons)
+                ChoiceChip(label: Text(r), selected: reason == r, onSelected: (_) => setState(() => reason = r)),
+            ]),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
+            FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('لغو تحویل')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    await s.undoMeal(p.id, m.code, reason: reason);
+    if (mounted) setState(_load);
   }
 
   Future<void> _undo(AdminState s, Person p) async {
@@ -250,7 +305,16 @@ class _PersonPageState extends State<PersonPage> {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(title: Text(p.displayName, overflow: TextOverflow.ellipsis)),
+      appBar: AppBar(
+        title: Text(p.displayName, overflow: TextOverflow.ellipsis),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.edit_rounded),
+            label: const Text('ویرایش'),
+            onPressed: s.event?.archived == true ? null : () => showPersonEditor(context, person: p),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           setState(_load);
@@ -290,6 +354,55 @@ class _PersonPageState extends State<PersonPage> {
                 ),
               ]),
             ),
+          for (final d in s.possibleDuplicatesOf(p))
+            Padding(
+              padding: const EdgeInsets.only(top: DaftarSize.space3),
+              child: Notice(
+                tone: NoticeTone.wait,
+                title: 'احتمالاً همان «${d.displayName}» است',
+                text: normalizeMobile(d.mobile).isNotEmpty && normalizeMobile(d.mobile) == normalizeMobile(p.mobile)
+                    ? 'موبایل یکسان است.'
+                    : 'ایمیل یکسان است.',
+                action: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(onPressed: s.busy ? null : () => _merge(s, p, d), child: const Text('ادغام…')),
+                ),
+              ),
+            ),
+          if (s.meals.any((m) => m.id != null)) ...[
+            const SectionTitle('پذیرایی'),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: _timeline,
+              builder: (context, snap) {
+                if (snap.connectionState != ConnectionState.done || snap.hasError) return const SizedBox.shrink();
+                final counts = mealCountsFromTimeline(snap.data!);
+                return Column(children: [
+                  for (final m in s.meals.where((m) => m.id != null && (m.active || (counts[m.id] ?? 0) > 0)))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: DaftarSize.space1),
+                      child: Row(children: [
+                        Icon(
+                          (counts[m.id] ?? 0) > 0 ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                          size: 20,
+                          color: (counts[m.id] ?? 0) > 0 ? x.go : x.line,
+                        ),
+                        const SizedBox(width: DaftarSize.space2),
+                        Expanded(child: Text(m.name)),
+                        if ((counts[m.id] ?? 0) > 1)
+                          Text('${faDigits(counts[m.id]!)} بار', style: theme.textTheme.bodySmall?.copyWith(color: x.wait)),
+                        if ((counts[m.id] ?? 0) > 0)
+                          TextButton(
+                            onPressed: s.busy || s.event?.archived == true ? null : () => _undoMeal(s, p, m),
+                            child: const Text('لغو تحویل…'),
+                          )
+                        else
+                          Text('هنوز نه', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+                      ]),
+                    ),
+                ]);
+              },
+            ),
+          ],
           const SectionTitle('تاریخچه'),
           Text('داده‌ی سرور تا ${hm(_at)}', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
           const SizedBox(height: DaftarSize.space2),
@@ -308,9 +421,22 @@ class _PersonPageState extends State<PersonPage> {
               final events = [...snap.data!]
                 ..sort((a, b) => '${a['device_time']}'.compareTo('${b['device_time']}'));
               if (events.isEmpty) return const Hint('هنوز کاری برای این نفر ثبت نشده.');
-              return Column(children: [
-                for (final e in events)
-                  Container(
+              // چندروزه: سرفصل «روز ۱»، «روز ۲» بین رخدادها.
+              final multiDay = events.map((e) => e['day']).whereType<String>().toSet().length > 1;
+              // سرفصل وقتی روز رخداد با رخداد قبلی فرق دارد.
+              bool header(int i) =>
+                  multiDay && events[i]['day'] is String && (i == 0 || events[i]['day'] != events[i - 1]['day']);
+              return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                for (var i = 0; i < events.length; i++) ...[
+                  if (header(i))
+                    Padding(
+                      padding: const EdgeInsets.only(top: DaftarSize.space3),
+                      child: Text(s.dayName(events[i]['day'] as String),
+                          style: theme.textTheme.labelLarge?.copyWith(color: x.stamp, fontWeight: FontWeight.w800)),
+                    ),
+                  Builder(builder: (context) {
+                    final e = events[i];
+                    return Container(
                     padding: const EdgeInsets.symmetric(vertical: DaftarSize.space2),
                     decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
                     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -339,7 +465,9 @@ class _PersonPageState extends State<PersonPage> {
                         Text(hm(DateTime.parse('${e['device_time']}')),
                             style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
                     ]),
-                  ),
+                  );
+                  }),
+                ],
               ]);
             },
           ),
@@ -349,7 +477,7 @@ class _PersonPageState extends State<PersonPage> {
             future: _timeline,
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done || snap.hasError) return const SizedBox.shrink();
-              if (!isCheckedInFromTimeline(snap.data!)) {
+              if (!isCheckedInFromTimeline(snap.data!, day: s.settings.dailyAttendance ? todayIso() : null)) {
                 return Notice(tone: NoticeTone.neutral, text: '${p.displayName} هنوز پذیرش نشده.');
               }
               return OutlinedButton(
