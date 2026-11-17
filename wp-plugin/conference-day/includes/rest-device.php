@@ -88,6 +88,10 @@ function cd_rest_device_login(WP_REST_Request $request) {
     $pin = cd_latin_digits((string) $request->get_param('pin'));
     $label = cd_str($request->get_param('label') ?? '');
 
+    if ($event && cd_event_is_archived($event)) {
+        return cd_error('cd_event_archived', 'این رویداد بایگانی شده است و ورود به آن ممکن نیست.', 403);
+    }
+
     $staff = null;
     if ($event && preg_match('/^\d{4,8}$/', $pin)) {
         $rows = $wpdb->get_results($wpdb->prepare(

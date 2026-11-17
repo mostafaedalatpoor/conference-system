@@ -13,9 +13,33 @@ function cd_get_event($id) {
     return $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cd_table('events') . ' WHERE id = %d', $id), ARRAY_A);
 }
 
-function cd_all_events() {
+/** رویدادها؛ بایگانی‌شده‌ها فقط وقتی خواسته شوند. */
+function cd_all_events($include_archived = false) {
     global $wpdb;
-    return $wpdb->get_results('SELECT * FROM ' . cd_table('events') . ' ORDER BY start_date DESC, id DESC', ARRAY_A);
+    $where = $include_archived ? '' : ' WHERE archived_at IS NULL';
+    return $wpdb->get_results('SELECT * FROM ' . cd_table('events') . $where . ' ORDER BY start_date DESC, id DESC', ARRAY_A);
+}
+
+function cd_event_is_archived(array $event) {
+    return !empty($event['archived_at']);
+}
+
+/** شمار داده‌های یک رویداد، برای پیام پیامد حذف و بایگانی. */
+function cd_event_impact($event_id) {
+    global $wpdb;
+    $count = function ($sql) use ($wpdb, $event_id) {
+        return (int) $wpdb->get_var($wpdb->prepare($sql, $event_id));
+    };
+    $log = cd_table('event_log');
+    return [
+        'attendees' => $count('SELECT COUNT(*) FROM ' . cd_table('attendees') . " WHERE event_id = %d AND status <> 'deleted'"),
+        'checkins' => $count("SELECT COUNT(DISTINCT attendee_id) FROM $log WHERE event_id = %d AND kind = 'checkin'"),
+        'meals_served' => $count("SELECT COUNT(*) FROM $log WHERE event_id = %d AND kind = 'meal_served'"),
+        'staff' => $count('SELECT COUNT(*) FROM ' . cd_table('staff') . ' WHERE event_id = %d'),
+        'devices' => $count('SELECT COUNT(*) FROM ' . cd_table('devices') . ' WHERE event_id = %d'),
+        'cards' => $count('SELECT COUNT(*) FROM ' . cd_table('cards') . ' WHERE event_id = %d'),
+        'log' => $count("SELECT COUNT(*) FROM $log WHERE event_id = %d"),
+    ];
 }
 
 function cd_bump_config($event_id) {
@@ -72,6 +96,7 @@ function cd_upsert_attendee($event_id, array $a, $source, $only_insert = false) 
         // null یعنی «طبق تنظیم رویداد»؛ ستون «اشتراک اطلاعات تماس» اکسل برای هر نفر مقدم است.
         'share_contact' => isset($a['share_contact']) && $a['share_contact'] !== null && $a['share_contact'] !== '' ? (int) (bool) $a['share_contact'] : null,
         'website' => esc_url_raw(cd_str($a['website'] ?? '', 255)),
+        'import_batch' => isset($a['import_batch']) && is_string($a['import_batch']) ? substr($a['import_batch'], 0, 36) : '',
         'created_at' => $now,
         'updated_at' => $now,
     ];
@@ -98,6 +123,10 @@ function cd_upsert_attendee($event_id, array $a, $source, $only_insert = false) 
             if (in_array($col, ['id', 'event_id', 'created_at', 'source'], true)) {
                 continue;
             }
+            // ردیفی که از ورودی اکسل نیامده، ورودی قبلی فرد را پاک نکند.
+            if ($col === 'import_batch' && $row['import_batch'] === '') {
+                continue;
+            }
             $updates[] = "$col = VALUES($col)";
         }
         $sql .= ' ON DUPLICATE KEY UPDATE ' . implode(', ', $updates);
@@ -121,6 +150,8 @@ function cd_attendee_out(array $r) {
         'source' => $r['source'],
         'share_contact' => isset($r['share_contact']) && $r['share_contact'] !== null ? (bool) $r['share_contact'] : null,
         'website' => $r['website'] ?? '',
+        'status' => $r['status'] ?? 'active',
+        'import_batch' => $r['import_batch'] ?? '',
     ];
 }
 
@@ -146,7 +177,7 @@ function cd_event_config($event_id) {
     global $wpdb;
     $types = $wpdb->get_results($wpdb->prepare('SELECT id, code, name FROM ' . cd_table('registration_types') . ' WHERE event_id = %d ORDER BY id', $event_id), ARRAY_A);
     $roles = $wpdb->get_results($wpdb->prepare('SELECT id, code, name FROM ' . cd_table('roles') . ' WHERE event_id = %d ORDER BY id', $event_id), ARRAY_A);
-    $meals = $wpdb->get_results($wpdb->prepare('SELECT id, code, day, name, sort FROM ' . cd_table('meals') . ' WHERE event_id = %d ORDER BY day, sort, id', $event_id), ARRAY_A);
+    $meals = $wpdb->get_results($wpdb->prepare('SELECT id, code, day, name, sort, active FROM ' . cd_table('meals') . ' WHERE event_id = %d ORDER BY day, sort, id', $event_id), ARRAY_A);
     $sessions = $wpdb->get_results($wpdb->prepare('SELECT id, day, start_time, end_time, title, hall, kind FROM ' . cd_table('sessions') . ' WHERE event_id = %d ORDER BY day, start_time, sort, id', $event_id), ARRAY_A);
 
     $meal_ids = array_map(function ($m) {
@@ -185,6 +216,7 @@ function cd_event_config($event_id) {
             'code' => $m['code'],
             'day' => $m['day'],
             'name' => $m['name'],
+            'active' => (bool) $m['active'],
             'rules' => $rules_by_meal[$mid] ?? ['registration_type_ids' => [], 'role_ids' => []],
         ];
     }
@@ -264,6 +296,8 @@ function cd_event_out(array $e) {
         'base_url' => $e['base_url'],
         'base_url_locked' => (bool) $e['base_url_locked'],
         'config_version' => (int) $e['config_version'],
+        'archived' => !empty($e['archived_at']),
+        'archived_at' => !empty($e['archived_at']) ? cd_iso($e['archived_at']) : null,
         'settings' => cd_event_settings($e),
     ];
 }

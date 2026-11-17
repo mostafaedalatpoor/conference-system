@@ -75,7 +75,7 @@ add_action('template_redirect', function () {
          FROM ' . cd_table('attendees') . ' a
          LEFT JOIN ' . cd_table('registration_types') . ' t ON t.id = a.registration_type_id
          LEFT JOIN ' . cd_table('roles') . ' r ON r.id = a.role_id
-         WHERE a.id = %s',
+         WHERE a.id = %s AND a.status <> \'deleted\'',
         $card['attendee_id']
     ), ARRAY_A);
     if (!$person) {

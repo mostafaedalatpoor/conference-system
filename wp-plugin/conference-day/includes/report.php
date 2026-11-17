@@ -12,6 +12,8 @@ const CD_FLAG_LABELS = [
     'possible_duplicate' => 'موبایل تکراری (احتمالاً ثبت دوباره)',
     'unknown_attendee' => 'کارت به کسی وصل نیست',
     'bad_registration_type' => 'نوع ثبت‌نام نامعتبر',
+    'not_permitted' => 'کار بدون اجازه (سرور نپذیرفت)',
+    'not_checked_in' => 'لغو پذیرش برای فرد پذیرش‌نشده (سرور نپذیرفت)',
 ];
 
 const CD_KIND_LABELS = [
@@ -56,7 +58,7 @@ function cd_build_report(array $event) {
     $eid = (int) $event['id'];
     $config = cd_event_config($eid);
     $attendees = $wpdb->get_results($wpdb->prepare(
-        'SELECT id, first_name, last_name, registration_type_id, role_id, source FROM ' . cd_table('attendees') . ' WHERE event_id = %d',
+        'SELECT id, first_name, last_name, registration_type_id, role_id, source FROM ' . cd_table('attendees') . " WHERE event_id = %d AND status = 'active'",
         $eid
     ), ARRAY_A);
     $states = cd_attendee_states($eid);
@@ -109,6 +111,7 @@ function cd_build_report(array $event) {
             'id' => $m['id'],
             'name' => $m['name'],
             'day' => $m['day'],
+            'active' => $m['active'],
             'entitled' => $entitled,
             'served' => $served,
             'duplicates' => $extra,
@@ -125,6 +128,24 @@ function cd_build_report(array $event) {
          ORDER BY l.seq DESC LIMIT 100',
         $eid
     ), ARRAY_A);
+
+    // کارهایی که سرور نپذیرفت (بدون اجازه، لغو بی‌مورد) هم در موارد مشکوک می‌آیند.
+    $rejected = $wpdb->get_results($wpdb->prepare(
+        'SELECT 0 AS seq, r.kind, r.reason AS flag, r.device_time, r.card_token, a.first_name, a.last_name, s.name AS staff_name, 1 AS rejected
+         FROM ' . cd_table('rejected_events') . ' r
+         LEFT JOIN ' . cd_table('attendees') . ' a ON a.id = r.attendee_id
+         LEFT JOIN ' . cd_table('staff') . ' s ON s.id = r.staff_id
+         WHERE r.event_id = %d ORDER BY r.id DESC LIMIT 100',
+        $eid
+    ), ARRAY_A);
+    $rejected_total = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cd_table('rejected_events') . ' WHERE event_id = %d', $eid));
+    if ($rejected) {
+        $flagged = array_merge($flagged, $rejected);
+        usort($flagged, function ($a, $b) {
+            return strcmp($b['device_time'], $a['device_time']);
+        });
+        $flagged = array_slice($flagged, 0, 100);
+    }
 
     $devices = $wpdb->get_results($wpdb->prepare(
         'SELECT d.id, d.label, d.last_sync_at, d.revoked, s.name AS staff_name
@@ -145,6 +166,7 @@ function cd_build_report(array $event) {
             'checked_in' => $checked_in,
             'walkins' => $walkins,
             'reserve_cards_free' => $reserve_free,
+            'rejected' => $rejected_total,
         ],
         'by_registration_type' => array_values($by_type),
         'meals' => $meals,
@@ -158,6 +180,7 @@ function cd_build_report(array $event) {
                 'staff' => $f['staff_name'],
                 'card_token' => $f['card_token'],
                 'device_time' => cd_iso($f['device_time']),
+                'rejected' => !empty($f['rejected']),
             ];
         }, $flagged),
         'devices' => array_map(function ($d) {
@@ -189,7 +212,7 @@ function cd_export_csv(array $event) {
     $attendees = $wpdb->get_results($wpdb->prepare(
         'SELECT a.*, c.serial FROM ' . cd_table('attendees') . ' a
          LEFT JOIN ' . cd_table('cards') . ' c ON c.attendee_id = a.id
-         WHERE a.event_id = %d ORDER BY a.last_name, a.first_name',
+         WHERE a.event_id = %d AND a.status = \'active\' ORDER BY a.last_name, a.first_name',
         $eid
     ), ARRAY_A);
     $states = cd_attendee_states($eid);

@@ -23,6 +23,8 @@ function cd_install_tables() {
     $staff = cd_table('staff');
     $devices = cd_table('devices');
     $log = cd_table('event_log');
+    $batches = cd_table('import_batches');
+    $rejected = cd_table('rejected_events');
 
     $sql = [];
 
@@ -37,6 +39,7 @@ function cd_install_tables() {
   config_version int(10) unsigned NOT NULL DEFAULT 1,
   settings longtext NULL,
   card_template longtext NULL,
+  archived_at datetime NULL,
   created_at datetime NOT NULL,
   updated_at datetime NOT NULL,
   PRIMARY KEY  (id),
@@ -68,6 +71,7 @@ function cd_install_tables() {
   day date NULL,
   name varchar(191) NOT NULL,
   sort int(11) NOT NULL DEFAULT 0,
+  active tinyint(1) NOT NULL DEFAULT 1,
   PRIMARY KEY  (id),
   UNIQUE KEY event_code (event_id,code)
 ) ENGINE=InnoDB $c;";
@@ -112,11 +116,14 @@ function cd_install_tables() {
   share_contact tinyint(1) NULL,
   website varchar(255) NOT NULL DEFAULT '',
   search_key varchar(512) NOT NULL DEFAULT '',
+  status varchar(16) NOT NULL DEFAULT 'active',
+  import_batch varchar(36) NOT NULL DEFAULT '',
   created_at datetime NOT NULL,
   updated_at datetime NOT NULL,
   PRIMARY KEY  (id),
   KEY event_id (event_id),
-  KEY mobile (mobile)
+  KEY mobile (mobile),
+  KEY import_batch (import_batch)
 ) ENGINE=InnoDB $c;";
 
     $sql[] = "CREATE TABLE $cards (
@@ -140,6 +147,8 @@ function cd_install_tables() {
   can_serve tinyint(1) NOT NULL DEFAULT 1,
   is_admin tinyint(1) NOT NULL DEFAULT 0,
   active tinyint(1) NOT NULL DEFAULT 1,
+  updated_at datetime NULL,
+  updated_by varchar(191) NOT NULL DEFAULT '',
   PRIMARY KEY  (id),
   UNIQUE KEY event_name (event_id,name)
 ) ENGINE=InnoDB $c;";
@@ -177,6 +186,35 @@ function cd_install_tables() {
   KEY event_seq (event_id,seq),
   KEY attendee_id (attendee_id),
   KEY card_token (card_token)
+) ENGINE=InnoDB $c;";
+
+    // ورودی‌های اکسل («ورودی‌های قبلی»)؛ هر فرد شناسه‌ی آخرین ورودی‌ای که او را آورده دارد.
+    $sql[] = "CREATE TABLE $batches (
+  id char(36) NOT NULL,
+  event_id bigint(20) unsigned NOT NULL,
+  file_name varchar(255) NOT NULL DEFAULT '',
+  created_at datetime NOT NULL,
+  PRIMARY KEY  (id),
+  KEY event_id (event_id)
+) ENGINE=InnoDB $c;";
+
+    // کارهایی که سرور نپذیرفت (بدون اجازه، لغو پذیرش برای پذیرش‌نشده) تا در گزارش دیده شوند.
+    $sql[] = "CREATE TABLE $rejected (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  uuid char(36) NOT NULL,
+  event_id bigint(20) unsigned NOT NULL,
+  device_id bigint(20) unsigned NULL,
+  staff_id bigint(20) unsigned NULL,
+  kind varchar(32) NOT NULL,
+  attendee_id char(36) NULL,
+  card_token varchar(64) NULL,
+  meal_id bigint(20) unsigned NULL,
+  reason varchar(32) NOT NULL,
+  device_time datetime NOT NULL,
+  received_at datetime NOT NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY uuid (uuid),
+  KEY event_id (event_id)
 ) ENGINE=InnoDB $c;";
 
     foreach ($sql as $s) {
