@@ -302,6 +302,14 @@ class ReserveCard {
   ReserveCard(this.token, this.serial, this.used);
 }
 
+/// ردیفی از اکسل که موبایل یا ایمیلش با فرد فعلی دیگری یکی است. [row] شماره‌ی ردیف داده (از ۰).
+class ImportConflict {
+  final int row;
+  final Person existing;
+  final Person incoming;
+  ImportConflict(this.row, this.existing, this.incoming);
+}
+
 class ImportResult {
   final List<Person> people;
   final List<String> problems;
@@ -310,7 +318,14 @@ class ImportResult {
 
   /// ردیف‌هایی که موبایل یا ایمیلشان با ردیف دیگری یکی است ولی نامشان نه: جدا وارد می‌شوند.
   final int possibleDuplicates;
-  ImportResult(this.people, this.problems, this.updated, this.created, [this.possibleDuplicates = 0]);
+
+  /// ردیف‌هایی که موبایل یا ایمیلشان با فرد فعلی دیگری یکی است (ادغام / فرد جدید / رد).
+  final List<ImportConflict> conflicts;
+
+  /// ردیف‌های واردشونده بدون موبایل («ناقص · وارد می‌شوند»).
+  final int incomplete;
+  ImportResult(this.people, this.problems, this.updated, this.created,
+      [this.possibleDuplicates = 0, this.conflicts = const [], this.incomplete = 0]);
 }
 
 /// تنظیم‌های رویداد که هم اپ نیروها و هم صفحه‌ی عمومی به آن نیاز دارند.
@@ -757,9 +772,22 @@ class AdminState extends ChangeNotifier {
   }
 
   /// تبدیل ردیف‌های اکسل به شرکت‌کننده؛ فقط پیش‌نمایش، چیزی ارسال نمی‌شود.
-  ImportResult buildImport(SheetTable table, Map<String, int> mapping, String typeCode) {
+  /// تبدیل ردیف‌های اکسل به شرکت‌کننده.
+  /// نوع: [typeCode] برای همه، یا از ستون `type` با [typeByValue] (normalizeText مقدار → کد نوع).
+  /// نقش: اگر [roleByValue] داده شود از آن (مقدار null = بدون نقش)، وگرنه تطبیق نام یا کد.
+  /// [resolutions]: برای ردیفی که با فرد فعلی دیگری تماس مشترک دارد: merge، new (پیش‌فرض) یا skip.
+  ImportResult buildImport(
+    SheetTable table,
+    Map<String, int> mapping,
+    String? typeCode, {
+    Map<String, String>? typeByValue,
+    Map<String, String?>? roleByValue,
+    Map<int, String> resolutions = const {},
+  }) {
     final out = <String, Person>{};
     final problems = <String>[];
+    final conflicts = <ImportConflict>[];
+    var incomplete = 0;
     var serial = _nextSerial;
     var created = 0;
     var updated = 0;
@@ -803,10 +831,42 @@ class AdminState extends ChangeNotifier {
         problems.add('ردیف ${r + 2}: ${email.isNotEmpty ? 'ایمیل' : 'موبایل'} با «${other.fullName}» یکی است؛ '
             'جدا وارد شد (احتمال تکراری). بعداً از صفحه‌ی فرد می‌توانید ادغام کنید.');
       }
+      // نوع: یک نوع برای همه یا از ستون با جدول تطبیق.
+      var rowType = typeCode;
+      if (rowType == null) {
+        final raw = cell(row, 'type');
+        rowType = typeByValue?[normalizeText(raw)];
+        if (rowType == null) {
+          problems.add('ردیف ${r + 2}: نوع «$raw» به نوعی تطبیق داده نشده؛ رد شد.');
+          continue;
+        }
+      }
+      // تماس مشترک با فرد فعلی دیگری: تصمیم با مدیر (ادغام، فرد جدید، رد).
+      if (people[id] == null) {
+        final probe = Person(id: id, firstName: first, lastName: last, typeCode: rowType, mobile: mobile, email: email);
+        final same = findPossibleDuplicates(probe, people.values);
+        if (same.isNotEmpty) {
+          final choice = resolutions[r] ?? 'new';
+          // کارت تصمیم همیشه می‌ماند تا انتخاب «رد» هم برگشت‌پذیر باشد.
+          conflicts.add(ImportConflict(r, same.first, probe));
+          if (choice == 'skip') {
+            problems.add('ردیف ${r + 2}: تکراری با «${same.first.fullName}»؛ به انتخاب شما رد شد.');
+            continue;
+          }
+          if (choice == 'merge') id = same.first.id;
+        }
+      }
       final existing = people[id];
       var roleCode = existing?.roleCode;
       final roleRaw = cell(row, 'role');
-      if (roleRaw.isNotEmpty) {
+      if (roleByValue != null && roleRaw.isNotEmpty) {
+        final k = normalizeText(roleRaw);
+        if (roleByValue.containsKey(k)) {
+          roleCode = roleByValue[k];
+        } else {
+          problems.add('ردیف ${r + 2}: نقش «$roleRaw» تطبیق داده نشده؛ بدون نقش وارد شد.');
+        }
+      } else if (roleRaw.isNotEmpty) {
         final n = normalizeText(roleRaw);
         final match = roles.where((ro) => normalizeText(ro.name) == n || ro.code == roleRaw);
         if (match.isNotEmpty) {
@@ -825,7 +885,7 @@ class AdminState extends ChangeNotifier {
         mobile: mobile,
         organization: cell(row, 'organization'),
         country: cell(row, 'country'),
-        typeCode: typeCode,
+        typeCode: rowType,
         presentationKind: pk.isNotEmpty ? pk : (existing?.presentationKind ?? ''),
         roleCode: roleCode,
         token: existing?.token ?? _randomToken(),
@@ -833,13 +893,36 @@ class AdminState extends ChangeNotifier {
         shareContact: shareFrom(cell(row, 'share_contact')) ?? existing?.shareContact,
         website: cell(row, 'website').isNotEmpty ? cell(row, 'website') : (existing?.website ?? ''),
       );
+      if (mobile.isEmpty) incomplete++;
       if (existing == null) {
         created++;
       } else {
         updated++;
       }
     }
-    return ImportResult(out.values.toList(), problems, updated, created, possibleDuplicates);
+    return ImportResult(out.values.toList(), problems, updated, created, possibleDuplicates, conflicts, incomplete);
+  }
+
+  /// «ساخت نوع تازه» یا نقش تازه از مقدار ستون اکسل؛ روی سرور ذخیره و کدش برگردانده می‌شود.
+  Future<String?> createTypeOrRole({required bool role, required String name}) async {
+    final list = role ? roles : types;
+    var n = list.length + 1;
+    String code() => '${role ? 'role' : 'type'}$n';
+    while (list.any((x) => x.code == code())) {
+      n++;
+    }
+    final c = code();
+    String? out;
+    await run('«$name» ساخته شد.', () async {
+      await api.post('/admin/events/$eventCode/config', {
+        role ? 'roles' : 'registration_types': [
+          {'code': c, 'name': name},
+        ],
+      });
+      await _loadEvent(eventCode!);
+      out = c;
+    });
+    return out;
   }
 
   /// ارسال افراد. [fileName] اگر باشد، همه‌ی این ارسال یک «ورودی» است تا بعداً یکجا حذف شود.

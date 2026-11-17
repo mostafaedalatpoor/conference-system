@@ -24,6 +24,7 @@ const Map<String, String> fieldLabels = {
   'organization': 'سازمان',
   'country': 'کشور',
   'presentation_kind': 'نوع ارائه (پوستر/شفاهی)',
+  'type': 'نوع ثبت‌نام',
   'role': 'نقش',
   'share_contact': 'اشتراک اطلاعات تماس (بله/خیر)',
   'website': 'صفحه‌ی شخصی (لینک)',
@@ -39,6 +40,7 @@ const Map<String, List<String>> _synonyms = {
   'organization': ['organization', 'organisation', 'affiliation', 'company', 'university', 'سازمان', 'دانشگاه', 'محل کار', 'وابستگی'],
   'country': ['country', 'کشور'],
   'presentation_kind': ['presentation', 'presentation type', 'نوع ارائه', 'ارائه'],
+  'type': ['type', 'registration type', 'category', 'نوع ثبت‌نام', 'نوع ثبت نام', 'نوع', 'دسته'],
   'role': ['role', 'نقش'],
   'share_contact': ['share contact', 'اشتراک اطلاعات تماس', 'اشتراک تماس'],
   'website': ['website', 'homepage', 'url', 'وب‌سایت', 'وبسایت', 'صفحه شخصی', 'صفحه‌ی شخصی'],
@@ -160,4 +162,31 @@ String presentationKindFrom(String raw) {
   if (s.contains('پوستر') || s.contains('poster')) return 'poster';
   if (s.contains('شفاهی') || s.contains('oral') || s.contains('سخنرانی') || s.contains('lecture')) return 'oral';
   return '';
+}
+
+/// مقدارهای متمایز یک ستون (بدون خالی)، به ترتیب اولین دیده‌شدن؛ برای جدول تطبیق مقدار نوع و نقش.
+List<String> distinctValues(SheetTable t, int? col) {
+  if (col == null || col < 0) return const [];
+  final seen = <String>{};
+  final out = <String>[];
+  for (final r in t.rows) {
+    final v = col < r.length ? r[col].trim() : '';
+    if (v.isNotEmpty && seen.add(normalizeText(v))) out.add(v);
+  }
+  return out;
+}
+
+/// تطبیق خودکار مقدار ستون با نوع یا نقش تعریف‌شده (نام یا کد یکسان). کلید: normalizeText مقدار.
+Map<String, String> autoMatchValues(List<String> values, Iterable<(String code, String name)> items) {
+  final out = <String, String>{};
+  for (final v in values) {
+    final n = normalizeText(v);
+    for (final (code, name) in items) {
+      if (normalizeText(name) == n || code.toLowerCase() == v.toLowerCase()) {
+        out[n] = code;
+        break;
+      }
+    }
+  }
+  return out;
 }
