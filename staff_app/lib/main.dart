@@ -5,7 +5,7 @@ import 'screens/home.dart';
 import 'screens/setup.dart';
 import 'brand.dart';
 import 'store.dart';
-import 'theme/daftar.dart';
+import 'theme/firouzeh.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,8 +40,8 @@ class StaffApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: daftarTheme(Brightness.light),
-      darkTheme: daftarTheme(Brightness.dark),
+      theme: firouzehTheme(Brightness.light),
+      darkTheme: firouzehTheme(Brightness.dark),
       // بزرگ‌نمایی متن سیستم تا ۱٫۳ برابر؛ بالاتر از آن چیدمان صفحه‌ی اسکن و شیت می‌شکند.
       builder: (context, child) => MediaQuery.withClampedTextScaling(maxScaleFactor: 1.3, child: child!),
       home: const _Root(),

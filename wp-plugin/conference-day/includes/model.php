@@ -180,7 +180,7 @@ function cd_event_day($utc_datetime) {
     return get_date_from_gmt($utc_datetime, 'Y-m-d');
 }
 
-/** روز یک ردیف دفتر: ستون day، یا برای داده‌ی قدیمی از زمان دستگاه. */
+/** روز یک ردیف فهرست رخدادها: ستون day، یا برای داده‌ی قدیمی از زمان دستگاه. */
 function cd_log_day(array $row) {
     return !empty($row['day']) ? $row['day'] : cd_event_day($row['device_time']);
 }

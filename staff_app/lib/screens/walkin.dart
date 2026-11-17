@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../models.dart';
 import '../normalize.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 import 'scanner.dart';
 
@@ -174,20 +174,20 @@ class _WalkinScreenState extends State<WalkinScreen> {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final free = store.freeReserveCards.length;
-    const gap = SizedBox(height: DaftarSize.space4);
+    const gap = SizedBox(height: FirouzehSize.space4);
 
     return Scaffold(
       appBar: AppBar(title: const Text('ثبت‌نام در محل')),
       body: ListView(
         padding: EdgeInsets.symmetric(
-          horizontal: ((MediaQuery.sizeOf(context).width - 560) / 2).clamp(DaftarSize.space4, double.infinity),
-          vertical: DaftarSize.space4,
+          horizontal: ((MediaQuery.sizeOf(context).width - 560) / 2).clamp(FirouzehSize.space4, double.infinity),
+          vertical: FirouzehSize.space4,
         ),
         children: [
-          DaftarField(
+          FirouzehField(
             label: 'نام',
             error: _firstError,
             child: TextField(
@@ -200,7 +200,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
             ),
           ),
           gap,
-          DaftarField(
+          FirouzehField(
             label: 'نام خانوادگی',
             error: _lastError,
             child: TextField(
@@ -212,7 +212,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
             ),
           ),
           gap,
-          DaftarField(
+          FirouzehField(
             label: 'موبایل',
             optional: true,
             child: TextField(
@@ -225,7 +225,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
             ),
           ),
           gap,
-          DaftarField(
+          FirouzehField(
             label: 'ایمیل',
             optional: true,
             child: TextField(
@@ -239,7 +239,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
             ),
           ),
           gap,
-          DaftarField(
+          FirouzehField(
             label: 'نوع ثبت‌نام',
             error: _typeError,
             child: store.types.length <= 3 && store.types.isNotEmpty
@@ -257,9 +257,9 @@ class _WalkinScreenState extends State<WalkinScreen> {
           ),
           if (store.roles.isNotEmpty) ...[
             gap,
-            DaftarField(
+            FirouzehField(
               label: 'نقش (اختیاری)',
-              child: Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+              child: Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
                 ChoiceChip(
                   label: const Text('بدون نقش'),
                   selected: _roleId == null,
@@ -275,24 +275,24 @@ class _WalkinScreenState extends State<WalkinScreen> {
             ),
           ],
           if (store.usesCards) ...[
-          const SizedBox(height: DaftarSize.space5),
+          const SizedBox(height: FirouzehSize.space5),
           Row(children: [
             Expanded(child: Text('کارت رزرو', style: theme.textTheme.titleMedium)),
             Text('${faDigits(free)} کارت آزاد',
                 style: theme.textTheme.bodySmall?.copyWith(color: free == 0 ? x.stop : x.inkMuted)),
           ]),
-          const SizedBox(height: DaftarSize.space2),
+          const SizedBox(height: FirouzehSize.space2),
           if (_card != null)
             // خانه‌ی پر: پلاک شماره‌ی کارت درشت با تیک.
             Container(
-              padding: const EdgeInsets.all(DaftarSize.space4),
+              padding: const EdgeInsets.all(FirouzehSize.space4),
               decoration: BoxDecoration(
                 color: x.goSoft,
-                borderRadius: BorderRadius.circular(DaftarSize.radiusMd),
+                borderRadius: BorderRadius.circular(FirouzehSize.radiusMd),
               ),
               child: Row(children: [
                 Icon(Icons.check_circle_rounded, color: x.go, size: 32),
-                const SizedBox(width: DaftarSize.space3),
+                const SizedBox(width: FirouzehSize.space3),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('کارت رزرو وصل می‌شود', style: theme.textTheme.bodySmall?.copyWith(color: x.ink)),
@@ -311,7 +311,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
               ]),
             )
           else
-            DaftarField(
+            FirouzehField(
               label: 'شماره‌ی روی کارت',
               error: _cardError,
               helper: store.cameraScan
@@ -338,7 +338,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
                     ),
                   ),
                   if (store.cameraScan) ...[
-                    const SizedBox(width: DaftarSize.space2),
+                    const SizedBox(width: FirouzehSize.space2),
                     OutlinedButton.icon(
                       onPressed: _scan,
                       icon: const Icon(Icons.qr_code_scanner_rounded),
@@ -349,9 +349,9 @@ class _WalkinScreenState extends State<WalkinScreen> {
               ),
             ),
           ],
-          const SizedBox(height: DaftarSize.space6),
+          const SizedBox(height: FirouzehSize.space6),
           FilledButton.icon(
-            style: daftarGoStyle(context),
+            style: firouzehGoStyle(context),
             icon: const Icon(Icons.how_to_reg_rounded),
             label: Text(store.usesCards ? 'ثبت، پذیرش و تحویل کارت' : 'ثبت و پذیرش'),
             onPressed: _save,

@@ -5,7 +5,7 @@ import '../excel_import.dart';
 import '../main.dart';
 import '../normalize.dart';
 import '../state.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 
 /// ورود افراد از اکسل در سه گام (طراحی ویندوز ۰۶-Import، مورد ۱۸):
@@ -95,7 +95,7 @@ class _ImportScreenState extends State<ImportScreen> {
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     if (_table != null) _autoMatch(s);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     const steps = ['انتخاب فایل', 'نگاشت ستون‌ها', 'بررسی و ورود'];
 
@@ -104,18 +104,18 @@ class _ImportScreenState extends State<ImportScreen> {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(height: 6, decoration: BoxDecoration(color: i <= _step ? x.stamp : x.line, borderRadius: BorderRadius.circular(3))),
-            const SizedBox(height: DaftarSize.space1),
+            const SizedBox(height: FirouzehSize.space1),
             Text('${faDigits(i + 1)} · ${steps[i]}',
                 style: theme.textTheme.bodySmall?.copyWith(color: i == _step ? x.ink : x.inkMuted, fontWeight: i == _step ? FontWeight.w800 : null)),
           ]),
         ),
-        if (i < steps.length - 1) const SizedBox(width: DaftarSize.space2),
+        if (i < steps.length - 1) const SizedBox(width: FirouzehSize.space2),
       ],
     ]);
 
     return PageBody(title: 'ورود افراد از اکسل', children: [
       header,
-      const SizedBox(height: DaftarSize.space4),
+      const SizedBox(height: FirouzehSize.space4),
       ...switch (_step) {
         0 => _fileStep(s),
         1 => _mappingStep(s),
@@ -135,7 +135,7 @@ class _ImportScreenState extends State<ImportScreen> {
       Text(s.people.isEmpty
           ? 'هنوز کسی وارد نشده.'
           : 'روی سرور: ${[for (final e in byType.entries) '${s.typeName(e.key)}: ${faDigits(e.value)}'].join('   ·   ')}'),
-      const SizedBox(height: DaftarSize.space3),
+      const SizedBox(height: FirouzehSize.space3),
       Row(children: [
         OutlinedButton.icon(onPressed: _pick, icon: const Icon(Icons.folder_open_rounded), label: const Text('انتخاب فایل (xlsx یا csv)')),
         const SizedBox(width: 12),
@@ -152,7 +152,7 @@ class _ImportScreenState extends State<ImportScreen> {
           onChanged: (t) => setState(() => _selectTable(t)),
         ),
       ],
-      const SizedBox(height: DaftarSize.space3),
+      const SizedBox(height: FirouzehSize.space3),
       const Hint(
         'ورود دوباره‌ی همان فایل کسی را تکراری نمی‌کند و کارت چاپ‌شده‌اش را عوض نمی‌کند؛ شناسه‌ی هر نفر از ایمیل، '
         'یا اگر نبود موبایل، یا اگر نبود نام ساخته می‌شود.',
@@ -163,8 +163,8 @@ class _ImportScreenState extends State<ImportScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),
             child: Row(children: [
-              Icon(Icons.description_rounded, size: 20, color: DaftarColors.of(context).inkMuted),
-              const SizedBox(width: DaftarSize.space2),
+              Icon(Icons.description_rounded, size: 20, color: FirouzehColors.of(context).inkMuted),
+              const SizedBox(width: FirouzehSize.space2),
               Expanded(
                 child: Text([
                   b.fileName.isEmpty ? 'بدون نام' : b.fileName,
@@ -173,14 +173,14 @@ class _ImportScreenState extends State<ImportScreen> {
                 ].join(' · ')),
               ),
               TextButton(
-                style: TextButton.styleFrom(foregroundColor: DaftarColors.of(context).stop),
+                style: TextButton.styleFrom(foregroundColor: FirouzehColors.of(context).stop),
                 onPressed: s.busy || b.people == 0 ? null : () => _deleteImport(s, b),
                 child: const Text('حذف این ورودی…'),
               ),
             ]),
           ),
       ],
-      const SizedBox(height: DaftarSize.space5),
+      const SizedBox(height: FirouzehSize.space5),
       Align(
         alignment: AlignmentDirectional.centerStart,
         child: FilledButton(onPressed: _table == null ? null : () => setState(() => _step = 1), child: const Text('بعدی: نگاشت ستون‌ها')),
@@ -199,7 +199,7 @@ class _ImportScreenState extends State<ImportScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
           FilledButton(
-            style: daftarDangerStyle(c),
+            style: firouzehDangerStyle(c),
             onPressed: del > 0 ? () => Navigator.pop(c, true) : null,
             child: Text('حذف ${faDigits(del)} نفر'),
           ),
@@ -212,10 +212,10 @@ class _ImportScreenState extends State<ImportScreen> {
   // ---------------------------------------------------------------- گام ۲
 
   Widget _pill(String text, bool ok) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: ok ? x.goSoft : x.waitSoft, borderRadius: BorderRadius.circular(DaftarSize.radiusPill)),
+      decoration: BoxDecoration(color: ok ? x.goSoft : x.waitSoft, borderRadius: BorderRadius.circular(FirouzehSize.radiusPill)),
       child: Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ok ? x.go : x.wait, fontWeight: FontWeight.w700)),
     );
   }
@@ -233,7 +233,7 @@ class _ImportScreenState extends State<ImportScreen> {
           child: Row(children: [
             Expanded(child: Text(v, style: const TextStyle(fontWeight: FontWeight.w700))),
             const Icon(Icons.arrow_back_rounded, size: 18),
-            const SizedBox(width: DaftarSize.space2),
+            const SizedBox(width: FirouzehSize.space2),
             SizedBox(
               width: 220,
               child: DropdownButtonFormField<String?>(
@@ -254,7 +254,7 @@ class _ImportScreenState extends State<ImportScreen> {
                 }),
               ),
             ),
-            const SizedBox(width: DaftarSize.space2),
+            const SizedBox(width: FirouzehSize.space2),
             SizedBox(
               width: 120,
               child: (role ? _roleByValue.containsKey(normalizeText(v)) : _typeByValue.containsKey(normalizeText(v)))
@@ -283,7 +283,7 @@ class _ImportScreenState extends State<ImportScreen> {
     final ready = _namesMapped && (_typeFromColumn ? _mapping.containsKey('type') && unmatchedTypes == 0 : _typeCode != null);
     return [
       Text('هر ستون اکسل کدام ویژگی است؟', style: Theme.of(context).textTheme.titleMedium),
-      const SizedBox(height: DaftarSize.space2),
+      const SizedBox(height: FirouzehSize.space2),
       for (final f in fieldLabels.entries)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 3),
@@ -320,7 +320,7 @@ class _ImportScreenState extends State<ImportScreen> {
                 }),
               ),
             ),
-            const SizedBox(width: DaftarSize.space2),
+            const SizedBox(width: FirouzehSize.space2),
             SizedBox(
               width: 110,
               child: _guessed.contains(f.key) && _mapping.containsKey(f.key)
@@ -339,7 +339,7 @@ class _ImportScreenState extends State<ImportScreen> {
         showSelectedIcon: false,
         onSelectionChanged: (v) => setState(() => _typeFromColumn = v.first),
       ),
-      const SizedBox(height: DaftarSize.space3),
+      const SizedBox(height: FirouzehSize.space3),
       if (!_typeFromColumn)
         SizedBox(
           width: 300,
@@ -357,7 +357,7 @@ class _ImportScreenState extends State<ImportScreen> {
       if (_mapping.containsKey('role')) ...[
         const SectionTitle('نقش'),
         const Hint('هر مقدار ستون نقش به کدام نقش؟ مقداری که تطبیق نشود، بدون نقش وارد می‌شود.'),
-        const SizedBox(height: DaftarSize.space2),
+        const SizedBox(height: FirouzehSize.space2),
         _valueTable(s, role: true),
       ],
       if (s.types.isEmpty && !_typeFromColumn)
@@ -365,10 +365,10 @@ class _ImportScreenState extends State<ImportScreen> {
           padding: EdgeInsets.only(top: 8),
           child: Notice(tone: NoticeTone.wait, text: 'اول در «پیکربندی» انواع ثبت‌نام را بسازید، یا «از ستون فایل» را انتخاب کنید.'),
         ),
-      const SizedBox(height: DaftarSize.space5),
+      const SizedBox(height: FirouzehSize.space5),
       Row(children: [
         OutlinedButton(onPressed: () => setState(() => _step = 0), child: const Text('بازگشت')),
-        const SizedBox(width: DaftarSize.space3),
+        const SizedBox(width: FirouzehSize.space3),
         FilledButton(
           onPressed: ready ? () => setState(() => _step = 2) : null,
           child: Text(!_namesMapped
@@ -386,7 +386,7 @@ class _ImportScreenState extends State<ImportScreen> {
   List<Widget> _reviewStep(AdminState s) {
     final r = _result(s);
     if (r == null) return [const Notice(tone: NoticeTone.wait, text: 'نگاشت کامل نیست.')];
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     Widget stat(int n, String label, Color c) => Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -397,7 +397,7 @@ class _ImportScreenState extends State<ImportScreen> {
     return [
       Card(
         child: Padding(
-          padding: const EdgeInsets.all(DaftarSize.space4),
+          padding: const EdgeInsets.all(FirouzehSize.space4),
           child: Row(children: [
             stat(r.people.length - r.incomplete, 'کامل و آماده', x.go),
             stat(r.incomplete, 'ناقص (بدون موبایل) · وارد می‌شوند', x.wait),
@@ -412,14 +412,14 @@ class _ImportScreenState extends State<ImportScreen> {
         const SectionTitle('ردیف‌هایی که توجه می‌خواهند'),
         Container(
           constraints: const BoxConstraints(maxHeight: 180),
-          decoration: BoxDecoration(color: x.waitSoft, borderRadius: BorderRadius.circular(DaftarSize.radiusXs)),
-          child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(DaftarSize.space3), children: [
+          decoration: BoxDecoration(color: x.waitSoft, borderRadius: BorderRadius.circular(FirouzehSize.radiusXs)),
+          child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(FirouzehSize.space3), children: [
             for (final p in r.problems)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Icon(Icons.warning_rounded, size: 16, color: x.wait),
-                  const SizedBox(width: DaftarSize.space2),
+                  const SizedBox(width: FirouzehSize.space2),
                   Expanded(child: Text(p, style: theme.textTheme.bodySmall)),
                 ]),
               ),
@@ -455,13 +455,13 @@ class _ImportScreenState extends State<ImportScreen> {
         ),
       ),
       if (r.people.length > 30) Text('… و ${faDigits(r.people.length - 30)} نفر دیگر'),
-      const SizedBox(height: DaftarSize.space4),
+      const SizedBox(height: FirouzehSize.space4),
       Text('افراد فعلی دست نمی‌خورند؛ ردیف تکراری فقط پس از تأیید شما ادغام می‌شود.',
           style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
-      const SizedBox(height: DaftarSize.space3),
+      const SizedBox(height: FirouzehSize.space3),
       Row(children: [
         OutlinedButton(onPressed: () => setState(() => _step = 1), child: const Text('بازگشت')),
-        const SizedBox(width: DaftarSize.space3),
+        const SizedBox(width: FirouzehSize.space3),
         FilledButton.icon(
           icon: const Icon(Icons.cloud_upload_rounded),
           onPressed: s.busy || r.people.isEmpty
@@ -485,13 +485,13 @@ class _ImportScreenState extends State<ImportScreen> {
 
   /// کارت «فرد فعلی ↔ ردیف جدید» با «ادغام»، «فرد جدید بساز»، «رد».
   Widget _conflictCard(AdminState s, ImportConflict c) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final choice = _resolutions[c.row] ?? 'new';
     Widget side(String tag, Person p) => Expanded(
           child: Container(
-            padding: const EdgeInsets.all(DaftarSize.space3),
-            decoration: BoxDecoration(color: x.sunken, borderRadius: BorderRadius.circular(DaftarSize.radiusSm)),
+            padding: const EdgeInsets.all(FirouzehSize.space3),
+            decoration: BoxDecoration(color: x.sunken, borderRadius: BorderRadius.circular(FirouzehSize.radiusSm)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(tag, style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
               Text(p.displayName, style: theme.textTheme.titleSmall),
@@ -502,16 +502,16 @@ class _ImportScreenState extends State<ImportScreen> {
           ),
         );
     return Card(
-      margin: const EdgeInsets.only(top: DaftarSize.space3),
+      margin: const EdgeInsets.only(top: FirouzehSize.space3),
       child: Padding(
-        padding: const EdgeInsets.all(DaftarSize.space3),
+        padding: const EdgeInsets.all(FirouzehSize.space3),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text('ردیف ${faDigits(c.row + 2)} · ${normalizeMobile(c.existing.mobile) == normalizeMobile(c.incoming.mobile) && c.incoming.mobile.isNotEmpty ? 'موبایل یکسان' : 'ایمیل یکسان'}',
               style: theme.textTheme.titleSmall),
-          const SizedBox(height: DaftarSize.space2),
-          Row(children: [side('فرد فعلی', c.existing), const SizedBox(width: DaftarSize.space2), side('ردیف جدید', c.incoming)]),
-          const SizedBox(height: DaftarSize.space2),
-          Wrap(spacing: DaftarSize.space2, children: [
+          const SizedBox(height: FirouzehSize.space2),
+          Row(children: [side('فرد فعلی', c.existing), const SizedBox(width: FirouzehSize.space2), side('ردیف جدید', c.incoming)]),
+          const SizedBox(height: FirouzehSize.space2),
+          Wrap(spacing: FirouzehSize.space2, children: [
             for (final (v, label) in const [('merge', 'ادغام'), ('new', 'فرد جدید بساز'), ('skip', 'رد')])
               ChoiceChip(label: Text(label), selected: choice == v, onSelected: (_) => setState(() => _resolutions[c.row] = v)),
           ]),

@@ -3,14 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../normalize.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 
 /// مهلت برگرداندن کار تازه (طراحی ۰۷-Done و ۱۳-MealOk).
 const undoWindow = Duration(seconds: 8);
 
 /// نوار «اشتباه زدم؟ برگردان ۸ ثانیه» با شمارش معکوس و نوار پیشرفت.
 /// تا [deadline] نمایش داده می‌شود و بعد خودش ناپدید می‌شود.
-/// قطعه‌ی تازه در سیستم Daftar؛ رنگ‌ها و اندازه‌ها از DaftarColors و DaftarSize.
+/// قطعه‌ی تازه در سیستم Firouzeh؛ رنگ‌ها و اندازه‌ها از FirouzehColors و FirouzehSize.
 class UndoBar extends StatefulWidget {
   final DateTime deadline;
   final VoidCallback onUndo;
@@ -44,17 +44,17 @@ class _UndoBarState extends State<UndoBar> {
   Widget build(BuildContext context) {
     final left = widget.deadline.difference(DateTime.now());
     if (left.isNegative) return const SizedBox.shrink();
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final secs = (left.inMilliseconds / 1000).ceil();
     return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
-        constraints: const BoxConstraints(minHeight: DaftarSize.tapMin),
-        padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space3),
-        decoration: BoxDecoration(color: x.surface, borderRadius: BorderRadius.circular(DaftarSize.radiusSm)),
+        constraints: const BoxConstraints(minHeight: FirouzehSize.tapMin),
+        padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space3),
+        decoration: BoxDecoration(color: x.surface, borderRadius: BorderRadius.circular(FirouzehSize.radiusSm)),
         child: Row(children: [
           Icon(Icons.undo_rounded, size: 20, color: x.inkMuted),
-          const SizedBox(width: DaftarSize.space2),
+          const SizedBox(width: FirouzehSize.space2),
           Expanded(child: Text(widget.label, style: theme.textTheme.bodyMedium)),
           OutlinedButton(
             onPressed: widget.onUndo,

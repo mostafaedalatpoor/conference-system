@@ -17,7 +17,7 @@ import 'screens/staff.dart';
 import 'brand.dart';
 import 'normalize.dart';
 import 'state.dart';
-import 'theme/daftar.dart';
+import 'theme/firouzeh.dart';
 import 'theme/widgets.dart';
 
 void main() {
@@ -53,8 +53,8 @@ class AdminApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: daftarTheme(Brightness.light, desktop: desktop),
-      darkTheme: daftarTheme(Brightness.dark, desktop: desktop),
+      theme: firouzehTheme(Brightness.light, desktop: desktop),
+      darkTheme: firouzehTheme(Brightness.dark, desktop: desktop),
       builder: (context, child) => MediaQuery.withClampedTextScaling(maxScaleFactor: 1.3, child: child!),
       home: const AppLock(child: Shell()),
     );
@@ -114,7 +114,7 @@ class MessageBar extends StatelessWidget {
       SizedBox(height: 3, child: s.busy ? const LinearProgressIndicator() : null),
       if (s.message != null)
         Padding(
-          padding: const EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space3, DaftarSize.space4, 0),
+          padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, FirouzehSize.space3, FirouzehSize.space4, 0),
           child: Align(
             alignment: AlignmentDirectional.topStart,
             child: ConstrainedBox(
@@ -188,7 +188,7 @@ class _DeskShellState extends State<DeskShell> {
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     final needsEvent = s.event == null;
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final steps = adminSteps(s);
     var i = needsEvent ? 0 : _i;
@@ -241,19 +241,19 @@ class _DeskShellState extends State<DeskShell> {
                 child: Column(children: [
                   Expanded(
                     child: ListView(
-                      padding: const EdgeInsets.all(DaftarSize.space3),
+                      padding: const EdgeInsets.all(FirouzehSize.space3),
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(DaftarSize.space2, DaftarSize.space2, DaftarSize.space2, 0),
+                          padding: const EdgeInsets.fromLTRB(FirouzehSize.space2, FirouzehSize.space2, FirouzehSize.space2, 0),
                           child: Row(children: [
                             Image.asset('assets/brand/logo.png', width: 32, height: 32, semanticLabel: 'لوگوی رویدادیار'),
-                            const SizedBox(width: DaftarSize.space2),
+                            const SizedBox(width: FirouzehSize.space2),
                             Text(appName, style: theme.textTheme.titleMedium),
                           ]),
                         ),
-                        Divider(color: x.line, height: DaftarSize.space5),
+                        Divider(color: x.line, height: FirouzehSize.space5),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(DaftarSize.space2, 0, DaftarSize.space2, DaftarSize.space4),
+                          padding: const EdgeInsets.fromLTRB(FirouzehSize.space2, 0, FirouzehSize.space2, FirouzehSize.space4),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(s.event?.name ?? 'رویدادی انتخاب نشده',
                                 style: theme.textTheme.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -267,9 +267,9 @@ class _DeskShellState extends State<DeskShell> {
                           item(0, 'اتصال و رویداد')
                         else
                           for (var n = 0; n < steps.length; n++) item(steps[n].$1, steps[n].$2, number: n + 1),
-                        const SizedBox(height: DaftarSize.space2),
+                        const SizedBox(height: FirouzehSize.space2),
                         Divider(color: x.line),
-                        const SizedBox(height: DaftarSize.space2),
+                        const SizedBox(height: FirouzehSize.space2),
                         item(5, s.limited ? 'امروز' : 'گزارش زنده'),
                         item(6, 'افراد'),
                       ],
@@ -280,7 +280,7 @@ class _DeskShellState extends State<DeskShell> {
                     onTap: () => showAboutRoydadyar(context),
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(DaftarSize.space4),
+                      padding: const EdgeInsets.all(FirouzehSize.space4),
                       decoration: BoxDecoration(border: Border(top: BorderSide(color: x.line))),
                       child: Text('$productName ${faDigits(appVersion.split('.').take(2).join('٫'))}، $makerShort',
                           style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
@@ -398,7 +398,7 @@ class PrepScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     final steps = adminSteps(s);
-    return ListView(padding: const EdgeInsets.all(DaftarSize.space4), children: [
+    return ListView(padding: const EdgeInsets.all(FirouzehSize.space4), children: [
       for (var n = 0; n < steps.length; n++)
         Builder(builder: (context) {
           final (k, title, _, page) = steps[n];
@@ -510,19 +510,19 @@ class _AppLockState extends State<AppLock> with WidgetsBindingObserver {
         body: SafeArea(
           child: Center(
             child: Padding(
-              padding: const EdgeInsets.all(DaftarSize.space5),
+              padding: const EdgeInsets.all(FirouzehSize.space5),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Image.asset('assets/brand/logo.png', width: 72, height: 72),
-                const SizedBox(height: DaftarSize.space3),
+                const SizedBox(height: FirouzehSize.space3),
                 Text(appName, style: theme.textTheme.titleLarge),
-                const SizedBox(height: DaftarSize.space5),
+                const SizedBox(height: FirouzehSize.space5),
                 FilledButton.icon(
-                  style: daftarWideStyle(context),
+                  style: firouzehWideStyle(context),
                   onPressed: _busy ? null : _unlock,
                   icon: const Icon(Icons.fingerprint_rounded),
                   label: const Text('باز کردن با اثر انگشت یا رمز گوشی'),
                 ),
-                const SizedBox(height: DaftarSize.space6),
+                const SizedBox(height: FirouzehSize.space6),
                 const MakerLine(team: makerTeam),
               ]),
             ),
@@ -536,7 +536,7 @@ class _AppLockState extends State<AppLock> with WidgetsBindingObserver {
           child: SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.all(DaftarSize.space3),
+              padding: const EdgeInsets.all(FirouzehSize.space3),
               child: Notice(
                 tone: NoticeTone.wait,
                 text: 'قفل صفحه‌ی این گوشی روشن نیست؛ هر کسی با این گوشی به مدیریت رویداد دسترسی دارد. '
@@ -566,7 +566,7 @@ class _StepItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final current = state == StepState.current;
     final disabled = state == StepState.disabled;
@@ -580,12 +580,12 @@ class _StepItem extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 2),
       child: Material(
         color: current ? x.stampSoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(DaftarSize.radiusXs),
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusXs),
         child: InkWell(
-          borderRadius: BorderRadius.circular(DaftarSize.radiusXs),
+          borderRadius: BorderRadius.circular(FirouzehSize.radiusXs),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space2, vertical: DaftarSize.space2),
+            padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space2, vertical: FirouzehSize.space2),
             child: Opacity(
               opacity: disabled ? .5 : 1,
               child: Row(children: [
@@ -593,7 +593,7 @@ class _StepItem extends StatelessWidget {
                   width: 28,
                   height: 28,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(DaftarSize.radiusXs)),
+                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(FirouzehSize.radiusXs)),
                   child: number == null
                       ? Icon(Icons.insights_rounded, size: 16, color: badgeFg)
                       : state == StepState.done
@@ -601,7 +601,7 @@ class _StepItem extends StatelessWidget {
                           : Text(faDigits(number!),
                               style: theme.textTheme.labelLarge?.copyWith(color: badgeFg, fontWeight: FontWeight.w800)),
                 ),
-                const SizedBox(width: DaftarSize.space3),
+                const SizedBox(width: FirouzehSize.space3),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(title,
@@ -634,12 +634,12 @@ class PageBody extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(DaftarSize.space5, DaftarSize.space5, DaftarSize.space5, DaftarSize.space7),
+            padding: const EdgeInsets.fromLTRB(FirouzehSize.space5, FirouzehSize.space5, FirouzehSize.space5, FirouzehSize.space7),
             children: [
               // روی گوشی عنوان در نوار بالاست و تکرار نمی‌شود.
               if (title != null && MediaQuery.sizeOf(context).width >= 1024)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: DaftarSize.space2),
+                  padding: const EdgeInsets.only(bottom: FirouzehSize.space2),
                   child: Text(title!, style: Theme.of(context).textTheme.titleLarge),
                 ),
               ...children,
@@ -655,7 +655,7 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: DaftarSize.space5, bottom: DaftarSize.space2),
+        padding: const EdgeInsets.only(top: FirouzehSize.space5, bottom: FirouzehSize.space2),
         child: Text(text, style: Theme.of(context).textTheme.titleMedium),
       );
 }
@@ -667,5 +667,5 @@ class Hint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      Text(text, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: DaftarColors.of(context).inkMuted));
+      Text(text, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: FirouzehColors.of(context).inkMuted));
 }

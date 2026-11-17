@@ -9,7 +9,7 @@ import '../export.dart';
 import '../main.dart';
 import '../normalize.dart';
 import '../state.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 import 'cards.dart' show isMobilePlatform;
 
@@ -110,8 +110,8 @@ class _ExportDialogState extends State<_ExportDialog> {
   }
 
   Widget _chips<T>(Map<T, String> items, bool Function(T) selected, void Function(T) onTap) => Wrap(
-        spacing: DaftarSize.space2,
-        runSpacing: DaftarSize.space2,
+        spacing: FirouzehSize.space2,
+        runSpacing: FirouzehSize.space2,
         children: [
           for (final e in items.entries)
             ChoiceChip(label: Text(e.value), selected: selected(e.key), onSelected: (_) => onTap(e.key)),
@@ -122,9 +122,9 @@ class _ExportDialogState extends State<_ExportDialog> {
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     final theme = Theme.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     Widget label(String t) => Padding(
-          padding: const EdgeInsets.only(top: DaftarSize.space3, bottom: DaftarSize.space2),
+          padding: const EdgeInsets.only(top: FirouzehSize.space3, bottom: FirouzehSize.space2),
           child: Text(t, style: theme.textTheme.labelLarge?.copyWith(color: x.inkMuted)),
         );
     final days = [...{for (final r in _rows) ...((r['days'] as List?) ?? const []).map((e) => '$e')}]..sort();
@@ -140,8 +140,8 @@ class _ExportDialogState extends State<_ExportDialog> {
               _who = k;
               _load();
             }),
-            const SizedBox(height: DaftarSize.space2),
-            Wrap(spacing: DaftarSize.space3, runSpacing: DaftarSize.space2, children: [
+            const SizedBox(height: FirouzehSize.space2),
+            Wrap(spacing: FirouzehSize.space3, runSpacing: FirouzehSize.space2, children: [
               SizedBox(
                 width: 180,
                 child: DropdownButtonFormField<String?>(
@@ -194,7 +194,7 @@ class _ExportDialogState extends State<_ExportDialog> {
                 ),
             ]),
             label('ستون‌ها'),
-            Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+            Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
               for (final e in allCols.entries)
                 FilterChip(
                   label: Text(e.value),
@@ -211,7 +211,7 @@ class _ExportDialogState extends State<_ExportDialog> {
                   }),
                 ),
             ]),
-            Wrap(spacing: DaftarSize.space6, runSpacing: DaftarSize.space2, children: [
+            Wrap(spacing: FirouzehSize.space6, runSpacing: FirouzehSize.space2, children: [
               Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 label('قالب'),
                 _chips({for (final f in ExportFormat.values) f: f.label}, (f) => _format == f, (f) => setState(() => _format = f)),
@@ -221,10 +221,10 @@ class _ExportDialogState extends State<_ExportDialog> {
                 _chips({true: 'شمسی', false: 'میلادی'}, (v) => _jalali == v, (v) => setState(() => _jalali = v)),
               ]),
             ]),
-            const SizedBox(height: DaftarSize.space3),
+            const SizedBox(height: FirouzehSize.space3),
             const Hint('سلول‌هایی که با علامت ریاضی شروع می‌شوند، با یک نشانه امن ذخیره می‌شوند.'),
             if (_error != null) ...[
-              const SizedBox(height: DaftarSize.space2),
+              const SizedBox(height: FirouzehSize.space2),
               Notice(tone: NoticeTone.stop, text: 'ردیف‌ها از سرور نیامد: $_error'),
             ],
           ]),

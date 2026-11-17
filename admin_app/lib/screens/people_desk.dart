@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../normalize.dart';
 import '../state.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 import 'people.dart';
 import 'person_edit.dart';
@@ -73,7 +73,7 @@ class _PeopleDeskScreenState extends State<PeopleDeskScreen> {
           content: const Text('کسانی که پذیرش یا وعده دارند حذف نمی‌شوند و می‌مانند؛ می‌توانید غیرفعالشان کنید.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
-            FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('حذف')),
+            FilledButton(style: firouzehDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('حذف')),
           ],
         ),
       );
@@ -91,7 +91,7 @@ class _PeopleDeskScreenState extends State<PeopleDeskScreen> {
   @override
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final all = s.people.values.toList()
       ..sort((a, b) {
@@ -116,7 +116,7 @@ class _PeopleDeskScreenState extends State<PeopleDeskScreen> {
               : (p.mobile.isEmpty && p.email.isEmpty ? 'ناقص' : 'هنوز نیامده', x.inkMuted, x.sunken);
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(DaftarSize.radiusPill)),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(FirouzehSize.radiusPill)),
         child: Text(text, style: theme.textTheme.bodySmall?.copyWith(color: fg, fontWeight: FontWeight.w700)),
       );
     }
@@ -148,7 +148,7 @@ class _PeopleDeskScreenState extends State<PeopleDeskScreen> {
           label: const Text('افزودن فرد'),
         ),
       ]),
-      const SizedBox(height: DaftarSize.space3),
+      const SizedBox(height: FirouzehSize.space3),
       Row(children: [
         Expanded(
           child: TextField(
@@ -158,8 +158,8 @@ class _PeopleDeskScreenState extends State<PeopleDeskScreen> {
           ),
         ),
       ]),
-      const SizedBox(height: DaftarSize.space2),
-      Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+      const SizedBox(height: FirouzehSize.space2),
+      Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
         for (final (f, label) in const [
           (PeopleFilter.all, 'همه'),
           (PeopleFilter.arrived, 'آمده'),
@@ -170,7 +170,7 @@ class _PeopleDeskScreenState extends State<PeopleDeskScreen> {
           ChoiceChip(label: Text('$label ${faDigits(count(f))}'), selected: _filter == f, onSelected: (_) => setState(() => _filter = f)),
       ]),
       if (_loading) const LinearProgressIndicator(),
-      const SizedBox(height: DaftarSize.space2),
+      const SizedBox(height: FirouzehSize.space2),
       Expanded(
         child: Card(
           margin: EdgeInsets.zero,
@@ -187,7 +187,7 @@ class _PeopleDeskScreenState extends State<PeopleDeskScreen> {
                         onTap: () => setState(() => _open = p.id),
                         child: Container(
                           height: 56,
-                          padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space3),
+                          padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space3),
                           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
                           child: Row(children: [
                             Checkbox(
@@ -208,11 +208,11 @@ class _PeopleDeskScreenState extends State<PeopleDeskScreen> {
         ),
       ),
       if (_checked.isNotEmpty) ...[
-        const SizedBox(height: DaftarSize.space2),
+        const SizedBox(height: FirouzehSize.space2),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space3, vertical: DaftarSize.space2),
+            padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space3, vertical: FirouzehSize.space2),
             child: Row(children: [
               Expanded(child: Text('${faDigits(_checked.length)} انتخاب شد', style: theme.textTheme.titleSmall)),
               TextButton(onPressed: () => setState(_checked.clear), child: const Text('لغو انتخاب')),
@@ -220,7 +220,7 @@ class _PeopleDeskScreenState extends State<PeopleDeskScreen> {
                 OutlinedButton(onPressed: s.busy ? null : () => _bulk(s, 'active'), child: const Text('فعال'))
               else
                 OutlinedButton(onPressed: s.busy ? null : () => _bulk(s, 'inactive'), child: const Text('غیرفعال')),
-              const SizedBox(width: DaftarSize.space2),
+              const SizedBox(width: FirouzehSize.space2),
               OutlinedButton(
                 style: OutlinedButton.styleFrom(foregroundColor: x.stop, side: BorderSide(color: x.stop, width: 1.5)),
                 onPressed: s.busy ? null : () => _bulk(s, 'deleted'),
@@ -233,11 +233,11 @@ class _PeopleDeskScreenState extends State<PeopleDeskScreen> {
     ]);
 
     return Padding(
-      padding: const EdgeInsets.all(DaftarSize.space5),
+      padding: const EdgeInsets.all(FirouzehSize.space5),
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Expanded(child: table),
         if (open != null) ...[
-          const SizedBox(width: DaftarSize.space4),
+          const SizedBox(width: FirouzehSize.space4),
           SizedBox(
             width: 400,
             child: Card(

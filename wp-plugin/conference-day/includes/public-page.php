@@ -226,7 +226,7 @@ function cd_tehran_now() {
 }
 
 /**
- * صفحه‌ی عمومی (PublicPass) با زبان طراحی «دفتر». HTML و CSS ساده، بدون جاوااسکریپت.
+ * صفحه‌ی عمومی (PublicPass) با سیستم طراحی «فیروزه». HTML و CSS ساده، بدون جاوااسکریپت.
  * $message: ['icon' => go|wait|stop|idle, 'text' => '…'] برای حالت‌های خطا.
  */
 function cd_render_public_page($event, $person, $message, $settings = null, $token = '') {

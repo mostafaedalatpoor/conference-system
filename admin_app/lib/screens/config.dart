@@ -6,7 +6,7 @@ import '../api.dart';
 import '../jalali.dart';
 import '../main.dart';
 import '../normalize.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/jalali_picker.dart';
 import '../theme/widgets.dart';
 import '../state.dart';
@@ -143,7 +143,7 @@ Future<void> _deleteServerItem(BuildContext context, AdminState s, String kind, 
       content: Text(isRole ? 'این نقش از رویداد حذف می‌شود.' : 'این نوع از رویداد حذف می‌شود.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
-        FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('حذف')),
+        FilledButton(style: firouzehDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('حذف')),
       ],
     ),
   );
@@ -167,7 +167,7 @@ Future<void> _deleteServerItem(BuildContext context, AdminState s, String kind, 
                 width: 420,
                 child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   const Text('به‌جای حذف، این افراد را به مورد دیگری منتقل کنید.'),
-                  const SizedBox(height: DaftarSize.space3),
+                  const SizedBox(height: FirouzehSize.space3),
                   if (others.isNotEmpty)
                     DropdownButtonFormField<String>(
                       value: target,
@@ -388,7 +388,7 @@ Future<void> _deleteMeal(BuildContext context, AdminState s, MealDef meal) async
       content: const Text('این وعده و قاعده‌ی «حق دارند» آن حذف می‌شود.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
-        FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('حذف')),
+        FilledButton(style: firouzehDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('حذف')),
       ],
     ),
   );
@@ -545,25 +545,25 @@ class _Choice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: DaftarSize.space2),
+      padding: const EdgeInsets.only(bottom: FirouzehSize.space2),
       child: Material(
         color: selected ? x.stampSoft : x.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DaftarSize.radiusSm),
+          borderRadius: BorderRadius.circular(FirouzehSize.radiusSm),
           side: BorderSide(color: selected ? x.stamp : x.line, width: selected ? 2 : 1),
         ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(DaftarSize.radiusSm),
+          borderRadius: BorderRadius.circular(FirouzehSize.radiusSm),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.all(DaftarSize.space3),
+            padding: const EdgeInsets.all(FirouzehSize.space3),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Icon(selected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
                   color: selected ? x.stamp : x.lineStrong, size: 20),
-              const SizedBox(width: DaftarSize.space3),
+              const SizedBox(width: FirouzehSize.space3),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(title, style: theme.textTheme.labelLarge),
@@ -595,7 +595,7 @@ class _EventSettingsEditor extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SectionTitle('شناسایی در روز اجرا'),
       const Hint('اسکن امکان است، نه شرط. اپ نیروها خودش را با این انتخاب تطبیق می‌دهد و هر کار همیشه با جستجوی نام هم شدنی است.'),
-      const SizedBox(height: DaftarSize.space2),
+      const SizedBox(height: FirouzehSize.space2),
       _Choice(
         selected: st.identifyMode == 'scan',
         title: 'کارت QR، با اسکن',
@@ -616,7 +616,7 @@ class _EventSettingsEditor extends StatelessWidget {
       ),
       if (locked && st.identifyMode == 'none')
         const Padding(
-          padding: EdgeInsets.only(top: DaftarSize.space1),
+          padding: EdgeInsets.only(top: FirouzehSize.space1),
           child: Notice(
             tone: NoticeTone.wait,
             text: 'کارت‌ها چاپ شده‌اند. با «بدون کارت»، شماره‌ی کارت دیگر در اپ نیروها نمایش داده نمی‌شود.',
@@ -625,7 +625,7 @@ class _EventSettingsEditor extends StatelessWidget {
       if (st.usesCards) ...[
         const SectionTitle('QR روی کارت برای دیگران چه کند؟'),
         const Hint('اپ نیروها در هر سه حالت فرد را می‌شناسد. این انتخاب فقط برای گوشی‌های دیگر (شرکت‌کننده، داور، اسپانسر) است.'),
-        const SizedBox(height: DaftarSize.space2),
+        const SizedBox(height: FirouzehSize.space2),
         _Choice(
           selected: st.qrBehavior == 'person',
           title: 'صفحه‌ی فرد (پیش‌فرض)',
@@ -640,7 +640,7 @@ class _EventSettingsEditor extends StatelessWidget {
         ),
         if (st.qrBehavior == 'redirect')
           Padding(
-            padding: const EdgeInsets.only(bottom: DaftarSize.space2),
+            padding: const EdgeInsets.only(bottom: FirouzehSize.space2),
             child: TextFormField(
               initialValue: st.redirectUrl,
               decoration: const InputDecoration(
@@ -660,7 +660,7 @@ class _EventSettingsEditor extends StatelessWidget {
         ),
         if (st.qrBehavior == 'vcard')
           const Padding(
-            padding: EdgeInsets.only(bottom: DaftarSize.space2),
+            padding: EdgeInsets.only(bottom: FirouzehSize.space2),
             child: Notice(
               tone: NoticeTone.wait,
               text: 'اطلاعات تماس روی کارت چاپ می‌شود و هر کسی با دوربین می‌خواندش؛ کارت گم‌شده هم دوباره صادر نمی‌شود. '
@@ -668,10 +668,10 @@ class _EventSettingsEditor extends StatelessWidget {
             ),
           ),
         if (st.qrBehavior != 'redirect') ...[
-          const SizedBox(height: DaftarSize.space2),
+          const SizedBox(height: FirouzehSize.space2),
           Text('اطلاعات تماسی که به اشتراک گذاشته می‌شود', style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: DaftarSize.space2),
-          Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+          const SizedBox(height: FirouzehSize.space2),
+          Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
             for (final (label, value, setter) in <(String, bool, void Function(bool))>[
               ('نام و عنوان', st.shareName, (v) => st.shareName = v),
               ('سازمان', st.shareOrg, (v) => st.shareOrg = v),

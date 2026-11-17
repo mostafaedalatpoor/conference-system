@@ -8,7 +8,7 @@ import '../main.dart';
 import '../models.dart';
 import '../normalize.dart';
 import '../store.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 import '../widgets/undo_bar.dart';
 import '../widgets/scan_input.dart';
@@ -263,7 +263,7 @@ class _MealScreenState extends State<MealScreen> {
 
   /// پذیرایی با جستجوی نام (ScreenMealByName)؛ روی ویندوز با بارکدخوان و ستون «اسکن‌های اخیر» (ScreenDeskMeal).
   Widget _byNameBody(AppStore store, Meal meal) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final q = _q.text.trim();
     final results = q.isEmpty ? <Attendee>[] : store.search(_q.text, limit: 30);
@@ -277,7 +277,7 @@ class _MealScreenState extends State<MealScreen> {
       onKeyEvent: (_, e) => _onKey(e, results.length),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space3),
+          padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, 0, FirouzehSize.space4, FirouzehSize.space3),
           child: ScanInputField(
             controller: _q,
             focusNode: _focus,
@@ -292,7 +292,7 @@ class _MealScreenState extends State<MealScreen> {
         ),
         if (_result != null)
           Padding(
-            padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space3),
+            padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, 0, FirouzehSize.space4, FirouzehSize.space3),
             child: ScanResultCard(
               key: ValueKey(_result!.seq),
               kind: _result!.kind.index,
@@ -326,7 +326,7 @@ class _MealScreenState extends State<MealScreen> {
         ),
         if (wide)
           Container(
-            padding: const EdgeInsets.all(DaftarSize.space3),
+            padding: const EdgeInsets.all(FirouzehSize.space3),
             decoration: BoxDecoration(border: Border(top: BorderSide(color: x.line))),
             child: KeyHints([
               ('Enter', 'انتخاب و تحویل'),
@@ -343,14 +343,14 @@ class _MealScreenState extends State<MealScreen> {
       Container(
         width: 320,
         decoration: BoxDecoration(color: x.surface, border: BorderDirectional(start: BorderSide(color: x.line))),
-        child: ListView(padding: const EdgeInsets.all(DaftarSize.space4), children: [
+        child: ListView(padding: const EdgeInsets.all(FirouzehSize.space4), children: [
           Text('اسکن‌های اخیر', style: theme.textTheme.titleMedium),
-          const SizedBox(height: DaftarSize.space2),
+          const SizedBox(height: FirouzehSize.space2),
           if (_recent.isEmpty)
             Text('هنوز کسی ثبت نشده.', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
           for (final r in _recent)
             Container(
-              padding: const EdgeInsets.symmetric(vertical: DaftarSize.space2),
+              padding: const EdgeInsets.symmetric(vertical: FirouzehSize.space2),
               decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Icon(
@@ -358,7 +358,7 @@ class _MealScreenState extends State<MealScreen> {
                   size: 20,
                   color: r.kind == _Kind.ok ? x.go : (r.kind == _Kind.unknown ? x.inkMuted : x.stop),
                 ),
-                const SizedBox(width: DaftarSize.space2),
+                const SizedBox(width: FirouzehSize.space2),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(r.detail.split('\n').first, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
@@ -377,7 +377,7 @@ class _MealScreenState extends State<MealScreen> {
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final meal = store.selectedMeal;
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final today = store.meals.where(_isToday).toList();
     final others = store.meals.where((m) => !_isToday(m)).toList();
 
@@ -389,11 +389,11 @@ class _MealScreenState extends State<MealScreen> {
           height: 72,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space4, vertical: DaftarSize.space2),
+            padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space4, vertical: FirouzehSize.space2),
             children: [
               for (final m in [...today, ...others])
                 Padding(
-                  padding: const EdgeInsetsDirectional.only(end: DaftarSize.space2),
+                  padding: const EdgeInsetsDirectional.only(end: FirouzehSize.space2),
                   child: _MealChip(
                     meal: m,
                     selected: m.id == meal?.id,
@@ -406,7 +406,7 @@ class _MealScreenState extends State<MealScreen> {
         ),
         if (meal != null)
           Padding(
-            padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space3),
+            padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, 0, FirouzehSize.space4, FirouzehSize.space3),
             child: Meter(
               label: 'تحویل‌شده (از دارای حق)',
               value: store.servedCount(meal.id),
@@ -416,7 +416,7 @@ class _MealScreenState extends State<MealScreen> {
           ),
         if (_lastServe != null && _lastServe!.$2.id == meal?.id)
           Padding(
-            padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space3),
+            padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, 0, FirouzehSize.space4, FirouzehSize.space3),
             child: UndoBar(
               key: ValueKey(_lastServe!.$3),
               label: 'اشتباه زدم؟ ${_lastServe!.$1.fullName}',
@@ -476,7 +476,7 @@ class _MealScreenState extends State<MealScreen> {
                                       height: (c.maxHeight * .38).clamp(120.0, 240.0),
                                       decoration: BoxDecoration(
                                         border: Border.all(color: Colors.white.withValues(alpha: .8), width: 2),
-                                        borderRadius: BorderRadius.circular(DaftarSize.radiusMd),
+                                        borderRadius: BorderRadius.circular(FirouzehSize.radiusMd),
                                       ),
                                     ),
                                   ),
@@ -484,9 +484,9 @@ class _MealScreenState extends State<MealScreen> {
                         ),
                         if (_result != null)
                           Positioned(
-                            left: DaftarSize.space3,
-                            right: DaftarSize.space3,
-                            bottom: DaftarSize.space3,
+                            left: FirouzehSize.space3,
+                            right: FirouzehSize.space3,
+                            bottom: FirouzehSize.space3,
                             child: ScanResultCard(
                               key: ValueKey(_result!.seq),
                               kind: _result!.kind.index,
@@ -502,22 +502,22 @@ class _MealScreenState extends State<MealScreen> {
         ),
         if (meal != null && store.cameraScan)
           Padding(
-            padding: const EdgeInsets.all(DaftarSize.space3),
+            padding: const EdgeInsets.all(FirouzehSize.space3),
             child: Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(DaftarSize.tapLg)),
+                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(FirouzehSize.tapLg)),
                     icon: const Icon(Icons.search_rounded),
                     label: const Text('کارت همراهش نیست؟'),
                     onPressed: _searchByName,
                   ),
                 ),
-                const SizedBox(width: DaftarSize.space2),
+                const SizedBox(width: FirouzehSize.space2),
                 Tooltip(
                   message: 'چراغ‌قوه',
                   child: SizedBox.square(
-                    dimension: DaftarSize.tapLg,
+                    dimension: FirouzehSize.tapLg,
                     child: ValueListenableBuilder<MobileScannerState>(
                       valueListenable: _controller,
                       builder: (context, s, _) {
@@ -560,7 +560,7 @@ class _MealChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final fg = selected ? x.onAction : (faded ? x.inkMuted : x.ink);
     return Semantics(
@@ -569,14 +569,14 @@ class _MealChip extends StatelessWidget {
       child: Material(
         color: selected ? x.action : x.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DaftarSize.radiusSm),
+          borderRadius: BorderRadius.circular(FirouzehSize.radiusSm),
           side: BorderSide(color: selected ? x.action : (faded ? x.line : x.lineStrong), width: 1.5),
         ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(DaftarSize.radiusSm),
+          borderRadius: BorderRadius.circular(FirouzehSize.radiusSm),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space4),
+            padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space4),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -614,7 +614,7 @@ class ScanResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final (bg, fg, icon) = switch (kind) {
@@ -631,19 +631,19 @@ class ScanResultCard extends StatelessWidget {
       excludeSemantics: true,
       child: Material(
         color: bg,
-        borderRadius: BorderRadius.circular(DaftarSize.radiusMd),
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusMd),
         clipBehavior: Clip.antiAlias,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space4, DaftarSize.space4, DaftarSize.space3),
+              padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, FirouzehSize.space4, FirouzehSize.space4, FirouzehSize.space3),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(icon, color: fg, size: 56),
-                  const SizedBox(width: DaftarSize.space3),
+                  const SizedBox(width: FirouzehSize.space3),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -706,7 +706,7 @@ class _CameraError extends StatelessWidget {
   Widget build(BuildContext context) {
     final denied = error.errorCode == MobileScannerErrorCode.permissionDenied;
     return ColoredBox(
-      color: DaftarColors.of(context).paper,
+      color: FirouzehColors.of(context).paper,
       child: Center(
         child: SingleChildScrollView(
           child: EmptyState(
@@ -726,27 +726,27 @@ class _CameraError extends StatelessWidget {
 /// تأیید تحویل وعده: روی موبایل باتم‌شیت، روی صفحه‌ی پهن دیالوگ که Enter آن را تأیید می‌کند.
 Future<bool> confirmMealDelivery(BuildContext context, Attendee a, Meal meal) async {
   final store = StoreScope.read(context);
-  final x = DaftarColors.of(context);
+  final x = FirouzehColors.of(context);
   final wide = MediaQuery.sizeOf(context).width >= 600;
   Widget content(BuildContext c) => Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(a.displayName, style: Theme.of(c).textTheme.headlineSmall),
-          const SizedBox(height: DaftarSize.space1),
+          const SizedBox(height: FirouzehSize.space1),
           Text('${meal.name}، ${store.typeName(a.registrationTypeId)}',
               style: Theme.of(c).textTheme.bodyMedium?.copyWith(color: x.inkMuted)),
-          const SizedBox(height: DaftarSize.space3),
+          const SizedBox(height: FirouzehSize.space3),
           const Notice(tone: NoticeTone.go, text: 'مجاز است و هنوز نگرفته.'),
-          const SizedBox(height: DaftarSize.space5),
+          const SizedBox(height: FirouzehSize.space5),
           FilledButton.icon(
             autofocus: true,
-            style: daftarGoStyle(c),
+            style: firouzehGoStyle(c),
             icon: const Icon(Icons.check_rounded),
             label: Text(wide ? 'تحویل شد (Enter)' : 'تحویل شد'),
             onPressed: () => Navigator.pop(c, true),
           ),
-          const SizedBox(height: DaftarSize.space2),
+          const SizedBox(height: FirouzehSize.space2),
           TextButton(onPressed: () => Navigator.pop(c, false), child: Text(wide ? 'انصراف (Esc)' : 'انصراف')),
         ],
       );
@@ -757,7 +757,7 @@ Future<bool> confirmMealDelivery(BuildContext context, Attendee a, Meal meal) as
       builder: (c) => Dialog(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440),
-          child: Padding(padding: const EdgeInsets.all(DaftarSize.space5), child: content(c)),
+          child: Padding(padding: const EdgeInsets.all(FirouzehSize.space5), child: content(c)),
         ),
       ),
     );
@@ -767,7 +767,7 @@ Future<bool> confirmMealDelivery(BuildContext context, Attendee a, Meal meal) as
       showDragHandle: true,
       useSafeArea: true,
       builder: (c) => Padding(
-        padding: const EdgeInsets.fromLTRB(DaftarSize.space5, 0, DaftarSize.space5, DaftarSize.space5),
+        padding: const EdgeInsets.fromLTRB(FirouzehSize.space5, 0, FirouzehSize.space5, FirouzehSize.space5),
         child: content(c),
       ),
     );
@@ -786,7 +786,7 @@ class MealByNameList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -805,8 +805,8 @@ class MealByNameList extends StatelessWidget {
               child: InkWell(
                 onTap: () => onTap(a),
                 child: Container(
-                  constraints: const BoxConstraints(minHeight: DaftarSize.tapXl),
-                  padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space4, vertical: DaftarSize.space2),
+                  constraints: const BoxConstraints(minHeight: FirouzehSize.tapXl),
+                  padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space4, vertical: FirouzehSize.space2),
                   decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
                   child: Row(children: [
                     Expanded(
@@ -821,7 +821,7 @@ class MealByNameList extends StatelessWidget {
                       ),
                     ),
                     Icon(icon, size: 18, color: color),
-                    const SizedBox(width: DaftarSize.space1),
+                    const SizedBox(width: FirouzehSize.space1),
                     Text(label, style: theme.textTheme.bodySmall?.copyWith(color: color, fontWeight: FontWeight.w700)),
                   ]),
                 ),
@@ -864,7 +864,7 @@ class _PickAttendeePageState extends State<_PickAttendeePage> {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final q = _q.text.trim();
     final results = q.isEmpty ? <Attendee>[] : store.search(_q.text, limit: 30);
     return Scaffold(
@@ -873,7 +873,7 @@ class _PickAttendeePageState extends State<_PickAttendeePage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.all(DaftarSize.space4),
+            padding: const EdgeInsets.all(FirouzehSize.space4),
             child: TextField(
               controller: _q,
               autofocus: true,

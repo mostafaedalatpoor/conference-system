@@ -4,7 +4,7 @@ import '../errors.dart';
 import '../brand.dart';
 import '../main.dart';
 import '../normalize.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 
 const _defaultServer = 'https://newvisionteam.ir';
@@ -69,22 +69,22 @@ class _SetupScreenState extends State<SetupScreen> {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
-    const gap = SizedBox(height: DaftarSize.space4);
+    const gap = SizedBox(height: FirouzehSize.space4);
     const suggestions = ['پذیرش ۱', 'پذیرش ۲', 'پذیرایی ۱', 'پذیرایی ۲'];
 
     return Scaffold(
       appBar: AppBar(title: const Text('ورود نیروی اجرایی')),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(DaftarSize.space4),
+          padding: const EdgeInsets.all(FirouzehSize.space4),
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: DaftarSize.space3, bottom: DaftarSize.space5),
+              padding: const EdgeInsets.only(top: FirouzehSize.space3, bottom: FirouzehSize.space5),
               child: Column(children: [
                 Image.asset('assets/brand/logo.png', width: 88, height: 88, semanticLabel: 'لوگوی رویدادیار'),
-                const SizedBox(height: DaftarSize.space2),
+                const SizedBox(height: FirouzehSize.space2),
                 Text(appName, style: theme.textTheme.titleLarge),
                 Text(appNameLatin, style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
               ]),
@@ -98,7 +98,7 @@ class _SetupScreenState extends State<SetupScreen> {
               ),
               gap,
             ],
-            DaftarField(
+            FirouzehField(
               label: 'کد رویداد',
               child: TextField(
                 controller: _event,
@@ -110,7 +110,7 @@ class _SetupScreenState extends State<SetupScreen> {
               ),
             ),
             gap,
-            DaftarField(
+            FirouzehField(
               label: 'PIN',
               helper: 'PIN را از مدیر رویداد بگیرید.',
               child: TextField(
@@ -124,7 +124,7 @@ class _SetupScreenState extends State<SetupScreen> {
               ),
             ),
             gap,
-            DaftarField(
+            FirouzehField(
               label: 'نام این گوشی',
               child: TextField(
                 controller: _label,
@@ -133,8 +133,8 @@ class _SetupScreenState extends State<SetupScreen> {
                 onSubmitted: (_) => _busy ? null : _submit(),
               ),
             ),
-            const SizedBox(height: DaftarSize.space2),
-            Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+            const SizedBox(height: FirouzehSize.space2),
+            Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
               for (final s in suggestions)
                 ChoiceChip(
                   label: Text(s),
@@ -142,16 +142,16 @@ class _SetupScreenState extends State<SetupScreen> {
                   onSelected: (_) => setState(() => _label.text = s),
                 ),
             ]),
-            const SizedBox(height: DaftarSize.space2),
+            const SizedBox(height: FirouzehSize.space2),
             Theme(
               data: theme.copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
                 tilePadding: EdgeInsets.zero,
-                childrenPadding: const EdgeInsets.only(bottom: DaftarSize.space3),
+                childrenPadding: const EdgeInsets.only(bottom: FirouzehSize.space3),
                 title: Text('تنظیمات پیشرفته', style: theme.textTheme.labelLarge?.copyWith(color: x.inkMuted)),
                 initiallyExpanded: _server.text != _defaultServer,
                 children: [
-                  DaftarField(
+                  FirouzehField(
                     label: 'آدرس سایت',
                     child: TextField(
                       controller: _server,
@@ -168,7 +168,7 @@ class _SetupScreenState extends State<SetupScreen> {
               gap,
             ],
             FilledButton(
-              style: daftarWideStyle(context, xl: true),
+              style: firouzehWideStyle(context, xl: true),
               onPressed: _busy ? null : _submit,
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 if (_busy) ...[
@@ -177,7 +177,7 @@ class _SetupScreenState extends State<SetupScreen> {
                     width: 18,
                     child: CircularProgressIndicator(strokeWidth: 2, color: x.inkMuted),
                   ),
-                  const SizedBox(width: DaftarSize.space3),
+                  const SizedBox(width: FirouzehSize.space3),
                 ],
                 Text(_busy ? 'در حال دریافت لیست…' : 'ورود و دریافت لیست'),
               ]),
@@ -187,9 +187,9 @@ class _SetupScreenState extends State<SetupScreen> {
               tone: NoticeTone.info,
               text: 'بعد از ورود، کل لیست روی گوشی ذخیره می‌شود و اپ بدون اینترنت هم کار می‌کند.',
             ),
-            const SizedBox(height: DaftarSize.space6),
+            const SizedBox(height: FirouzehSize.space6),
             const MakerLine(team: makerTeam),
-            const SizedBox(height: DaftarSize.space4),
+            const SizedBox(height: FirouzehSize.space4),
           ],
         ),
       ),

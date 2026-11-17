@@ -133,7 +133,7 @@ class PassCard {
       {'token': token, 'attendee_id': attendeeId, 'serial': serial, 'is_reserve': isReserve};
 }
 
-/// یک رخداد در دفتر رخدادها. seq برای رخدادهای هنوز ارسال‌نشده null است.
+/// یک رخداد در فهرست رخدادها. seq برای رخدادهای هنوز ارسال‌نشده null است.
 class LogEvent {
   final String uuid;
   final String kind;

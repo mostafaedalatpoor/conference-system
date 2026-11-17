@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../normalize.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 
 /// صفحه‌ی تمام‌صفحه‌ی اسکن؛ با اولین QR معتبر، توکن کارت را برمی‌گرداند.
@@ -56,15 +56,15 @@ class _ScannerPageState extends State<ScannerPage> {
           ),
         ],
       ),
-      backgroundColor: DaftarColors.of(context).camera,
+      backgroundColor: FirouzehColors.of(context).camera,
       body: Stack(
         children: [
           MobileScanner(controller: _controller, onDetect: _onDetect),
           if (_hint != null)
             Positioned(
-              left: DaftarSize.space4,
-              right: DaftarSize.space4,
-              bottom: DaftarSize.space6,
+              left: FirouzehSize.space4,
+              right: FirouzehSize.space4,
+              bottom: FirouzehSize.space6,
               child: Notice(tone: NoticeTone.wait, text: _hint!),
             ),
         ],

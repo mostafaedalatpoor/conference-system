@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../main.dart';
 import '../normalize.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 import 'report.dart';
 import '../state.dart';
@@ -99,26 +99,26 @@ class _StaffScreenState extends State<StaffScreen> {
       showDragHandle: true,
       builder: (c) => StatefulBuilder(
         builder: (c, setSheet) {
-          final x = DaftarColors.of(c);
+          final x = FirouzehColors.of(c);
           final theme = Theme.of(c);
           return SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space5),
+              padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, 0, FirouzehSize.space4, FirouzehSize.space5),
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Text('نیروی تازه ساخته شد', style: theme.textTheme.titleLarge),
-                const SizedBox(height: DaftarSize.space3),
+                const SizedBox(height: FirouzehSize.space3),
                 Container(
-                  padding: const EdgeInsets.all(DaftarSize.space3),
-                  decoration: BoxDecoration(color: x.sunken, borderRadius: BorderRadius.circular(DaftarSize.radiusMd)),
+                  padding: const EdgeInsets.all(FirouzehSize.space3),
+                  decoration: BoxDecoration(color: x.sunken, borderRadius: BorderRadius.circular(FirouzehSize.radiusMd)),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('نیرو', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
                     Text([st.name, if (roles.isNotEmpty) roles].join(' · '), style: theme.textTheme.titleMedium),
                   ]),
                 ),
-                const SizedBox(height: DaftarSize.space3),
+                const SizedBox(height: FirouzehSize.space3),
                 Container(
-                  padding: const EdgeInsets.all(DaftarSize.space4),
-                  decoration: BoxDecoration(color: x.stampSoft, borderRadius: BorderRadius.circular(DaftarSize.radiusLg)),
+                  padding: const EdgeInsets.all(FirouzehSize.space4),
+                  decoration: BoxDecoration(color: x.stampSoft, borderRadius: BorderRadius.circular(FirouzehSize.radiusLg)),
                   child: Column(children: [
                     Text(
                       visible ? faDigits(st.pin!) : '•' * st.pin!.length,
@@ -135,9 +135,9 @@ class _StaffScreenState extends State<StaffScreen> {
                     ]),
                   ]),
                 ),
-                const SizedBox(height: DaftarSize.space4),
+                const SizedBox(height: FirouzehSize.space4),
                 FilledButton(
-                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(DaftarSize.tapLg)),
+                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(FirouzehSize.tapLg)),
                   onPressed: () => Navigator.pop(c),
                   child: const Text('بستن'),
                 ),
@@ -152,7 +152,7 @@ class _StaffScreenState extends State<StaffScreen> {
   /// خانه‌ی پین در ردیف نیرو (۱۱-StaffPin و ۰۴-Phones): پوشیده با چشم و کپی، «پین قدیمی ثبت‌شده نیست · بساز»،
   /// یا فیلد پین تازه وقتی مدیر «پین تازه» یا «بساز» زده.
   Widget _pinCell(AdminState s, StaffDef st) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     if (st.newPin.isNotEmpty || (st.id == null)) {
       return TextFormField(
@@ -196,7 +196,7 @@ class _StaffScreenState extends State<StaffScreen> {
     final shown = _shown.contains(st.id);
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Text('پین', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
-      const SizedBox(width: DaftarSize.space2),
+      const SizedBox(width: FirouzehSize.space2),
       Text(shown ? faDigits(st.pin!) : '•' * st.pin!.length,
           textDirection: TextDirection.ltr,
           style: theme.textTheme.titleMedium?.copyWith(letterSpacing: 3, fontFeatures: tabularFigures)),
@@ -222,8 +222,8 @@ class _StaffScreenState extends State<StaffScreen> {
       ),
       if (_lastSaved(s) != null)
         Padding(
-          padding: const EdgeInsets.only(top: DaftarSize.space2),
-          child: Text(_lastSaved(s)!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DaftarColors.of(context).inkMuted)),
+          padding: const EdgeInsets.only(top: FirouzehSize.space2),
+          child: Text(_lastSaved(s)!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: FirouzehColors.of(context).inkMuted)),
         ),
       const SizedBox(height: 12),
       for (final st in s.staff)
@@ -237,7 +237,7 @@ class _StaffScreenState extends State<StaffScreen> {
               decoration: InputDecoration(
                 labelText: 'نام',
                 isDense: true,
-                suffix: st.active ? null : const DaftarTag('غیرفعال', kind: TagKind.outline),
+                suffix: st.active ? null : const FirouzehTag('غیرفعال', kind: TagKind.outline),
               ),
               onChanged: (v) => st.name = v.trim(),
             );
@@ -279,10 +279,10 @@ class _StaffScreenState extends State<StaffScreen> {
             // گوشی: هر نیرو یک کارت عمودی.
             return Card(
               child: Padding(
-                padding: const EdgeInsets.all(DaftarSize.space3),
+                padding: const EdgeInsets.all(FirouzehSize.space3),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   Row(children: [Expanded(child: name), delete]),
-                  const SizedBox(height: DaftarSize.space2),
+                  const SizedBox(height: FirouzehSize.space2),
                   Align(alignment: AlignmentDirectional.centerStart, child: pin),
                   flags,
                 ]),

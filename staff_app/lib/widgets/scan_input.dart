@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../normalize.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 
 /// آیا روی این دستگاه، در همین اجرا، بارکدخوان دیده شده؟
@@ -44,7 +44,7 @@ class ScanInputField extends StatefulWidget {
     required this.onSubmitted,
     required this.onScan,
     this.autofocus = true,
-    this.height = DaftarSize.tapLg,
+    this.height = FirouzehSize.tapLg,
   });
 
   @override
@@ -167,7 +167,7 @@ class _ScanInputFieldState extends State<ScanInputField> {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     return ValueListenableBuilder<bool>(
       valueListenable: scannerSeen,
@@ -195,12 +195,12 @@ class _ScanInputFieldState extends State<ScanInputField> {
                   fillColor: lostFocus ? x.sunken : null,
                   enabledBorder: _reading
                       ? OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(DaftarSize.radiusSm),
+                          borderRadius: BorderRadius.circular(FirouzehSize.radiusSm),
                           borderSide: BorderSide(color: x.go, width: 2))
                       : null,
                   focusedBorder: _reading
                       ? OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(DaftarSize.radiusSm),
+                          borderRadius: BorderRadius.circular(FirouzehSize.radiusSm),
                           borderSide: BorderSide(color: x.go, width: 2))
                       : null,
                   suffixIcon: widget.controller.text.isEmpty
@@ -221,18 +221,18 @@ class _ScanInputFieldState extends State<ScanInputField> {
             ),
             if (lostFocus)
               Padding(
-                padding: const EdgeInsets.only(top: DaftarSize.space2),
+                padding: const EdgeInsets.only(top: FirouzehSize.space2),
                 child: Material(
                   color: x.sunken,
-                  borderRadius: BorderRadius.circular(DaftarSize.radiusSm),
+                  borderRadius: BorderRadius.circular(FirouzehSize.radiusSm),
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(DaftarSize.radiusSm),
+                    borderRadius: BorderRadius.circular(FirouzehSize.radiusSm),
                     onTap: widget.focusNode.requestFocus,
                     child: Padding(
-                      padding: const EdgeInsets.all(DaftarSize.space3),
+                      padding: const EdgeInsets.all(FirouzehSize.space3),
                       child: Row(children: [
                         Icon(Icons.pause_circle_rounded, color: x.ink, size: 20),
-                        const SizedBox(width: DaftarSize.space2),
+                        const SizedBox(width: FirouzehSize.space2),
                         Expanded(
                           child: Text('اسکن متوقف است. برای اسکن اینجا کلیک کنید یا F4 بزنید.',
                               style: theme.textTheme.bodySmall?.copyWith(color: x.ink)),
@@ -244,18 +244,18 @@ class _ScanInputFieldState extends State<ScanInputField> {
               )
             else if (widget.scanEnabled && seen)
               Padding(
-                padding: const EdgeInsets.only(top: DaftarSize.space2),
+                padding: const EdgeInsets.only(top: FirouzehSize.space2),
                 child: Align(
                   alignment: AlignmentDirectional.centerStart,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space2, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space2, vertical: 2),
                     decoration: BoxDecoration(
                       color: x.goSoft,
-                      borderRadius: BorderRadius.circular(DaftarSize.radiusXs),
+                      borderRadius: BorderRadius.circular(FirouzehSize.radiusXs),
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.qr_code_scanner_rounded, size: 14, color: x.go),
-                      const SizedBox(width: DaftarSize.space1),
+                      const SizedBox(width: FirouzehSize.space1),
                       Text('بارکدخوان وصل است',
                           style: theme.textTheme.bodySmall?.copyWith(color: x.go, fontWeight: FontWeight.w600)),
                     ]),
@@ -264,7 +264,7 @@ class _ScanInputFieldState extends State<ScanInputField> {
               ),
             if (_warning != null)
               Padding(
-                padding: const EdgeInsets.only(top: DaftarSize.space2),
+                padding: const EdgeInsets.only(top: FirouzehSize.space2),
                 child: Notice(tone: NoticeTone.wait, icon: Icons.keyboard_rounded, text: _warning!),
               ),
           ],
@@ -281,9 +281,9 @@ class KeyHints extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final style = Theme.of(context).textTheme.bodySmall?.copyWith(color: x.inkMuted);
-    return Wrap(spacing: DaftarSize.space4, runSpacing: DaftarSize.space2, children: [
+    return Wrap(spacing: FirouzehSize.space4, runSpacing: FirouzehSize.space2, children: [
       for (final (k, label) in items)
         Row(mainAxisSize: MainAxisSize.min, children: [
           Container(
@@ -291,7 +291,7 @@ class KeyHints extends StatelessWidget {
             decoration: BoxDecoration(
               color: x.surface,
               border: Border.all(color: x.lineStrong),
-              borderRadius: BorderRadius.circular(DaftarSize.radiusXs),
+              borderRadius: BorderRadius.circular(FirouzehSize.radiusXs),
             ),
             child: Text(k, textDirection: TextDirection.ltr, style: style?.copyWith(color: x.ink, fontWeight: FontWeight.w700)),
           ),

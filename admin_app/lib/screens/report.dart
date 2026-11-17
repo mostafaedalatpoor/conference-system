@@ -8,7 +8,7 @@ import '../export.dart';
 import '../main.dart';
 import 'export_dialog.dart';
 import '../normalize.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 
 class ReportScreen extends StatefulWidget {
@@ -58,30 +58,30 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     final r = s.report;
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     if (!identical(r, _seenReport)) {
       _seenReport = r;
       _updatedAt = r == null ? null : DateTime.now();
     }
     final flagged = r == null ? 0 : (r['flagged'] as List).length;
     return PageBody(title: widget.title, children: [
-      Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, crossAxisAlignment: WrapCrossAlignment.center, children: [
         OutlinedButton.icon(
           onPressed: s.busy ? null : s.loadReport,
           icon: const Icon(Icons.refresh_rounded),
           label: const Text('به‌روزرسانی'),
         ),
-        const SizedBox(width: DaftarSize.space4),
+        const SizedBox(width: FirouzehSize.space4),
         Switch(value: _auto, onChanged: _setAuto),
-        const SizedBox(width: DaftarSize.space2),
+        const SizedBox(width: FirouzehSize.space2),
         const Text('هر ۳۰ ثانیه'),
-        const SizedBox(width: DaftarSize.space4),
+        const SizedBox(width: FirouzehSize.space4),
         OutlinedButton.icon(
           onPressed: r == null ? null : () => showExportDialog(context),
           icon: const Icon(Icons.download_rounded),
           label: const Text('خروجی اکسل…'),
         ),
-        const SizedBox(width: DaftarSize.space4),
+        const SizedBox(width: FirouzehSize.space4),
         if (_updatedAt != null)
           Text('آخرین به‌روزرسانی ${hm(_updatedAt!)}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
@@ -95,8 +95,8 @@ class _ReportScreenState extends State<ReportScreen> {
       else ...[
         // حضور روزانه یا رویداد چندروزه: «همه» و هر روز.
         if (r['daily_attendance'] == true && ((r['by_day'] as List?) ?? const []).isNotEmpty) ...[
-          const SizedBox(height: DaftarSize.space3),
-          Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+          const SizedBox(height: FirouzehSize.space3),
+          Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
             ChoiceChip(label: const Text('همه'), selected: s.reportDay == null, onSelected: (_) => s.setReportDay(null)),
             for (final d in (r['by_day'] as List).cast<Map>())
               ChoiceChip(
@@ -109,8 +109,8 @@ class _ReportScreenState extends State<ReportScreen> {
         const SectionTitle('خلاصه'),
         LayoutBuilder(builder: (context, c) {
           final cols = c.maxWidth >= 760 ? 4 : 2;
-          final w = (c.maxWidth - DaftarSize.space3 * (cols - 1)) / cols;
-          return Wrap(spacing: DaftarSize.space3, runSpacing: DaftarSize.space3, children: [
+          final w = (c.maxWidth - FirouzehSize.space3 * (cols - 1)) / cols;
+          return Wrap(spacing: FirouzehSize.space3, runSpacing: FirouzehSize.space3, children: [
             StatTile(
               width: w,
               label: 'پذیرش‌شده',
@@ -236,22 +236,22 @@ class StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     return Container(
       width: width,
-      padding: const EdgeInsets.all(DaftarSize.space4),
+      padding: const EdgeInsets.all(FirouzehSize.space4),
       decoration: BoxDecoration(
         color: attention ? x.waitSoft : x.surface,
         border: Border.all(color: attention ? x.waitSoft : x.line),
-        borderRadius: BorderRadius.circular(DaftarSize.radiusMd),
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusMd),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           if (attention) ...[Icon(Icons.warning_rounded, size: 16, color: x.wait), const SizedBox(width: 4)],
           Text(label, style: theme.textTheme.labelLarge?.copyWith(color: attention ? x.ink : x.inkMuted)),
         ]),
-        const SizedBox(height: DaftarSize.space1),
+        const SizedBox(height: FirouzehSize.space1),
         Text.rich(
           TextSpan(children: [
             TextSpan(text: value),
@@ -286,7 +286,7 @@ class DeviceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final revoked = device['revoked'] == true;
     final last = DateTime.tryParse('${device['last_sync_at'] ?? ''}');
@@ -301,11 +301,11 @@ class DeviceRow extends StatelessWidget {
     return Opacity(
       opacity: revoked ? .55 : 1,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: DaftarSize.space2),
+        padding: const EdgeInsets.symmetric(vertical: FirouzehSize.space2),
         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
         child: Row(children: [
           Icon(revoked ? Icons.phonelink_erase_rounded : Icons.smartphone_rounded, color: x.inkMuted),
-          const SizedBox(width: DaftarSize.space3),
+          const SizedBox(width: FirouzehSize.space3),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(label.isEmpty ? 'دستگاه بی‌نام' : label, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
@@ -319,7 +319,7 @@ class DeviceRow extends StatelessWidget {
             ]),
           ),
           if (revoked)
-            const DaftarTag('باطل‌شده', kind: TagKind.outline)
+            const FirouzehTag('باطل‌شده', kind: TagKind.outline)
           else if (device['id'] is int)
             OutlinedButton(
               onPressed: () async {
@@ -333,7 +333,7 @@ class DeviceRow extends StatelessWidget {
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
                       FilledButton(
-                        style: daftarDangerStyle(c),
+                        style: firouzehDangerStyle(c),
                         onPressed: () => Navigator.pop(c, true),
                         child: const Text('باطل کن'),
                       ),
@@ -372,7 +372,7 @@ class _MealPeoplePageState extends State<MealPeoplePage> {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(widget.name)),
@@ -382,7 +382,7 @@ class _MealPeoplePageState extends State<MealPeoplePage> {
           if (snap.connectionState != ConnectionState.done) return const LinearProgressIndicator();
           if (snap.hasError) {
             return const Padding(
-              padding: EdgeInsets.all(DaftarSize.space4),
+              padding: EdgeInsets.all(FirouzehSize.space4),
               child: Notice(tone: NoticeTone.neutral, text: 'این فهرست از سرور نیامد. افزونه‌ی سایت باید به‌روز شود.'),
             );
           }
@@ -395,8 +395,8 @@ class _MealPeoplePageState extends State<MealPeoplePage> {
               };
           int count(String f) => all.where((p) => match(p, f)).length;
           final list = all.where((p) => match(p, _filter)).toList();
-          return ListView(padding: const EdgeInsets.all(DaftarSize.space4), children: [
-            Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+          return ListView(padding: const EdgeInsets.all(FirouzehSize.space4), children: [
+            Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
               for (final (f, label) in const [
                 ('waiting', 'حق دارند، نگرفته'),
                 ('served', 'گرفته'),
@@ -409,11 +409,11 @@ class _MealPeoplePageState extends State<MealPeoplePage> {
                   onSelected: (_) => setState(() => _filter = f),
                 ),
             ]),
-            const SizedBox(height: DaftarSize.space3),
+            const SizedBox(height: FirouzehSize.space3),
             if (list.isEmpty) const Hint('کسی نیست.'),
             for (final p in list)
               Container(
-                padding: const EdgeInsets.symmetric(vertical: DaftarSize.space2),
+                padding: const EdgeInsets.symmetric(vertical: FirouzehSize.space2),
                 decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
                 child: Row(children: [
                   Expanded(
@@ -446,7 +446,7 @@ class _HourlyBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final max = hours.fold<int>(1, (m, h) => (h['count'] as int) > m ? h['count'] as int : m);
     return SizedBox(
@@ -455,18 +455,18 @@ class _HourlyBars extends StatelessWidget {
         for (final h in hours)
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space1),
+              padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space1),
               child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
                 Text(faDigits(h['count']), style: theme.textTheme.labelMedium?.copyWith(fontFeatures: tabularFigures)),
-                const SizedBox(height: DaftarSize.space1),
+                const SizedBox(height: FirouzehSize.space1),
                 Container(
                   height: (h['count'] as int) == 0 ? 3 : 100 * (h['count'] as int) / max,
                   decoration: BoxDecoration(
                     color: (h['count'] as int) == 0 ? x.line : x.stamp,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(DaftarSize.radiusXs)),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(FirouzehSize.radiusXs)),
                   ),
                 ),
-                const SizedBox(height: DaftarSize.space1),
+                const SizedBox(height: FirouzehSize.space1),
                 Text(faDigits('${h['hour']}'.padLeft(2, '0')),
                     style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
               ]),
@@ -515,7 +515,7 @@ class _ExportCards extends StatelessWidget {
           ],
       ];
 
-  /// تاریخچه‌ی همه‌ی رخدادها از دفتر، با نام فرد، نیرو و وعده.
+  /// تاریخچه‌ی همه‌ی رخدادها از فهرست رخدادها، با نام فرد، نیرو و وعده.
   Future<void> _history(BuildContext context) async {
     final s = StateScope.read(context);
     final snap = await s.run('', s.fullSnapshot);
@@ -556,21 +556,21 @@ class _ExportCards extends StatelessWidget {
           width: 320,
           child: Card(
             child: Padding(
-              padding: const EdgeInsets.all(DaftarSize.space4),
+              padding: const EdgeInsets.all(FirouzehSize.space4),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(icon, color: DaftarColors.of(context).stamp),
-                const SizedBox(height: DaftarSize.space2),
+                Icon(icon, color: FirouzehColors.of(context).stamp),
+                const SizedBox(height: FirouzehSize.space2),
                 Text(title, style: Theme.of(context).textTheme.titleSmall),
-                Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DaftarColors.of(context).inkMuted)),
-                const SizedBox(height: DaftarSize.space3),
-                Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+                Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: FirouzehColors.of(context).inkMuted)),
+                const SizedBox(height: FirouzehSize.space3),
+                Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
                   for (final (label, onTap) in actions) OutlinedButton(onPressed: busy ? null : onTap, child: Text(label)),
                 ]),
               ]),
             ),
           ),
         );
-    return Wrap(spacing: DaftarSize.space3, runSpacing: DaftarSize.space3, children: [
+    return Wrap(spacing: FirouzehSize.space3, runSpacing: FirouzehSize.space3, children: [
       card(Icons.groups_rounded, 'فهرست حضور', 'افراد با اولین و آخرین پذیرش و پذیرش‌کننده.', [
         ('اکسل', () => showExportDialog(context)),
         ('PDF', () => showExportDialog(context, format: ExportFormat.pdf)),

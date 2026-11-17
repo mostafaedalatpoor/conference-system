@@ -1,11 +1,11 @@
-// «دفتر» — زبان طراحی مشترک اپ نیروها و اپ مدیریت.
+// «فیروزه» — زبان طراحی مشترک اپ نیروها و اپ مدیریت.
 // مقدارها از tokens.json سامانه‌ی طراحی آمده‌اند؛ این فایل در هر دو اپ یکسان است.
-// صفحه‌ها رنگ وضعیت را از DaftarColors.of(context) و بقیه را از ThemeData می‌گیرند.
+// صفحه‌ها رنگ وضعیت را از FirouzehColors.of(context) و بقیه را از ThemeData می‌گیرند.
 import 'package:flutter/material.dart';
 
 /// رنگ‌هایی که در ColorScheme جا ندارند (وضعیت‌ها و رنگ شناسه).
 @immutable
-class DaftarColors extends ThemeExtension<DaftarColors> {
+class FirouzehColors extends ThemeExtension<FirouzehColors> {
   final Color paper, surface, sunken, line, lineStrong, ink, inkMuted;
   final Color stamp, stampSoft, onStamp, action, onAction;
   final Color go, goSoft, goFill, onGo;
@@ -13,7 +13,7 @@ class DaftarColors extends ThemeExtension<DaftarColors> {
   final Color wait, waitSoft, waitFill, onWait;
   final Color idleFill, onIdle, scrim, camera;
 
-  const DaftarColors({
+  const FirouzehColors({
     required this.paper,
     required this.surface,
     required this.sunken,
@@ -44,7 +44,7 @@ class DaftarColors extends ThemeExtension<DaftarColors> {
     required this.camera,
   });
 
-  static const light = DaftarColors(
+  static const light = FirouzehColors(
     paper: Color(0xFFF4F5F7),
     surface: Color(0xFFFFFFFF),
     sunken: Color(0xFFE9ECF0),
@@ -75,7 +75,7 @@ class DaftarColors extends ThemeExtension<DaftarColors> {
     camera: Color(0xFF000000),
   );
 
-  static const dark = DaftarColors(
+  static const dark = FirouzehColors(
     paper: Color(0xFF0D1015),
     surface: Color(0xFF161A21),
     sunken: Color(0xFF08090C),
@@ -106,17 +106,17 @@ class DaftarColors extends ThemeExtension<DaftarColors> {
     camera: Color(0xFF000000),
   );
 
-  static DaftarColors of(BuildContext context) => Theme.of(context).extension<DaftarColors>() ?? light;
+  static FirouzehColors of(BuildContext context) => Theme.of(context).extension<FirouzehColors>() ?? light;
 
   @override
-  DaftarColors copyWith() => this;
+  FirouzehColors copyWith() => this;
 
   @override
-  DaftarColors lerp(DaftarColors? other, double t) => t < .5 ? this : (other ?? this);
+  FirouzehColors lerp(FirouzehColors? other, double t) => t < .5 ? this : (other ?? this);
 }
 
 /// فاصله‌ها، گوشه‌ها و اندازه‌ها (شبکه‌ی ۴px).
-abstract final class DaftarSize {
+abstract final class FirouzehSize {
   static const space1 = 4.0;
   static const space2 = 8.0;
   static const space3 = 12.0;
@@ -139,7 +139,7 @@ abstract final class DaftarSize {
 }
 
 /// سایه فقط برای باتم‌شیت و منوهای بازشو؛ بقیه‌ی سطوح با خط line جدا می‌شوند.
-List<BoxShadow> daftarShadowPop(Brightness b) => [
+List<BoxShadow> firouzehShadowPop(Brightness b) => [
       BoxShadow(
         offset: const Offset(0, 8),
         blurRadius: 28,
@@ -199,10 +199,10 @@ final _deskText = TextTheme(
   labelSmall: _t(12, 18, FontWeight.w500),
 );
 
-/// ThemeData کامل «دفتر». [desktop] برای اپ ویندوز: کنترل ۳۶px، گوشه‌ی ۴px، متن فشرده‌تر.
-ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
+/// ThemeData کامل «فیروزه». [desktop] برای اپ ویندوز: کنترل ۳۶px، گوشه‌ی ۴px، متن فشرده‌تر.
+ThemeData firouzehTheme(Brightness b, {bool desktop = false}) {
   final dark = b == Brightness.dark;
-  final x = dark ? DaftarColors.dark : DaftarColors.light;
+  final x = dark ? FirouzehColors.dark : FirouzehColors.light;
   final scheme = ColorScheme(
     brightness: b,
     primary: x.action,
@@ -241,9 +241,9 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
     bodyColor: x.ink,
     displayColor: x.ink,
   );
-  final r = desktop ? DaftarSize.radiusXs : DaftarSize.radiusSm;
+  final r = desktop ? FirouzehSize.radiusXs : FirouzehSize.radiusSm;
   final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(r));
-  final h = desktop ? DaftarSize.controlDesk : DaftarSize.tapLg;
+  final h = desktop ? FirouzehSize.controlDesk : FirouzehSize.tapLg;
   final border = desktop ? 1.0 : 1.5;
   final buttonText = text.labelLarge;
   final pad = EdgeInsets.symmetric(horizontal: desktop ? 16 : 20);
@@ -312,7 +312,7 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        minimumSize: Size(48, desktop ? DaftarSize.controlDesk : DaftarSize.tapMin),
+        minimumSize: Size(48, desktop ? FirouzehSize.controlDesk : FirouzehSize.tapMin),
         shape: shape,
         textStyle: buttonText,
         foregroundColor: x.stamp,
@@ -320,14 +320,14 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
     ),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
-        minimumSize: Size.square(desktop ? DaftarSize.controlDesk : DaftarSize.tapMin),
+        minimumSize: Size.square(desktop ? FirouzehSize.controlDesk : FirouzehSize.tapMin),
         foregroundColor: x.ink,
         shape: shape,
       ),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: SegmentedButton.styleFrom(
-        minimumSize: Size(48, desktop ? DaftarSize.controlDesk : DaftarSize.tapMin),
+        minimumSize: Size(48, desktop ? FirouzehSize.controlDesk : FirouzehSize.tapMin),
         textStyle: buttonText,
         backgroundColor: x.surface,
         foregroundColor: x.ink,
@@ -360,7 +360,7 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
     ),
     checkboxTheme: CheckboxThemeData(
       side: BorderSide(color: x.lineStrong, width: border),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DaftarSize.radiusXs)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusXs)),
     ),
     navigationBarTheme: NavigationBarThemeData(
       height: 72,
@@ -368,7 +368,7 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
       backgroundColor: x.surface,
       surfaceTintColor: Colors.transparent,
       indicatorColor: x.action,
-      indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DaftarSize.radiusSm)),
+      indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusSm)),
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       labelTextStyle: WidgetStateProperty.resolveWith((s) => text.labelMedium?.copyWith(
             color: s.contains(WidgetState.selected) ? x.ink : x.inkMuted,
@@ -385,7 +385,7 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
       showDragHandle: true,
       dragHandleColor: x.lineStrong,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(DaftarSize.radiusLg)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(FirouzehSize.radiusLg)),
       ),
     ),
     snackBarTheme: SnackBarThemeData(
@@ -394,7 +394,7 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
       contentTextStyle: text.bodyMedium?.copyWith(color: x.onAction),
       actionTextColor: x.onAction,
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DaftarSize.radiusSm)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusSm)),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: x.surface,
@@ -402,7 +402,7 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
       barrierColor: x.scrim,
       titleTextStyle: text.titleLarge,
       contentTextStyle: text.bodyMedium,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DaftarSize.radiusMd)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusMd)),
     ),
     cardTheme: CardThemeData(
       color: x.surface,
@@ -410,7 +410,7 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(DaftarSize.radiusMd),
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusMd),
         side: BorderSide(color: x.line),
       ),
     ),
@@ -423,7 +423,7 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
     ),
     dividerTheme: DividerThemeData(color: x.line, space: 1, thickness: 1),
     chipTheme: ChipThemeData(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DaftarSize.radiusXs)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusXs)),
       side: BorderSide(color: x.line),
       backgroundColor: x.surface,
       selectedColor: x.stampSoft,
@@ -439,7 +439,7 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
       trackOutlineColor: WidgetStateProperty.all(x.lineStrong),
     ),
     tooltipTheme: TooltipThemeData(
-      decoration: BoxDecoration(color: x.action, borderRadius: BorderRadius.circular(DaftarSize.radiusXs)),
+      decoration: BoxDecoration(color: x.action, borderRadius: BorderRadius.circular(FirouzehSize.radiusXs)),
       textStyle: text.bodySmall?.copyWith(color: x.onAction),
     ),
     navigationRailTheme: NavigationRailThemeData(
@@ -450,18 +450,18 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
     ),
     dataTableTheme: DataTableThemeData(
       headingRowColor: WidgetStateProperty.all(x.sunken),
-      headingRowHeight: DaftarSize.controlDesk,
-      dataRowMinHeight: DaftarSize.rowDesk,
-      dataRowMaxHeight: DaftarSize.rowDesk,
+      headingRowHeight: FirouzehSize.controlDesk,
+      dataRowMinHeight: FirouzehSize.rowDesk,
+      dataRowMaxHeight: FirouzehSize.rowDesk,
       headingTextStyle: text.labelLarge?.copyWith(color: x.ink),
       dataTextStyle: text.bodyMedium?.copyWith(fontFeatures: tabularFigures),
       dividerThickness: 1,
-      horizontalMargin: DaftarSize.space3,
-      columnSpacing: DaftarSize.space5,
+      horizontalMargin: FirouzehSize.space3,
+      columnSpacing: FirouzehSize.space5,
       decoration: BoxDecoration(
         color: x.surface,
         border: Border.all(color: x.line),
-        borderRadius: BorderRadius.circular(DaftarSize.radiusXs),
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusXs),
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(
@@ -487,24 +487,24 @@ ThemeData daftarTheme(Brightness b, {bool desktop = false}) {
 }
 
 /// دکمه‌ی «تأیید» (go): فقط برای «تیک پذیرش» و «ثبت، پذیرش و تحویل کارت».
-ButtonStyle daftarGoStyle(BuildContext context, {bool xl = true}) {
-  final x = DaftarColors.of(context);
+ButtonStyle firouzehGoStyle(BuildContext context, {bool xl = true}) {
+  final x = FirouzehColors.of(context);
   return FilledButton.styleFrom(
     backgroundColor: x.goFill,
     foregroundColor: x.onGo,
-    minimumSize: Size.fromHeight(xl ? DaftarSize.tapXl : DaftarSize.tapLg),
+    minimumSize: Size.fromHeight(xl ? FirouzehSize.tapXl : FirouzehSize.tapLg),
     textStyle: Theme.of(context).textTheme.titleMedium,
   );
 }
 
 /// دکمه‌ی «خطرناک» (danger): کار برگشت‌ناپذیر در دیالوگ تأیید.
-ButtonStyle daftarDangerStyle(BuildContext context) {
-  final x = DaftarColors.of(context);
+ButtonStyle firouzehDangerStyle(BuildContext context) {
+  final x = FirouzehColors.of(context);
   return FilledButton.styleFrom(backgroundColor: x.stopFill, foregroundColor: x.onStop);
 }
 
 /// دکمه‌ی اصلی تمام‌عرض (xl ۶۴px یا lg ۵۶px).
-ButtonStyle daftarWideStyle(BuildContext context, {bool xl = false}) => FilledButton.styleFrom(
-      minimumSize: Size.fromHeight(xl ? DaftarSize.tapXl : DaftarSize.tapLg),
+ButtonStyle firouzehWideStyle(BuildContext context, {bool xl = false}) => FilledButton.styleFrom(
+      minimumSize: Size.fromHeight(xl ? FirouzehSize.tapXl : FirouzehSize.tapLg),
       textStyle: Theme.of(context).textTheme.titleMedium,
     );

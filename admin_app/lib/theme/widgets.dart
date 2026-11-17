@@ -1,9 +1,9 @@
-// اجزای مشترک «دفتر»: Notice، Tag، Meter، EmptyState، Field.
+// اجزای مشترک «فیروزه»: Notice، Tag، Meter، EmptyState، Field.
 // این فایل در هر دو اپ یکسان است.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'daftar.dart';
+import 'firouzeh.dart';
 
 /// لحن اعلان درون صفحه.
 enum NoticeTone { info, neutral, go, wait, stop }
@@ -20,7 +20,7 @@ class Notice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final (bg, fg, ic) = switch (tone) {
       NoticeTone.info => (x.stampSoft, x.stamp, Icons.info_rounded),
@@ -30,13 +30,13 @@ class Notice extends StatelessWidget {
       NoticeTone.stop => (x.stopSoft, x.stop, Icons.error_rounded),
     };
     return Container(
-      padding: const EdgeInsets.all(DaftarSize.space3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(DaftarSize.radiusSm)),
+      padding: const EdgeInsets.all(FirouzehSize.space3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(FirouzehSize.radiusSm)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon ?? ic, color: fg, size: 22),
-          const SizedBox(width: DaftarSize.space3),
+          const SizedBox(width: FirouzehSize.space3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,7 +44,7 @@ class Notice extends StatelessWidget {
               children: [
                 if (title != null) Text(title!, style: theme.textTheme.labelLarge?.copyWith(color: x.ink)),
                 SelectableText(text, style: theme.textTheme.bodyMedium?.copyWith(color: x.ink)),
-                if (action != null) ...[const SizedBox(height: DaftarSize.space2), action!],
+                if (action != null) ...[const SizedBox(height: FirouzehSize.space2), action!],
               ],
             ),
           ),
@@ -57,24 +57,24 @@ class Notice extends StatelessWidget {
 enum TagKind { plain, outline, stamp }
 
 /// برچسب کوتاه برای نوع ثبت‌نام، نقش و نوع ارائه. گوشه‌ی ۴px، بدون رنگ معنایی.
-class DaftarTag extends StatelessWidget {
+class FirouzehTag extends StatelessWidget {
   final String text;
   final TagKind kind;
-  const DaftarTag(this.text, {super.key, this.kind = TagKind.plain});
+  const FirouzehTag(this.text, {super.key, this.kind = TagKind.plain});
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final (bg, fg, border) = switch (kind) {
       TagKind.plain => (x.sunken, x.ink, null),
       TagKind.outline => (Colors.transparent, x.inkMuted, x.line),
       TagKind.stamp => (x.stampSoft, x.stamp, null),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space2, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space2, vertical: 2),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(DaftarSize.radiusXs),
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusXs),
         border: border == null ? null : Border.all(color: border),
       ),
       child: Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: fg, fontWeight: FontWeight.w600)),
@@ -100,7 +100,7 @@ class Meter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final big = compact ? theme.textTheme.titleMedium : theme.textTheme.displayLarge;
     return Column(
@@ -118,9 +118,9 @@ class Meter extends StatelessWidget {
                 style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
           ],
         ),
-        const SizedBox(height: DaftarSize.space1),
+        const SizedBox(height: FirouzehSize.space1),
         ClipRRect(
-          borderRadius: BorderRadius.circular(DaftarSize.radiusPill),
+          borderRadius: BorderRadius.circular(FirouzehSize.radiusPill),
           child: LinearProgressIndicator(
             value: total <= 0 ? 0 : (value / total).clamp(0.0, 1.0),
             minHeight: 4,
@@ -143,21 +143,21 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(DaftarSize.space5, DaftarSize.space6, DaftarSize.space5, DaftarSize.space5),
+      padding: const EdgeInsets.fromLTRB(FirouzehSize.space5, FirouzehSize.space6, FirouzehSize.space5, FirouzehSize.space5),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 40, color: x.lineStrong),
-          const SizedBox(height: DaftarSize.space3),
+          const SizedBox(height: FirouzehSize.space3),
           Text(title, textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
           if (hint != null) ...[
-            const SizedBox(height: DaftarSize.space1),
+            const SizedBox(height: FirouzehSize.space1),
             Text(hint!, textAlign: TextAlign.center, style: theme.textTheme.bodyMedium?.copyWith(color: x.inkMuted)),
           ],
-          if (action != null) ...[const SizedBox(height: DaftarSize.space4), action!],
+          if (action != null) ...[const SizedBox(height: FirouzehSize.space4), action!],
         ],
       ),
     );
@@ -165,13 +165,13 @@ class EmptyState extends StatelessWidget {
 }
 
 /// فیلد با برچسب ثابت **بالای** کادر (نه برچسب شناور)، راهنما و خطای زیر همان فیلد.
-class DaftarField extends StatelessWidget {
+class FirouzehField extends StatelessWidget {
   final String label;
   final bool optional;
   final Widget child;
   final String? error;
   final String? helper;
-  const DaftarField({
+  const FirouzehField({
     super.key,
     required this.label,
     required this.child,
@@ -182,7 +182,7 @@ class DaftarField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -231,7 +231,7 @@ class MakerLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final style = Theme.of(context).textTheme.bodySmall?.copyWith(color: x.inkMuted);
     return Text.rich(
       TextSpan(children: [
@@ -262,21 +262,21 @@ class AboutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(DaftarSize.space4),
+        padding: const EdgeInsets.all(FirouzehSize.space4),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Image.asset('assets/brand/logo.png', width: 40, height: 40, semanticLabel: 'لوگوی رویدادیار'),
-          const SizedBox(width: DaftarSize.space3),
+          const SizedBox(width: FirouzehSize.space3),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(appName, style: theme.textTheme.titleMedium),
               Text('$appNameLatin، نسخه‌ی ${version.replaceAllMapped(RegExp(r'\d'), (m) => '۰۱۲۳۴۵۶۷۸۹'[int.parse(m[0]!)])}',
                   textDirection: TextDirection.rtl,
                   style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
-              const SizedBox(height: DaftarSize.space2),
+              const SizedBox(height: FirouzehSize.space2),
               Text(maker, style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
               SelectableText(
                 website,

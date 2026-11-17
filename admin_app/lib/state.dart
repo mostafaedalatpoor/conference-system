@@ -845,7 +845,7 @@ class AdminState extends ChangeNotifier {
           problems.add('ردیف ${r + 2}: تکرار همان ردیف ($first $last)؛ فقط یک بار وارد می‌شود.');
           continue;
         }
-        // تماس مشترک با نام دیگر (مثلاً موبایل یک دفتر): بی‌صدا حذف نمی‌شود؛ جدا وارد و «احتمال تکراری» گزارش می‌شود.
+        // تماس مشترک با نام دیگر (مثلاً موبایل یک اداره): بی‌صدا حذف نمی‌شود؛ جدا وارد و «احتمال تکراری» گزارش می‌شود.
         id = _stableId('$key|n:$nameKey');
         if (out.containsKey(id)) {
           problems.add('ردیف ${r + 2}: تکرار همان ردیف ($first $last)؛ فقط یک بار وارد می‌شود.');
@@ -1048,7 +1048,7 @@ class AdminState extends ChangeNotifier {
         await _loadEvent(eventCode!);
       });
 
-  /// حذف کارت‌های رزروی که به کسی وصل نشده‌اند و در دفتر رخدادها هم نیامده‌اند.
+  /// حذف کارت‌های رزروی که به کسی وصل نشده‌اند و در فهرست رخدادها هم نیامده‌اند.
   Future<void> deleteFreeReserves() => run('', () async {
         final r = (await api.delete('/admin/events/$eventCode/reserve-cards') as Map).cast<String, dynamic>();
         await _loadEvent(eventCode!);
@@ -1088,7 +1088,7 @@ class AdminState extends ChangeNotifier {
         report = await _fetchReport();
       });
 
-  /// لغو پذیرش یک نفر از اپ مدیریت (در دفتر رخدادها با دلیل و فاعل ثبت می‌شود).
+  /// لغو پذیرش یک نفر از اپ مدیریت (در فهرست رخدادها با دلیل و فاعل ثبت می‌شود).
   /// سرور فقط برای فرد پذیرش‌شده قبول می‌کند.
   Future<void> undoCheckin(String attendeeId, {String reason = ''}) => run('پذیرش لغو شد.', () async {
         await api.post('/admin/events/$eventCode/attendees/$attendeeId/checkin-undo', {

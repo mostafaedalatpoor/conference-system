@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../brand.dart';
 import '../main.dart';
 import '../normalize.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import 'checkin.dart';
 import 'meal.dart';
 import 'status.dart';
@@ -32,7 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final attention = store.pending.isNotEmpty || store.rejected.isNotEmpty;
     final statusIcon = Badge(
@@ -95,13 +95,13 @@ class _HomeScreenState extends State<HomeScreen> {
           title: Text(title, overflow: TextOverflow.ellipsis),
           actions: [
             SyncPill(onOpenStatus: () => setState(() => _index = statusIndex)),
-            const SizedBox(width: DaftarSize.space2),
+            const SizedBox(width: FirouzehSize.space2),
           ],
           bottom: wide && showNav
               ? PreferredSize(
                   preferredSize: const Size.fromHeight(56),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space2),
+                    padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, 0, FirouzehSize.space4, FirouzehSize.space2),
                     child: Align(
                       alignment: AlignmentDirectional.centerStart,
                       child: SegmentedButton<int>(
@@ -113,7 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               icon: tabs[k].icon,
                               label: Row(mainAxisSize: MainAxisSize.min, children: [
                                 Text(tabs[k].label),
-                                const SizedBox(width: DaftarSize.space2),
+                                const SizedBox(width: FirouzehSize.space2),
                                 Text('F${k + 1}',
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: k == i ? x.onAction.withValues(alpha: .7) : x.inkMuted,
@@ -188,7 +188,7 @@ class _SyncPillState extends State<SyncPill> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final n = store.pending.length;
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
@@ -241,7 +241,7 @@ class _SyncPillState extends State<SyncPill> with SingleTickerProviderStateMixin
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 36),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space3),
+              padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space3),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../normalize.dart';
 import '../state.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 import 'person_edit.dart';
 import 'report.dart';
@@ -48,12 +48,12 @@ class _PeopleScreenState extends State<PeopleScreen> {
   @override
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final results = _search(s);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(
-        padding: const EdgeInsets.all(DaftarSize.space4),
+        padding: const EdgeInsets.all(FirouzehSize.space4),
         child: Row(children: [
           Expanded(child: TextField(
           controller: _q,
@@ -66,7 +66,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
           ),
           onChanged: (_) => setState(() {}),
         )),
-          const SizedBox(width: DaftarSize.space2),
+          const SizedBox(width: FirouzehSize.space2),
           IconButton.filledTonal(
             tooltip: 'افزودن فرد',
             icon: const Icon(Icons.person_add_rounded),
@@ -94,8 +94,8 @@ class _PeopleScreenState extends State<PeopleScreen> {
                         child: InkWell(
                           onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PersonPage(person: p))),
                           child: Container(
-                            constraints: const BoxConstraints(minHeight: DaftarSize.tapXl),
-                            padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space4, vertical: DaftarSize.space2),
+                            constraints: const BoxConstraints(minHeight: FirouzehSize.tapXl),
+                            padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space4, vertical: FirouzehSize.space2),
                             decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
                             child: Row(children: [
                               Expanded(
@@ -111,12 +111,12 @@ class _PeopleScreenState extends State<PeopleScreen> {
                                   ),
                                 ]),
                               ),
-                              if (!p.isActive) const DaftarTag('غیرفعال', kind: TagKind.outline),
-                              const SizedBox(width: DaftarSize.space2),
+                              if (!p.isActive) const FirouzehTag('غیرفعال', kind: TagKind.outline),
+                              const SizedBox(width: FirouzehSize.space2),
                               if (p.serial != null && s.settings.usesCards)
                                 Text('کارت ${faDigits(p.serial!)}',
                                     style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
-                              const SizedBox(width: DaftarSize.space2),
+                              const SizedBox(width: FirouzehSize.space2),
                               Icon(Icons.chevron_left_rounded, color: x.inkMuted),
                             ]),
                           ),
@@ -191,7 +191,7 @@ class _PersonPageState extends State<PersonPage> {
                 subtitle: Text(sub),
                 onTap: () => setState(() => mode = value),
               ),
-            const SizedBox(height: DaftarSize.space2),
+            const SizedBox(height: FirouzehSize.space2),
             const Notice(tone: NoticeTone.wait, text: 'کارت قبلی باطل می‌شود: اسکنش در گوشی نیروها رد می‌شود و صفحه‌ی شخصی‌اش باز نمی‌شود.'),
           ]),
           actions: [
@@ -233,15 +233,15 @@ class _PersonPageState extends State<PersonPage> {
           title: Text('لغو تحویل ${m.name} به ${p.displayName}؟'),
           content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('در گزارش ثبت می‌شود و گوشی‌ها با همگام‌سازی بعدی می‌بینند.'),
-            const SizedBox(height: DaftarSize.space3),
-            Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+            const SizedBox(height: FirouzehSize.space3),
+            Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
               for (final r in reasons)
                 ChoiceChip(label: Text(r), selected: reason == r, onSelected: (_) => setState(() => reason = r)),
             ]),
           ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
-            FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('لغو تحویل')),
+            FilledButton(style: firouzehDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('لغو تحویل')),
           ],
         ),
       ),
@@ -261,17 +261,17 @@ class _PersonPageState extends State<PersonPage> {
           title: Text('لغو پذیرش ${p.displayName}؟'),
           content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('ثبت وعده‌های او می‌ماند. می‌توانید دوباره پذیرش کنید.'),
-            const SizedBox(height: DaftarSize.space3),
+            const SizedBox(height: FirouzehSize.space3),
             const Text('دلیل لغو'),
-            const SizedBox(height: DaftarSize.space2),
-            Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+            const SizedBox(height: FirouzehSize.space2),
+            Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
               for (final r in reasons)
                 ChoiceChip(label: Text(r), selected: reason == r, onSelected: (_) => setState(() => reason = r)),
             ]),
           ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
-            FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('لغو پذیرش')),
+            FilledButton(style: firouzehDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('لغو پذیرش')),
           ],
         ),
       ),
@@ -290,7 +290,7 @@ class _PersonPageState extends State<PersonPage> {
         content: const Text('از فهرست افراد، گوشی نیروها و گزارش کنار می‌رود.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
-          FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('حذف کن')),
+          FilledButton(style: firouzehDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('حذف کن')),
         ],
       ),
     );
@@ -315,7 +315,7 @@ class _PersonPageState extends State<PersonPage> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(c), child: const Text('نه، برگرد')),
           OutlinedButton(onPressed: () => Navigator.pop(c, 'inactive'), child: const Text('فقط غیرفعال کن')),
-          FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, 'delete'), child: const Text('حذف کن')),
+          FilledButton(style: firouzehDangerStyle(c), onPressed: () => Navigator.pop(c, 'delete'), child: const Text('حذف کن')),
         ],
       ),
     );
@@ -331,7 +331,7 @@ class _PersonPageState extends State<PersonPage> {
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     final p = s.people[widget.person.id] ?? widget.person;
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final details = <(String, String, bool)>[
       ('سازمان', p.organization, false),
@@ -361,17 +361,17 @@ class _PersonPageState extends State<PersonPage> {
           setState(_load);
           await _timeline.catchError((_) => <Map<String, dynamic>>[]);
         },
-        child: ListView(padding: const EdgeInsets.all(DaftarSize.space4), children: [
+        child: ListView(padding: const EdgeInsets.all(FirouzehSize.space4), children: [
           Text(p.displayName, style: theme.textTheme.headlineSmall),
-          const SizedBox(height: DaftarSize.space2),
-          Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
-            for (final t in [s.typeName(p.typeCode), s.roleName(p.roleCode)].where((e) => e.isNotEmpty)) DaftarTag(t),
-            if (p.source == 'walkin') const DaftarTag('ثبت‌نام در محل', kind: TagKind.outline),
-            if (!p.isActive) const DaftarTag('غیرفعال', kind: TagKind.outline),
+          const SizedBox(height: FirouzehSize.space2),
+          Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
+            for (final t in [s.typeName(p.typeCode), s.roleName(p.roleCode)].where((e) => e.isNotEmpty)) FirouzehTag(t),
+            if (p.source == 'walkin') const FirouzehTag('ثبت‌نام در محل', kind: TagKind.outline),
+            if (!p.isActive) const FirouzehTag('غیرفعال', kind: TagKind.outline),
           ]),
           if (!p.isActive)
             Padding(
-              padding: const EdgeInsets.only(top: DaftarSize.space3),
+              padding: const EdgeInsets.only(top: FirouzehSize.space3),
               child: Notice(
                 tone: NoticeTone.neutral,
                 text: 'غیرفعال: در گوشی نیروها و گزارش دیده نمی‌شود. تاریخچه‌اش می‌ماند.',
@@ -384,7 +384,7 @@ class _PersonPageState extends State<PersonPage> {
                 ),
               ),
             ),
-          const SizedBox(height: DaftarSize.space3),
+          const SizedBox(height: FirouzehSize.space3),
           for (final d in details)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
@@ -397,10 +397,10 @@ class _PersonPageState extends State<PersonPage> {
             ),
           if (s.settings.usesCards && p.token != null)
             Padding(
-              padding: const EdgeInsets.only(top: DaftarSize.space3),
+              padding: const EdgeInsets.only(top: FirouzehSize.space3),
               child: Row(children: [
                 Icon(Icons.style_rounded, size: 20, color: x.stamp),
-                const SizedBox(width: DaftarSize.space2),
+                const SizedBox(width: FirouzehSize.space2),
                 Expanded(
                   child: Text([
                     'کارت ${faDigits(p.serial ?? '')}',
@@ -416,7 +416,7 @@ class _PersonPageState extends State<PersonPage> {
             ),
           for (final d in s.possibleDuplicatesOf(p))
             Padding(
-              padding: const EdgeInsets.only(top: DaftarSize.space3),
+              padding: const EdgeInsets.only(top: FirouzehSize.space3),
               child: Notice(
                 tone: NoticeTone.wait,
                 title: 'احتمالاً همان «${d.displayName}» است',
@@ -439,14 +439,14 @@ class _PersonPageState extends State<PersonPage> {
                 return Column(children: [
                   for (final m in s.meals.where((m) => m.id != null && (m.active || (counts[m.id] ?? 0) > 0)))
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: DaftarSize.space1),
+                      padding: const EdgeInsets.symmetric(vertical: FirouzehSize.space1),
                       child: Row(children: [
                         Icon(
                           (counts[m.id] ?? 0) > 0 ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
                           size: 20,
                           color: (counts[m.id] ?? 0) > 0 ? x.go : x.line,
                         ),
-                        const SizedBox(width: DaftarSize.space2),
+                        const SizedBox(width: FirouzehSize.space2),
                         Expanded(child: Text(m.name)),
                         if ((counts[m.id] ?? 0) > 1)
                           Text('${faDigits(counts[m.id]!)} بار', style: theme.textTheme.bodySmall?.copyWith(color: x.wait)),
@@ -465,12 +465,12 @@ class _PersonPageState extends State<PersonPage> {
           ],
           const SectionTitle('تاریخچه'),
           Text('داده‌ی سرور تا ${hm(_at)}', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
-          const SizedBox(height: DaftarSize.space2),
+          const SizedBox(height: FirouzehSize.space2),
           FutureBuilder<List<Map<String, dynamic>>>(
             future: _timeline,
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
-                return const Padding(padding: EdgeInsets.all(DaftarSize.space4), child: LinearProgressIndicator());
+                return const Padding(padding: EdgeInsets.all(FirouzehSize.space4), child: LinearProgressIndicator());
               }
               if (snap.hasError) {
                 return const Notice(
@@ -490,14 +490,14 @@ class _PersonPageState extends State<PersonPage> {
                 for (var i = 0; i < events.length; i++) ...[
                   if (header(i))
                     Padding(
-                      padding: const EdgeInsets.only(top: DaftarSize.space3),
+                      padding: const EdgeInsets.only(top: FirouzehSize.space3),
                       child: Text(s.dayName(events[i]['day'] as String),
                           style: theme.textTheme.labelLarge?.copyWith(color: x.stamp, fontWeight: FontWeight.w800)),
                     ),
                   Builder(builder: (context) {
                     final e = events[i];
                     return Container(
-                    padding: const EdgeInsets.symmetric(vertical: DaftarSize.space2),
+                    padding: const EdgeInsets.symmetric(vertical: FirouzehSize.space2),
                     decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
                     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Icon(
@@ -505,7 +505,7 @@ class _PersonPageState extends State<PersonPage> {
                         size: 20,
                         color: e['flag'] != null ? x.wait : x.go,
                       ),
-                      const SizedBox(width: DaftarSize.space2),
+                      const SizedBox(width: FirouzehSize.space2),
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(_label(e), style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
@@ -531,7 +531,7 @@ class _PersonPageState extends State<PersonPage> {
               ]);
             },
           ),
-          const SizedBox(height: DaftarSize.space5),
+          const SizedBox(height: FirouzehSize.space5),
           // لغو پذیرش فقط برای کسی که الان پذیرش‌شده است (سرور هم همین را می‌سنجد).
           FutureBuilder<List<Map<String, dynamic>>>(
             future: _timeline,
@@ -542,7 +542,7 @@ class _PersonPageState extends State<PersonPage> {
               }
               return OutlinedButton(
                 style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(DaftarSize.tapMin),
+                  minimumSize: const Size.fromHeight(FirouzehSize.tapMin),
                   foregroundColor: x.stop,
                   side: BorderSide(color: x.stop, width: 1.5),
                 ),
@@ -551,10 +551,10 @@ class _PersonPageState extends State<PersonPage> {
               );
             },
           ),
-          const SizedBox(height: DaftarSize.space3),
+          const SizedBox(height: FirouzehSize.space3),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(DaftarSize.tapMin),
+              minimumSize: const Size.fromHeight(FirouzehSize.tapMin),
               foregroundColor: x.stop,
               side: BorderSide(color: x.stop, width: 1.5),
             ),
@@ -562,7 +562,7 @@ class _PersonPageState extends State<PersonPage> {
             onPressed: s.busy ? null : () => _delete(s, p),
             label: const Text('حذف از رویداد…'),
           ),
-          const SizedBox(height: DaftarSize.space1),
+          const SizedBox(height: FirouzehSize.space1),
           Text(
             'اگر پذیرش یا وعده دارد، می‌توانید به‌جای حذف غیرفعالش کنید.',
             textAlign: TextAlign.center,
@@ -575,7 +575,7 @@ class _PersonPageState extends State<PersonPage> {
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(children: [
                   Icon(Icons.warning_rounded, size: 18, color: x.wait),
-                  const SizedBox(width: DaftarSize.space2),
+                  const SizedBox(width: FirouzehSize.space2),
                   Expanded(child: Text('${f['flag_label']}')),
                   if (DateTime.tryParse('${f['device_time']}') != null)
                     Text(relativeTime(DateTime.parse('${f['device_time']}')),

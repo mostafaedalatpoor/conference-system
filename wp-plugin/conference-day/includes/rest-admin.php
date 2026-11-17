@@ -5,7 +5,7 @@ if (!defined('ABSPATH')) {
 
 /*
  * API مدیریت، برای اپ دسکتاپ. احراز هویت با هدر X-Conf-Admin
- * (کلیدی که در پیشخوان وردپرس، صفحه‌ی «کنفرانس ← تنظیمات» ساخته می‌شود).
+ * (کلیدی که در پیشخوان وردپرس، صفحه‌ی «رویدادیار ← اتصال اپ‌ها» ساخته می‌شود).
  * از هدر Authorization استفاده نمی‌شود چون بعضی هاست‌ها آن را حذف می‌کنند.
  */
 
@@ -37,7 +37,7 @@ function cd_admin_role($set = null) {
     return $role;
 }
 
-/** برچسب کلیدی که درخواست فعلی با آن آمده؛ «فاعل» کارهای مدیریتی در دفتر و نیروها. */
+/** برچسب کلیدی که درخواست فعلی با آن آمده؛ «فاعل» کارهای مدیریتی در فهرست رخدادها و نیروها. */
 function cd_admin_actor($set = null) {
     static $actor = '';
     if ($set !== null) {
@@ -154,7 +154,7 @@ add_action('rest_api_init', function () {
             'callback' => 'cd_rest_reserve_cards',
         ],
         [
-            // حذف رزروهای آزاد (کارتی که به کسی وصل نشده و در دفتر هم نیامده).
+            // حذف رزروهای آزاد (کارتی که به کسی وصل نشده و در فهرست رخدادها هم نیامده).
             'methods' => 'DELETE',
             'permission_callback' => $admin,
             'callback' => 'cd_rest_delete_free_reserves',
@@ -339,7 +339,7 @@ add_action('rest_api_init', function () {
         ],
     ]);
 
-    // لغو پذیرش از اپ مدیریت؛ مثل رخداد checkin_undo گوشی در دفتر ثبت می‌شود.
+    // لغو پذیرش از اپ مدیریت؛ مثل رخداد checkin_undo گوشی در فهرست رخدادها ثبت می‌شود.
     register_rest_route(CD_NS, "/admin/events/$code/attendees/$aid/checkin-undo", [
         'methods' => 'POST',
         'permission_callback' => $admin,
@@ -1118,7 +1118,7 @@ function cd_rest_archive_event(WP_REST_Request $request) {
 }
 
 /**
- * حذف واقعی رویداد: تأیید با تایپ کد (confirm) و فقط وقتی هیچ کار ثبت‌شده‌ای (دفتر رخداد) ندارد؛
+ * حذف واقعی رویداد: تأیید با تایپ کد (confirm) و فقط وقتی هیچ کار ثبت‌شده‌ای (فهرست رخداد) ندارد؛
  * وگرنه 409 با خلاصه‌ی پیامد، تا مدیر خروجی بگیرد یا بایگانی کند.
  */
 function cd_rest_delete_event(WP_REST_Request $request) {
@@ -1168,7 +1168,7 @@ function cd_attendee_activity($event_id, array $ids) {
 }
 
 /**
- * تغییر وضعیت چند نفر: active، inactive یا deleted (حذف نرم؛ دفتر رخدادها دست نمی‌خورد).
+ * تغییر وضعیت چند نفر: active، inactive یا deleted (حذف نرم؛ فهرست رخدادها دست نمی‌خورد).
  * حذف کسی که پذیرش یا وعده دارد فقط با $force؛ وگرنه در kept برمی‌گردد.
  */
 function cd_set_attendees_status($event_id, array $ids, $status, $force) {
@@ -1447,7 +1447,7 @@ function cd_rest_patch_attendee(WP_REST_Request $request) {
 }
 
 /**
- * ادغام فرد from در این فرد: رخدادهای دفتر و کارهای ردشده و کارت‌ها به این فرد منتقل می‌شوند،
+ * ادغام فرد from در این فرد: رخدادهای فهرست رخدادها و کارهای ردشده و کارت‌ها به این فرد منتقل می‌شوند،
  * فیلدهای خالی این فرد از from پر می‌شود و from حذف نرم می‌شود.
  */
 function cd_rest_merge_attendees(WP_REST_Request $request) {

@@ -2,15 +2,11 @@ name: build
 
 # رویدادیار: اپ نیروها و اپ مدیریت، هر کدام روی اندروید و ویندوز.
 on:
+  # فقط push روی main می‌سازد و در Releases منتشر می‌کند (تگ از نسخه‌ی pubspec، مثلاً v2.0.0).
   push:
-    branches: [main, design-system-daftar]
-    # تگ نسخه (مثلاً v0.2.0) همه را می‌سازد و در Releases منتشر می‌کند.
-    tags: ['v*']
+    branches: [main]
+  # اجرای دستی: فقط ساخت برای آزمایش، بدون انتشار.
   workflow_dispatch:
-  # بعد از باز شدن bundle، ساخت خودکار اجرا شود.
-  workflow_run:
-    workflows: [bootstrap]
-    types: [completed]
 
 env:
   VAZIRMATN: https://raw.githubusercontent.com/rastikerdar/vazirmatn/master/fonts/ttf
@@ -209,9 +205,9 @@ jobs:
 
   release:
     name: انتشار در Releases
-    # با تگ v* یا با commitی روی شاخه که «[release]» در پیامش دارد؛
-    # در حالت دوم خود گیت‌هاب تگ نسخه‌ی pubspec را روی همان commit می‌سازد.
-    if: startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[release]')
+    # فقط با push روی main؛ تگ نسخه‌ی pubspec (بدون شماره‌ی ساخت بعد از +) روی همان commit ساخته می‌شود.
+    # push دوباره با همان نسخه، فایل‌های همان انتشار را جایگزین می‌کند.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [staff-android, staff-windows, admin-windows, admin-android, wp-plugin]
     runs-on: ubuntu-latest
     permissions:
@@ -222,11 +218,7 @@ jobs:
       - name: شماره‌ی نسخه
         id: ver
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=v$(grep '^version:' staff_app/pubspec.yaml | sed -E 's/version: *([0-9.]+).*/\1/')" >> "$GITHUB_OUTPUT"
-          fi
+          echo "tag=v$(grep '^version:' staff_app/pubspec.yaml | sed -E 's/version: *([0-9.]+).*/\1/')" >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v4
         with:
@@ -250,7 +242,7 @@ jobs:
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: رویدادیار ${{ steps.ver.outputs.tag }}
+          name: رویدادیار ${{ steps.ver.outputs.tag }} · فیروزه
           files: out/*
           generate_release_notes: true
           body: |

@@ -10,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../card_logic.dart';
 import '../cards_pdf.dart';
 import '../main.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 import '../normalize.dart';
 import '../state.dart';
@@ -336,15 +336,15 @@ class _CardsScreenState extends State<CardsScreen> {
         showDragHandle: true,
         builder: (c) => SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space5),
+            padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, 0, FirouzehSize.space4, FirouzehSize.space5),
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text('فایل ذخیره شد: $name', style: Theme.of(c).textTheme.titleMedium),
-              const SizedBox(height: DaftarSize.space2),
+              const SizedBox(height: FirouzehSize.space2),
               const Hint('به چاپخانه می‌دهید؟ با «بله»، آدرس سایت روی QR قفل می‌شود.'),
-              const SizedBox(height: DaftarSize.space4),
+              const SizedBox(height: FirouzehSize.space4),
               Row(children: [
                 Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(c, false), child: const Text('فعلاً نه'))),
-                const SizedBox(width: DaftarSize.space3),
+                const SizedBox(width: FirouzehSize.space3),
                 Expanded(flex: 2, child: FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('بله، قفل کن'))),
               ]),
             ]),
@@ -415,7 +415,7 @@ class _CardsScreenState extends State<CardsScreen> {
   }) =>
       SizedBox(
         width: width,
-        child: DaftarField(
+        child: FirouzehField(
           label: label,
           error: error,
           child: TextFormField(
@@ -425,7 +425,7 @@ class _CardsScreenState extends State<CardsScreen> {
             textDirection: ltr ? TextDirection.ltr : null,
             decoration: InputDecoration(
               isDense: true,
-              suffixIcon: error == null ? null : Icon(Icons.error_rounded, color: DaftarColors.of(context).stop),
+              suffixIcon: error == null ? null : Icon(Icons.error_rounded, color: FirouzehColors.of(context).stop),
             ),
             onChanged: (v) => setState(() {
               _raw[id] = v;
@@ -485,7 +485,7 @@ class _CardsScreenState extends State<CardsScreen> {
         subtitle: const Text('خاموش: همه‌ی افراد یک قالب دارند'),
       ),
       if (set.separate) ...[
-        Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+        Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
           for (final x in set.templates)
             ChoiceChip(
               label: Text(x.name),
@@ -507,13 +507,13 @@ class _CardsScreenState extends State<CardsScreen> {
             }),
           ),
         ]),
-        const SizedBox(height: DaftarSize.space2),
+        const SizedBox(height: FirouzehSize.space2),
         Hint(_ruleSummary(s, t)),
-        const SizedBox(height: DaftarSize.space3),
-        Wrap(spacing: DaftarSize.space3, runSpacing: DaftarSize.space2, crossAxisAlignment: WrapCrossAlignment.end, children: [
+        const SizedBox(height: FirouzehSize.space3),
+        Wrap(spacing: FirouzehSize.space3, runSpacing: FirouzehSize.space2, crossAxisAlignment: WrapCrossAlignment.end, children: [
           SizedBox(
             width: 220,
-            child: DaftarField(
+            child: FirouzehField(
               label: 'نام قالب',
               error: t.name.trim().isEmpty ? 'نام قالب را بنویسید' : null,
               child: TextFormField(
@@ -532,7 +532,7 @@ class _CardsScreenState extends State<CardsScreen> {
             ),
         ]),
         if (!t.isDefault) ...[
-          const SizedBox(height: DaftarSize.space3),
+          const SizedBox(height: FirouzehSize.space3),
           Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
             const Text('نقش:  '),
             for (final r in s.roles)
@@ -556,12 +556,12 @@ class _CardsScreenState extends State<CardsScreen> {
           const SizedBox(height: 6),
           const Hint('اگر نقش کسی به یک قالب و نوع ثبت‌نامش به قالب دیگری بخورد، قالب نقش برنده است.'),
         ],
-        const SizedBox(height: DaftarSize.space3),
+        const SizedBox(height: FirouzehSize.space3),
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: SizedBox(
             width: 260,
-            child: DaftarField(
+            child: FirouzehField(
               label: 'قالب کارت‌های رزرو',
               child: DropdownButtonFormField<String>(
                 key: ValueKey('reserve-${set.templates.length}-$_rev'),
@@ -620,7 +620,7 @@ class _CardsScreenState extends State<CardsScreen> {
     return PageBody(title: 'کارت‌ها', children: [
       if (locked)
         const Padding(
-          padding: EdgeInsets.only(bottom: DaftarSize.space2),
+          padding: EdgeInsets.only(bottom: FirouzehSize.space2),
           child: Notice(
             tone: NoticeTone.wait,
             text: 'کارت‌ها چاپ شده‌اند. تغییر قالب فقط روی کارت‌های رزرو جدید اثر دارد.',
@@ -643,7 +643,7 @@ class _CardsScreenState extends State<CardsScreen> {
         ),
         if (free > 0)
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: DaftarColors.of(context).stop),
+            style: TextButton.styleFrom(foregroundColor: FirouzehColors.of(context).stop),
             onPressed: s.busy
                 ? null
                 : () async {
@@ -656,7 +656,7 @@ class _CardsScreenState extends State<CardsScreen> {
                         actions: [
                           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
                           FilledButton(
-                            style: daftarDangerStyle(c),
+                            style: firouzehDangerStyle(c),
                             onPressed: () => Navigator.pop(c, true),
                             child: const Text('حذف'),
                           ),
@@ -669,7 +669,7 @@ class _CardsScreenState extends State<CardsScreen> {
           ),
       ]),
       const SectionTitle('مشخصات کارت'),
-      Wrap(spacing: DaftarSize.space3, runSpacing: DaftarSize.space3, crossAxisAlignment: WrapCrossAlignment.start, children: [
+      Wrap(spacing: FirouzehSize.space3, runSpacing: FirouzehSize.space3, crossAxisAlignment: WrapCrossAlignment.start, children: [
         _checked('w', 'عرض (میلی‌متر)', _plain(set.widthMm), errors['w'], (v) {
           if (cardSizeError(v, 'عرض') == null) set.widthMm = parseDecimal(v)!;
         }),
@@ -680,7 +680,7 @@ class _CardsScreenState extends State<CardsScreen> {
           if (bleedError(v) == null) set.bleedMm = parseDecimal(v)!;
         }),
       ]),
-      const SizedBox(height: DaftarSize.space2),
+      const SizedBox(height: FirouzehSize.space2),
       const Hint('اندازه‌ی نهایی کارت را از چاپخانه بپرسید (کارت ویزیت معمولاً ۸۵×۵۵ میلی‌متر). '
           'ارقام فارسی و ممیز «٫» هم پذیرفته می‌شود.'),
       CheckboxListTile(
@@ -736,7 +736,7 @@ class _CardsScreenState extends State<CardsScreen> {
       ]),
       if (t.qrSizeMm < s.minQrMm)
         Padding(
-          padding: const EdgeInsets.only(top: DaftarSize.space2),
+          padding: const EdgeInsets.only(top: FirouzehSize.space2),
           child: Notice(
             tone: NoticeTone.wait,
             text: 'QR کوچک است؛ گوشی‌های قدیمی از فاصله نمی‌خوانند. کمینه برای '
@@ -759,7 +759,7 @@ class _CardsScreenState extends State<CardsScreen> {
       const SectionTitle('ساخت PDF'),
       if (!locked && host.isNotEmpty)
         Padding(
-          padding: const EdgeInsets.only(bottom: DaftarSize.space3),
+          padding: const EdgeInsets.only(bottom: FirouzehSize.space3),
           child: Notice(
             tone: NoticeTone.stop,
             icon: Icons.lock_rounded,
@@ -769,10 +769,10 @@ class _CardsScreenState extends State<CardsScreen> {
           ),
         ),
       Text('چه کسانی', style: Theme.of(context).textTheme.labelLarge),
-      const SizedBox(height: DaftarSize.space2),
+      const SizedBox(height: FirouzehSize.space2),
       Padding(
-        padding: const EdgeInsets.only(bottom: DaftarSize.space3),
-        child: Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+        padding: const EdgeInsets.only(bottom: FirouzehSize.space3),
+        child: Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
           ChoiceChip(
             label: Text('همه ${faDigits(all.length)}'),
             selected: _scope == PrintScope.all,
@@ -792,12 +792,12 @@ class _CardsScreenState extends State<CardsScreen> {
       ),
       if (_scope != PrintScope.all)
         const Padding(
-          padding: EdgeInsets.only(bottom: DaftarSize.space3),
+          padding: EdgeInsets.only(bottom: FirouzehSize.space3),
           child: Hint('کارت‌های رزرو فقط با «همه» ساخته می‌شوند؛ برای رزرو جدا «PDF کارت‌های رزرو آزاد» را بزنید.'),
         ),
       if (set.separate && set.templates.length > 1)
         Padding(
-          padding: const EdgeInsets.only(bottom: DaftarSize.space3),
+          padding: const EdgeInsets.only(bottom: FirouzehSize.space3),
           child: SegmentedButton<bool>(
             segments: const [
               ButtonSegment(value: false, label: Text('همه در یک فایل')),
@@ -810,7 +810,7 @@ class _CardsScreenState extends State<CardsScreen> {
         ),
       if (mobile && noArtwork)
         const Padding(
-          padding: EdgeInsets.only(bottom: DaftarSize.space3),
+          padding: EdgeInsets.only(bottom: FirouzehSize.space3),
           child: Notice(
             tone: NoticeTone.wait,
             text: 'طرح روی و پشت روی این گوشی انتخاب نشده؛ کارت‌ها روی زمینه‌ی سفید (فقط نام و QR) ساخته می‌شوند. '
@@ -998,10 +998,10 @@ class _Preflight extends StatelessWidget {
                   ok == true ? Icons.check_circle_rounded : (ok == null ? Icons.warning_rounded : Icons.error_rounded),
                   size: 18,
                   color: ok == true
-                      ? DaftarColors.of(context).go
-                      : (ok == null ? DaftarColors.of(context).wait : DaftarColors.of(context).stop),
+                      ? FirouzehColors.of(context).go
+                      : (ok == null ? FirouzehColors.of(context).wait : FirouzehColors.of(context).stop),
                 ),
-                const SizedBox(width: DaftarSize.space2),
+                const SizedBox(width: FirouzehSize.space2),
                 Expanded(child: Text(text)),
               ]),
             ),
@@ -1020,7 +1020,7 @@ class _Preview extends StatelessWidget {
 
   Widget _side(BuildContext context, double width, String imagePath, List<Widget> overlay) {
     final set = s.cards;
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final pxPerMm = width / set.widthMm;
     return SizedBox(
       width: width,

@@ -28,7 +28,7 @@ const CD_KIND_LABELS = [
 ];
 
 /**
- * وضعیت لحظه‌ای هر نفر از روی دفتر رخدادها:
+ * وضعیت لحظه‌ای هر نفر از روی فهرست رخدادها:
  * [attendee_id => ['checked_in_at' => ?, 'days' => [day => checked_in_at], 'meals' => [meal_id => count]]]
  * checked_in_at همان رفتار قبلی است (روزها جدا نیستند)؛ days برای حضور روزانه است.
  * meal_undo یک تحویل را برمی‌گرداند.
@@ -253,7 +253,7 @@ function cd_build_report(array $event, $day = null) {
 /**
  * ردیف‌های خروجی افراد (فهرست حضور) با فیلتر. پایه‌ی خروجی اپ مدیریت و CSV پیشخوان.
  * $f: who = all|checked_in|absent|walkin|flagged، type و role (کد)، day (حضور روزانه)، include_inactive.
- * «اولین پذیرش» و «آخرین پذیرش» از دفتر رخدادهاست (لغوشده‌ها هم حساب‌اند)؛ «پذیرش توسط» نیروی آخرین پذیرش.
+ * «اولین پذیرش» و «آخرین پذیرش» از فهرست رخدادهاست (لغوشده‌ها هم حساب‌اند)؛ «پذیرش توسط» نیروی آخرین پذیرش.
  */
 function cd_export_rows(array $event, array $f = []) {
     global $wpdb;

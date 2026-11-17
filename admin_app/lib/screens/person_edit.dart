@@ -4,7 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../main.dart';
 import '../normalize.dart';
 import '../state.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 
 /// «ویرایش اطلاعات» و «افزودن فرد» (طراحی ۱۹-EditPerson). [person] = null یعنی افزودن.
@@ -102,18 +102,18 @@ class _PersonEditorState extends State<_PersonEditor> {
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     final theme = Theme.of(context);
-    const gap = SizedBox(height: DaftarSize.space3);
+    const gap = SizedBox(height: FirouzehSize.space3);
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space4, DaftarSize.space4, DaftarSize.space5),
+      padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, FirouzehSize.space4, FirouzehSize.space4, FirouzehSize.space5),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         Row(children: [
           Expanded(child: Text(_adding ? 'افزودن فرد' : 'ویرایش اطلاعات', style: theme.textTheme.titleLarge)),
-          if (_adding) Text('ثبت‌نام دستی', style: theme.textTheme.bodySmall?.copyWith(color: DaftarColors.of(context).inkMuted)),
+          if (_adding) Text('ثبت‌نام دستی', style: theme.textTheme.bodySmall?.copyWith(color: FirouzehColors.of(context).inkMuted)),
         ]),
         gap,
         Row(children: [
           Expanded(child: TextField(controller: _first, decoration: const InputDecoration(labelText: 'نام'))),
-          const SizedBox(width: DaftarSize.space3),
+          const SizedBox(width: FirouzehSize.space3),
           Expanded(child: TextField(controller: _last, decoration: const InputDecoration(labelText: 'نام خانوادگی'))),
         ]),
         gap,
@@ -159,20 +159,20 @@ class _PersonEditorState extends State<_PersonEditor> {
           gap,
           Notice(tone: NoticeTone.stop, text: _error!),
         ],
-        const SizedBox(height: DaftarSize.space4),
+        const SizedBox(height: FirouzehSize.space4),
         Row(children: [
           Expanded(
             child: OutlinedButton(
-              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(DaftarSize.tapLg)),
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(FirouzehSize.tapLg)),
               onPressed: () => Navigator.pop(context, false),
               child: const Text('انصراف'),
             ),
           ),
-          const SizedBox(width: DaftarSize.space3),
+          const SizedBox(width: FirouzehSize.space3),
           Expanded(
             flex: 2,
             child: FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(DaftarSize.tapLg)),
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(FirouzehSize.tapLg)),
               onPressed: s.busy ? null : () => _save(s),
               child: const Text('ذخیره'),
             ),

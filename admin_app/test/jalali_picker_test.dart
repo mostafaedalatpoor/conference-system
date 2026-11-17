@@ -1,4 +1,4 @@
-import 'package:conference_admin/theme/daftar.dart';
+import 'package:conference_admin/theme/firouzeh.dart';
 import 'package:conference_admin/theme/jalali_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -13,7 +13,7 @@ Widget _wrap(Widget child) => MaterialApp(
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: daftarTheme(Brightness.light),
+      theme: firouzehTheme(Brightness.light),
       home: Scaffold(body: SingleChildScrollView(child: SizedBox(width: 360, child: child))),
     );
 

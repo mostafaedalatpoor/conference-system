@@ -44,6 +44,14 @@ values = {
 for key, value in values.items():
     src, n = re.subn(rf'VALUE "{key}", "[^"]*"', lambda _: f'VALUE "{key}", "{value}"', src)
     assert n == 1, f"{key} not found"
+# شماره‌ی ساخت (بعد از + در pubspec) فقط برای اندروید است و به کاربر نشان داده نمی‌شود:
+# نسخه‌ی فایل ویندوز فقط «2.0.0» است (رشته‌ها) و «2,0,0,0» (عددی).
+pubspec = (root.parent / "pubspec.yaml").read_text(encoding="utf-8")
+name = re.search(r"^version:\s*([0-9]+\.[0-9]+\.[0-9]+)", pubspec, re.M).group(1)
+src, n1 = re.subn(r'VALUE "(FileVersion|ProductVersion)", [^\r\n]*', lambda m: f'VALUE "{m.group(1)}", "{name}" "\\0"', src)
+src, n2 = re.subn(r"^(\s*(?:FILEVERSION|PRODUCTVERSION))\s+[^\r\n]*", lambda m: f"{m.group(1)} {name.replace('.', ',')},0", src, flags=re.M)
+if n1 != 2 or n2 != 2:
+    print(f"warning: version fields patched {n1}/2 strings, {n2}/2 numbers")
 rc.write_text(src, encoding="utf-8")
 
 shutil.copyfile(args.icon, root / "runner/resources/app_icon.ico")

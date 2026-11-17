@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../normalize.dart';
 import '../state.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/jalali_picker.dart';
 import '../theme/widgets.dart';
 
@@ -59,7 +59,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
         controller: _key,
         decoration: const InputDecoration(
           labelText: 'کلید API',
-          helperText: 'از پیشخوان وردپرس: رویدادیار ← تنظیمات ← ساخت کلید. '
+          helperText: 'از پیشخوان وردپرس: رویدادیار ← اتصال اپ‌ها ← ساخت کلید. '
               'کلید را هر وقت لازم شد از پیشخوان وردپرس دوباره ببین و کپی کن. '
               'برای هر دستگاه کلید جدا بسازید تا اگر گم شد، فقط همان باطل شود.',
           helperMaxLines: 3,
@@ -77,10 +77,10 @@ class _ConnectScreenState extends State<ConnectScreen> {
       ),
       if (s.events.isNotEmpty || s.event != null)
         Padding(
-          padding: const EdgeInsets.only(top: DaftarSize.space3),
+          padding: const EdgeInsets.only(top: FirouzehSize.space3),
           child: Align(
             alignment: AlignmentDirectional.centerStart,
-            child: DaftarTag(
+            child: FirouzehTag(
               'دسترسی این کلید: ${s.keyRoleLabel.isNotEmpty ? s.keyRoleLabel : 'مالک'}',
               kind: TagKind.stamp,
             ),
@@ -117,7 +117,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
       ],
       if (s.apiKey.isNotEmpty && s.event != null && !_creating && !s.limited)
         Padding(
-          padding: const EdgeInsets.only(top: DaftarSize.space3),
+          padding: const EdgeInsets.only(top: FirouzehSize.space3),
           child: Align(
             alignment: AlignmentDirectional.centerStart,
             child: TextButton.icon(
@@ -136,7 +136,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
           ),
         ),
       if (s.event?.archived == true && !_creating) ...[
-        const SizedBox(height: DaftarSize.space3),
+        const SizedBox(height: FirouzehSize.space3),
         Notice(
           tone: NoticeTone.wait,
           text: 'این رویداد بایگانی شده و فقط خواندنی است. گوشی نیروها هم نمی‌توانند واردش شوند.',
@@ -243,16 +243,16 @@ class _SensitiveActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final e = s.event!;
     final style = OutlinedButton.styleFrom(
       foregroundColor: x.stop,
       side: BorderSide(color: x.stop, width: 1.5),
-      minimumSize: const Size(0, DaftarSize.tapMin),
+      minimumSize: const Size(0, FirouzehSize.tapMin),
     );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SectionTitle('کارهای حساس'),
-      Wrap(spacing: DaftarSize.space3, runSpacing: DaftarSize.space2, children: [
+      Wrap(spacing: FirouzehSize.space3, runSpacing: FirouzehSize.space2, children: [
         if (!e.archived)
           OutlinedButton.icon(
             style: style,
@@ -282,7 +282,7 @@ Future<bool?> _confirmArchive(BuildContext context) => showDialog<bool>(
         content: const Text('رویداد از فهرست کنار می‌رود و فقط خواندنی می‌شود. هر وقت خواستید برش می‌گردانید.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
-          FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('بایگانی')),
+          FilledButton(style: firouzehDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('بایگانی')),
         ],
       ),
     );
@@ -320,7 +320,7 @@ Future<void> _deleteEvent(BuildContext context, AdminState s) async {
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
           if (!e.archived)
-            FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('بایگانی')),
+            FilledButton(style: firouzehDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('بایگانی')),
         ],
       ),
     );
@@ -337,8 +337,8 @@ Future<void> _deleteEvent(BuildContext context, AdminState s) async {
           width: 440,
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Notice(tone: NoticeTone.stop, text: '$summary حذف می‌شود. این کار برگشت ندارد.'),
-            const SizedBox(height: DaftarSize.space4),
-            DaftarField(
+            const SizedBox(height: FirouzehSize.space4),
+            FirouzehField(
               label: 'برای تأیید، کد رویداد را بنویسید: ${e.code}',
               child: TextField(
                 controller: code,
@@ -352,7 +352,7 @@ Future<void> _deleteEvent(BuildContext context, AdminState s) async {
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
           FilledButton(
-            style: daftarDangerStyle(c),
+            style: firouzehDangerStyle(c),
             onPressed: code.text.trim() == e.code ? () => Navigator.pop(c, true) : null,
             child: const Text('حذف رویداد'),
           ),
@@ -381,8 +381,8 @@ Future<bool?> _confirmUnlock(BuildContext context, EventInfo e) {
               text: 'اگر بعد از چاپ کارت‌ها آدرس پایه عوض شود، QR همه‌ی کارت‌های چاپ‌شده دیگر کار نمی‌کند '
                   'و باید دوباره چاپ شوند.',
             ),
-            const SizedBox(height: DaftarSize.space4),
-            DaftarField(
+            const SizedBox(height: FirouzehSize.space4),
+            FirouzehField(
               label: 'برای تأیید، کد رویداد را بنویسید: ${e.code}',
               child: TextField(
                 controller: code,
@@ -396,7 +396,7 @@ Future<bool?> _confirmUnlock(BuildContext context, EventInfo e) {
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
           FilledButton(
-            style: daftarDangerStyle(c),
+            style: firouzehDangerStyle(c),
             onPressed: code.text.trim() == e.code ? () => Navigator.pop(c, true) : null,
             child: const Text('قفل را بردار'),
           ),

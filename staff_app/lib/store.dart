@@ -13,7 +13,7 @@ import 'normalize.dart';
 
 const _uuid = Uuid();
 
-/// همه‌ی وضعیت اپ: داده‌ی رویداد، دفتر رخدادها، صف ارسال، و همگام‌سازی.
+/// همه‌ی وضعیت اپ: داده‌ی رویداد، فهرست رخدادها، صف ارسال، و همگام‌سازی.
 /// همه‌چیز روی گوشی ذخیره می‌شود، پس اپ بدون اینترنت کار می‌کند.
 class AppStore extends ChangeNotifier {
   // ورود
@@ -41,7 +41,7 @@ class AppStore extends ChangeNotifier {
   Set<String> revokedCards = {};
   Map<int, String> staffNames = {};
 
-  // دفتر رخدادها
+  // فهرست رخدادها
   List<LogEvent> serverLog = [];
   final Set<String> _serverUuids = {};
   List<LogEvent> pending = [];
@@ -244,7 +244,7 @@ class AppStore extends ChangeNotifier {
 
   // ---------------------------------------------------------------- محاسبه‌ی وضعیت
 
-  /// وضعیت هر نفر از روی دفتر رخدادهای سرور و بعد رخدادهای ارسال‌نشده.
+  /// وضعیت هر نفر از روی فهرست رخدادهای سرور و بعد رخدادهای ارسال‌نشده.
   void _recompute() {
     final att = Map<String, Attendee>.from(_baseAttendees);
     final owner = <String, String>{};

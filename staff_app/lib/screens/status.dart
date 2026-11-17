@@ -4,7 +4,7 @@ import '../errors.dart';
 import '../brand.dart';
 import '../main.dart';
 import '../normalize.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 
 class StatusScreen extends StatefulWidget {
@@ -46,7 +46,7 @@ class _StatusScreenState extends State<StatusScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
           FilledButton(
-            style: n > 0 ? daftarDangerStyle(c) : null,
+            style: n > 0 ? firouzehDangerStyle(c) : null,
             onPressed: () => Navigator.pop(c, true),
             child: Text(n > 0 ? 'با این حال خارج شو' : 'خروج'),
           ),
@@ -60,7 +60,7 @@ class _StatusScreenState extends State<StatusScreen> {
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final theme = Theme.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final n = store.pending.length;
 
     Widget row(String k, String v, {Color? color, IconData? icon}) => Padding(
@@ -82,13 +82,13 @@ class _StatusScreenState extends State<StatusScreen> {
         );
 
     Widget section(String title, List<Widget> children) => Padding(
-          padding: const EdgeInsets.only(bottom: DaftarSize.space4),
+          padding: const EdgeInsets.only(bottom: FirouzehSize.space4),
           child: Card(
             child: Padding(
-              padding: const EdgeInsets.all(DaftarSize.space4),
+              padding: const EdgeInsets.all(FirouzehSize.space4),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Text(title, style: theme.textTheme.titleMedium),
-                const SizedBox(height: DaftarSize.space2),
+                const SizedBox(height: FirouzehSize.space2),
                 ...children,
               ]),
             ),
@@ -96,17 +96,17 @@ class _StatusScreenState extends State<StatusScreen> {
         );
 
     return ListView(
-      padding: const EdgeInsets.all(DaftarSize.space4),
+      padding: const EdgeInsets.all(FirouzehSize.space4),
       children: [
         // آفلاین خطا نیست: پیام اصلی خنثی است و فقط باطل‌شدن دسترسی قرمز است.
         if (store.needsLogin)
           const Padding(
-            padding: EdgeInsets.only(bottom: DaftarSize.space4),
+            padding: EdgeInsets.only(bottom: FirouzehSize.space4),
             child: Notice(tone: NoticeTone.stop, text: 'دسترسی این گوشی باطل شده. دوباره وارد شوید.'),
           )
         else if (!store.online)
           Padding(
-            padding: const EdgeInsets.only(bottom: DaftarSize.space4),
+            padding: const EdgeInsets.only(bottom: FirouzehSize.space4),
             child: Notice(
               tone: NoticeTone.neutral,
               icon: Icons.cloud_off_rounded,
@@ -118,7 +118,7 @@ class _StatusScreenState extends State<StatusScreen> {
           )
         else if (n > 0)
           Padding(
-            padding: const EdgeInsets.only(bottom: DaftarSize.space4),
+            padding: const EdgeInsets.only(bottom: FirouzehSize.space4),
             child: Notice(
               tone: NoticeTone.wait,
               icon: Icons.cloud_upload_rounded,
@@ -133,19 +133,19 @@ class _StatusScreenState extends State<StatusScreen> {
           row('کارهای ارسال‌نشده', faDigits(n), color: n == 0 ? null : x.wait),
           if (store.lastError != null && !store.needsLogin)
             Padding(
-              padding: const EdgeInsets.only(top: DaftarSize.space1),
+              padding: const EdgeInsets.only(top: FirouzehSize.space1),
               child: Text(store.lastError!, style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
             ),
-          const SizedBox(height: DaftarSize.space3),
+          const SizedBox(height: FirouzehSize.space3),
           FilledButton.icon(
-            style: daftarWideStyle(context),
+            style: firouzehWideStyle(context),
             onPressed: store.syncing ? null : store.sync,
             icon: const Icon(Icons.sync_rounded),
             label: Text(store.syncing ? 'در حال ارسال…' : 'همگام‌سازی الان'),
           ),
-          const SizedBox(height: DaftarSize.space2),
+          const SizedBox(height: FirouzehSize.space2),
           OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(DaftarSize.tapLg)),
+            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(FirouzehSize.tapLg)),
             onPressed: _refreshing ? null : _refresh,
             icon: const Icon(Icons.download_rounded),
             label: Text(_refreshing ? 'در حال دریافت…' : 'دریافت دوباره‌ی کل لیست'),
@@ -167,10 +167,10 @@ class _StatusScreenState extends State<StatusScreen> {
           section('کارهایی که سرور نپذیرفت', [
             for (final r in store.rejected.reversed.take(20))
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: DaftarSize.space1),
+                padding: const EdgeInsets.symmetric(vertical: FirouzehSize.space1),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Icon(Icons.warning_rounded, size: 18, color: x.wait),
-                  const SizedBox(width: DaftarSize.space2),
+                  const SizedBox(width: FirouzehSize.space2),
                   Expanded(
                     child: Text(
                       [
@@ -184,13 +184,13 @@ class _StatusScreenState extends State<StatusScreen> {
                 ]),
               ),
           ]),
-        const SizedBox(height: DaftarSize.space3),
+        const SizedBox(height: FirouzehSize.space3),
         TextButton(
           style: TextButton.styleFrom(foregroundColor: x.stop),
           onPressed: _logout,
           child: const Text('خروج از این رویداد'),
         ),
-        const SizedBox(height: DaftarSize.space4),
+        const SizedBox(height: FirouzehSize.space4),
         const AboutCard(
           appName: appName,
           appNameLatin: appNameLatin,

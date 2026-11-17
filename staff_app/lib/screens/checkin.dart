@@ -5,7 +5,7 @@ import '../main.dart';
 import '../models.dart';
 import '../normalize.dart';
 import '../store.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 import '../widgets/scan_input.dart';
 import '../widgets/undo_bar.dart';
@@ -166,14 +166,14 @@ class _CheckinScreenState extends State<CheckinScreen> {
     final store = StoreScope.of(context);
     final q = _q.text.trim();
     final results = _results(store);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final wide = _wide;
     final desk = !AppStore.hasCamera;
     final selected = results.isEmpty ? null : results[_selected.clamp(0, results.length - 1)];
     final paneAttendee = _paneId != null ? store.attendees[_paneId] : (q.isEmpty ? null : selected);
 
     final search = Padding(
-      padding: const EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space3, DaftarSize.space4, 0),
+      padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, FirouzehSize.space3, FirouzehSize.space4, 0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -192,11 +192,11 @@ class _CheckinScreenState extends State<CheckinScreen> {
             ),
           ),
           if (store.cameraScan) ...[
-            const SizedBox(width: DaftarSize.space2),
+            const SizedBox(width: FirouzehSize.space2),
             Tooltip(
               message: 'اسکن کارت',
               child: SizedBox.square(
-                dimension: DaftarSize.tapLg,
+                dimension: FirouzehSize.tapLg,
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size.square(56)),
                   onPressed: _scanToFind,
@@ -238,7 +238,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
                       },
                     ),
                   Padding(
-                    padding: const EdgeInsets.all(DaftarSize.space4),
+                    padding: const EdgeInsets.all(FirouzehSize.space4),
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.person_add_rounded),
                       label: const Text('پیدا نشد؟ ثبت‌نام در محل'),
@@ -257,7 +257,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
         children: [
           search,
           Padding(
-            padding: const EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space3, DaftarSize.space4, DaftarSize.space2),
+            padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, FirouzehSize.space3, FirouzehSize.space4, FirouzehSize.space2),
             child: Meter(
               // رویداد چندروزه: «پذیرش‌شده · روز ۲ از ۳»
               label: store.eventDayOf == null
@@ -272,7 +272,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
           Expanded(child: list),
           if (wide)
             Container(
-              padding: const EdgeInsets.all(DaftarSize.space3),
+              padding: const EdgeInsets.all(FirouzehSize.space3),
               decoration: BoxDecoration(border: Border(top: BorderSide(color: x.line))),
               child: KeyHints([
                 ('Enter', 'تیک پذیرش / نفر بعدی'),
@@ -304,7 +304,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
                 ),
               )
             : SingleChildScrollView(
-                padding: const EdgeInsets.only(top: DaftarSize.space5),
+                padding: const EdgeInsets.only(top: FirouzehSize.space5),
                 child: AttendeePanel(
                   key: ValueKey(paneAttendee.id),
                   attendeeId: paneAttendee.id,
@@ -328,7 +328,7 @@ class _Recent extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final theme = Theme.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final mine = store.checkins.entries
         .where((e) => store.staffId != null && e.value.staffId == store.staffId && store.attendees[e.key] != null)
         .toList()
@@ -345,7 +345,7 @@ class _Recent extends StatelessWidget {
         ),
         if (mine.isNotEmpty) ...[
           Padding(
-            padding: const EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space2, DaftarSize.space4, DaftarSize.space1),
+            padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, FirouzehSize.space2, FirouzehSize.space4, FirouzehSize.space1),
             child: Text('پذیرش‌های آخر این گوشی', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
           ),
           for (final e in mine.take(5))
@@ -375,7 +375,7 @@ class AttendeeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     final state = store.checkins[a.id];
     final parts = [
@@ -389,14 +389,14 @@ class AttendeeRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Container(
-          constraints: const BoxConstraints(minHeight: DaftarSize.tapXl),
-          padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space4, vertical: DaftarSize.space2),
+          constraints: const BoxConstraints(minHeight: FirouzehSize.tapXl),
+          padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space4, vertical: FirouzehSize.space2),
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: x.line))),
           child: Row(
             children: [
               if (store.usesCards) ...[
                 _LetterBox(letter: batchLetter(a), done: state != null),
-                const SizedBox(width: DaftarSize.space3),
+                const SizedBox(width: FirouzehSize.space3),
               ],
               Expanded(
                 child: Column(
@@ -414,10 +414,10 @@ class AttendeeRow extends StatelessWidget {
               ),
               // حضور روزانه: روز دیگری آمده ولی امروز نه.
               if (state == null && store.dailyAttendance && (store.checkinDays[a.id]?.isNotEmpty ?? false)) ...[
-                const SizedBox(width: DaftarSize.space2),
+                const SizedBox(width: FirouzehSize.space2),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: x.sunken, borderRadius: BorderRadius.circular(DaftarSize.radiusPill)),
+                  decoration: BoxDecoration(color: x.sunken, borderRadius: BorderRadius.circular(FirouzehSize.radiusPill)),
                   child: Text(
                     '${store.checkinDays[a.id]!.map(store.dayName).join('، ')} ✓ · امروز —',
                     style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
@@ -425,16 +425,16 @@ class AttendeeRow extends StatelessWidget {
                 ),
               ],
               if (state != null) ...[
-                const SizedBox(width: DaftarSize.space2),
+                const SizedBox(width: FirouzehSize.space2),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: x.goSoft,
-                    borderRadius: BorderRadius.circular(DaftarSize.radiusPill),
+                    borderRadius: BorderRadius.circular(FirouzehSize.radiusPill),
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.check_rounded, size: 16, color: x.go),
-                    const SizedBox(width: DaftarSize.space1),
+                    const SizedBox(width: FirouzehSize.space1),
                     Text(hm(state.at),
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: x.go, fontWeight: FontWeight.w700, fontFeatures: tabularFigures)),
@@ -457,14 +457,14 @@ class _LetterBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: done ? x.goSoft : x.surface,
-        borderRadius: BorderRadius.circular(DaftarSize.radiusXs),
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusXs),
         border: Border.all(color: done ? x.goSoft : x.lineStrong, width: 1.5),
       ),
       child: Text(
@@ -489,7 +489,7 @@ class _Highlighted extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final q = query.trim();
     final i = q.isEmpty ? -1 : text.toLowerCase().indexOf(q.toLowerCase());
     if (i < 0) return Text(text, style: style, maxLines: 1, overflow: TextOverflow.ellipsis);
@@ -582,7 +582,7 @@ class AttendeePanel extends StatelessWidget {
     final cards = store.usesCards;
     final card = cards ? store.cardOf(a.id) : null;
     final theme = Theme.of(context);
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final letter = batchLetter(a);
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final enter = enterHints ? ' (Enter)' : '';
@@ -613,19 +613,19 @@ class AttendeePanel extends StatelessWidget {
                 : (card == null ? 'کارت این نفر در لیست نیست.' : 'کارت را از دسته‌ی «$letter» بدهید.'),
           ),
           if (cards) ...[
-            const SizedBox(height: DaftarSize.space4),
+            const SizedBox(height: FirouzehSize.space4),
             _CardPlate(letter: letter, serial: card?.serial, large: true),
           ],
-          const SizedBox(height: DaftarSize.space5),
+          const SizedBox(height: FirouzehSize.space5),
           FilledButton.icon(
-            style: daftarWideStyle(context, xl: true),
+            style: firouzehWideStyle(context, xl: true),
             icon: const Icon(Icons.arrow_back_rounded),
             label: Text('نفر بعدی$enter'),
             onPressed: onNext,
           ),
           // «اشتباه زدم؟» ۸ ثانیه فقط برای پذیرشی که همین گوشی زده.
           if (state != null && state.staffId == store.staffId) ...[
-            const SizedBox(height: DaftarSize.space3),
+            const SizedBox(height: FirouzehSize.space3),
             UndoBar(
               key: ValueKey(state.at),
               deadline: state.at.add(undoWindow),
@@ -651,21 +651,21 @@ class AttendeePanel extends StatelessWidget {
             text: ['ساعت ${hm(state.at)}', if (by != null) 'نیرو: $by'].join('، '),
           ),
           if (cards) ...[
-            const SizedBox(height: DaftarSize.space2),
+            const SizedBox(height: FirouzehSize.space2),
             Text('کارت گم‌شده دوباره صادر نمی‌شود.', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
-            const SizedBox(height: DaftarSize.space4),
+            const SizedBox(height: FirouzehSize.space4),
             _CardPlate(letter: letter, serial: card?.serial),
           ],
-          const SizedBox(height: DaftarSize.space5),
+          const SizedBox(height: FirouzehSize.space5),
           FilledButton(
-            style: daftarWideStyle(context),
+            style: firouzehWideStyle(context),
             onPressed: onNext,
             child: Text('نفر بعدی$enter'),
           ),
           if (store.isAdmin) ...[
-            const SizedBox(height: DaftarSize.space2),
+            const SizedBox(height: FirouzehSize.space2),
             OutlinedButton(
-              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(DaftarSize.tapLg)),
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(FirouzehSize.tapLg)),
               onPressed: () async {
                 final ok = await _confirmDanger(
                   context,
@@ -687,10 +687,10 @@ class AttendeePanel extends StatelessWidget {
         children: [
           if (cards) ...[
             _CardPlate(letter: letter, serial: card?.serial),
-            const SizedBox(height: DaftarSize.space5),
+            const SizedBox(height: FirouzehSize.space5),
           ],
           FilledButton.icon(
-            style: daftarGoStyle(context),
+            style: firouzehGoStyle(context),
             icon: const Icon(Icons.check_rounded),
             label: Text('تیک پذیرش$enter'),
             onPressed: onCheckin,
@@ -700,19 +700,19 @@ class AttendeePanel extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(DaftarSize.space5, 0, DaftarSize.space5, DaftarSize.space5),
+      padding: const EdgeInsets.fromLTRB(FirouzehSize.space5, 0, FirouzehSize.space5, FirouzehSize.space5),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(a.displayName, style: theme.textTheme.headlineSmall),
           if (tags.isNotEmpty) ...[
-            const SizedBox(height: DaftarSize.space2),
-            Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
-              for (final t in tags) DaftarTag(t, kind: t == 'ثبت‌نام در محل' ? TagKind.outline : TagKind.plain),
+            const SizedBox(height: FirouzehSize.space2),
+            Wrap(spacing: FirouzehSize.space2, runSpacing: FirouzehSize.space2, children: [
+              for (final t in tags) FirouzehTag(t, kind: t == 'ثبت‌نام در محل' ? TagKind.outline : TagKind.plain),
             ]),
           ],
-          if (details.isNotEmpty) const SizedBox(height: DaftarSize.space3),
+          if (details.isNotEmpty) const SizedBox(height: FirouzehSize.space3),
           for (final d in details)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
@@ -729,7 +729,7 @@ class AttendeePanel extends StatelessWidget {
                 ),
               ]),
             ),
-          const SizedBox(height: DaftarSize.space4),
+          const SizedBox(height: FirouzehSize.space4),
           AnimatedSwitcher(
             duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 150),
             child: body,
@@ -749,7 +749,7 @@ class _CardPlate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     Widget cell(String label, String value) => Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -762,15 +762,15 @@ class _CardPlate extends StatelessWidget {
           ]),
         );
     return Container(
-      padding: const EdgeInsets.all(DaftarSize.space4),
+      padding: const EdgeInsets.all(FirouzehSize.space4),
       decoration: BoxDecoration(
         color: x.sunken,
-        borderRadius: BorderRadius.circular(DaftarSize.radiusMd),
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusMd),
       ),
       child: Row(children: [
         cell('دسته', letter),
         Container(width: 1, height: large ? 56 : 40, color: x.line),
-        const SizedBox(width: DaftarSize.space4),
+        const SizedBox(width: FirouzehSize.space4),
         cell('شماره‌ی کارت', serial == null ? '—' : faDigits(serial!)),
       ]),
     );
@@ -787,7 +787,7 @@ Future<bool?> _confirmDanger(BuildContext context,
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
           FilledButton(
-            style: daftarDangerStyle(c),
+            style: firouzehDangerStyle(c),
             onPressed: () => Navigator.pop(c, true),
             child: Text(confirm),
           ),

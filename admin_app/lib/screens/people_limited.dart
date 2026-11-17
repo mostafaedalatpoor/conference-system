@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../main.dart';
 import '../normalize.dart';
-import '../theme/daftar.dart';
+import '../theme/firouzeh.dart';
 import '../theme/widgets.dart';
 
 /// «افراد» در حالت دسترسی محدود (کلید فقط گزارش): فهرست فقط‌خواندنی از خروجی فهرست حضور، با تاریخچه‌ی هر نفر.
@@ -75,7 +75,7 @@ class _LimitedPeopleScreenState extends State<LimitedPeopleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final x = DaftarColors.of(context);
+    final x = FirouzehColors.of(context);
     final theme = Theme.of(context);
     return FutureBuilder<Map<String, dynamic>>(
       future: _data,
@@ -83,7 +83,7 @@ class _LimitedPeopleScreenState extends State<LimitedPeopleScreen> {
         if (snap.connectionState != ConnectionState.done) return const LinearProgressIndicator();
         if (snap.hasError) {
           return Padding(
-            padding: const EdgeInsets.all(DaftarSize.space4),
+            padding: const EdgeInsets.all(FirouzehSize.space4),
             child: Notice(tone: NoticeTone.stop, text: 'فهرست افراد نیامد: ${snap.error}'),
           );
         }
@@ -94,7 +94,7 @@ class _LimitedPeopleScreenState extends State<LimitedPeopleScreen> {
             .toList();
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Padding(
-            padding: const EdgeInsets.all(DaftarSize.space4),
+            padding: const EdgeInsets.all(FirouzehSize.space4),
             child: TextField(
               controller: _q,
               decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: 'نام، موبایل یا شماره‌ی کارت'),
@@ -116,7 +116,7 @@ class _LimitedPeopleScreenState extends State<LimitedPeopleScreen> {
                 ),
               if (rows.length > 200)
                 Padding(
-                  padding: const EdgeInsets.all(DaftarSize.space4),
+                  padding: const EdgeInsets.all(FirouzehSize.space4),
                   child: Hint('${faDigits(rows.length - 200)} نفر دیگر؛ جستجو را دقیق‌تر کنید.'),
                 ),
             ]),
@@ -133,7 +133,7 @@ class LimitedBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space3, DaftarSize.space4, 0),
+        padding: EdgeInsets.fromLTRB(FirouzehSize.space4, FirouzehSize.space3, FirouzehSize.space4, 0),
         child: Notice(
           tone: NoticeTone.neutral,
           icon: Icons.lock_rounded,
