@@ -401,19 +401,10 @@ function cd_rest_admin_undo_checkin(WP_REST_Request $request) {
     return ['ok' => true, 'seq' => (int) $wpdb->insert_id];
 }
 
-/** قالب کارت (جای نام و QR، اندازه، رنگ). مسیر تصویرهای طرح محلی است و ذخیره نمی‌شود. */
-function cd_rest_save_card_template(WP_REST_Request $request) {
-    global $wpdb;
-    $event = cd_event_from_request($request);
-    if (is_wp_error($event)) {
-        return $event;
-    }
-    $t = $request->get_param('template');
-    if (!is_array($t)) {
-        return cd_error('cd_bad_template', 'قالب کارت لازم است.');
-    }
+/** کلیدهای چیدمان یک قالب کارت (جای نام و QR، اندازه‌ی قلم، رنگ). */
+function cd_card_layout_clean(array $t) {
     $clean = [];
-    foreach (['width_mm', 'height_mm', 'name_x', 'name_y', 'name_size', 'qr_x', 'qr_y', 'qr_size_mm'] as $k) {
+    foreach (['name_x', 'name_y', 'name_size', 'qr_x', 'qr_y', 'qr_size_mm'] as $k) {
         if (isset($t[$k]) && is_numeric($t[$k])) {
             $clean[$k] = (float) $t[$k];
         }
@@ -424,6 +415,98 @@ function cd_rest_save_card_template(WP_REST_Request $request) {
     foreach (['show_role', 'show_serial'] as $k) {
         if (array_key_exists($k, $t)) {
             $clean[$k] = (bool) $t[$k];
+        }
+    }
+    return $clean;
+}
+
+/** فهرست کد نقش یا نوع ثبت‌نام برای قاعده‌ی قالب. */
+function cd_card_codes($list) {
+    $out = [];
+    foreach (is_array($list) ? $list : [] as $c) {
+        if (cd_is_code($c) && !in_array($c, $out, true)) {
+            $out[] = $c;
+        }
+    }
+    return $out;
+}
+
+/**
+ * قالب‌های کارت. مسیر تصویرهای طرح محلی است و ذخیره نمی‌شود.
+ * نسخه‌ی ۲: `templates` با قاعده‌ی نقش/نوع، اندازه و حاشیه‌ی برش مشترک؛ کلیدهای سطح بالا
+ * همان قالب پیش‌فرض‌اند تا اپ قدیمی یک قالب درست ببیند.
+ * قالب تکی (اپ قدیمی): اگر قالب‌های نسخه‌ی ۲ ذخیره شده‌اند، فقط قالب پیش‌فرض و اندازه عوض می‌شود.
+ */
+function cd_rest_save_card_template(WP_REST_Request $request) {
+    global $wpdb;
+    $event = cd_event_from_request($request);
+    if (is_wp_error($event)) {
+        return $event;
+    }
+    $t = $request->get_param('template');
+    if (!is_array($t)) {
+        return cd_error('cd_bad_template', 'قالب کارت لازم است.');
+    }
+    $shared = [];
+    foreach (['width_mm', 'height_mm', 'bleed_mm'] as $k) {
+        if (isset($t[$k]) && is_numeric($t[$k])) {
+            $shared[$k] = (float) $t[$k];
+        }
+    }
+    if (array_key_exists('crop_marks', $t)) {
+        $shared['crop_marks'] = (bool) $t['crop_marks'];
+    }
+
+    if (isset($t['templates'])) {
+        $list = [];
+        $ids = [];
+        foreach (is_array($t['templates']) ? $t['templates'] : [] as $x) {
+            $id = is_array($x) ? ($x['id'] ?? null) : null;
+            if (!cd_is_code($id) || isset($ids[$id])) {
+                continue;
+            }
+            $ids[$id] = true;
+            $name = cd_str($x['name'] ?? '', 80);
+            $list[] = [
+                'id' => $id,
+                'name' => $name !== '' ? $name : $id,
+                'is_default' => !empty($x['is_default']),
+                'roles' => cd_card_codes($x['roles'] ?? []),
+                'types' => cd_card_codes($x['types'] ?? []),
+            ] + cd_card_layout_clean($x);
+        }
+        if (!$list) {
+            return cd_error('cd_bad_template', 'دست‌کم یک قالب کارت لازم است.');
+        }
+        // درست یک قالب پیش‌فرض: اولی که علامت دارد، وگرنه اولین قالب.
+        $def = 0;
+        foreach ($list as $i => $x) {
+            if ($x['is_default']) {
+                $def = $i;
+                break;
+            }
+        }
+        foreach ($list as $i => $x) {
+            $list[$i]['is_default'] = $i === $def;
+        }
+        $reserve = (string) ($t['reserve_template'] ?? '');
+        $clean = ['version' => 2] + $shared + [
+            'separate' => !empty($t['separate']),
+            'reserve_template' => isset($ids[$reserve]) ? $reserve : $list[$def]['id'],
+        ];
+        $legacy = $list[$def];
+        unset($legacy['id'], $legacy['name'], $legacy['is_default'], $legacy['roles'], $legacy['types']);
+        $clean = $clean + $legacy + ['templates' => $list];
+    } else {
+        $clean = $shared + cd_card_layout_clean($t);
+        $old = !empty($event['card_template']) ? json_decode($event['card_template'], true) : null;
+        if (is_array($old) && !empty($old['templates']) && is_array($old['templates'])) {
+            foreach ($old['templates'] as $i => $x) {
+                if (!empty($x['is_default'])) {
+                    $old['templates'][$i] = array_merge($x, cd_card_layout_clean($t));
+                }
+            }
+            $clean = array_merge($old, $clean);
         }
     }
     $wpdb->update(cd_table('events'), ['card_template' => wp_json_encode($clean), 'updated_at' => cd_now()], ['id' => (int) $event['id']]);
