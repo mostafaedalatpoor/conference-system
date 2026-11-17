@@ -153,6 +153,13 @@ add_action('rest_api_init', function () {
         ],
     ]);
 
+    // کارت این افراد چاپ شد (ساخت PDF نهایی و تحویل به چاپخانه).
+    register_rest_route(CD_NS, "/admin/events/$code/attendees/printed", [
+        'methods' => 'POST',
+        'permission_callback' => $admin,
+        'callback' => 'cd_rest_mark_printed',
+    ]);
+
     register_rest_route(CD_NS, "/admin/events/$code/attendees/status", [
         'methods' => 'POST',
         'permission_callback' => $admin,
@@ -250,6 +257,13 @@ add_action('rest_api_init', function () {
     ]);
 
     // حذف یک نفر (حذف نرم). اگر پذیرش یا وعده دارد، بدون force=1 پاسخ 409 با شمارش می‌دهد.
+    // «کارت گم شد»: کارت رزرو آزاد یا کارت تازه با همان شماره؛ کارت قبلی باطل می‌شود.
+    register_rest_route(CD_NS, "/admin/events/$code/attendees/$aid/replace-card", [
+        'methods' => 'POST',
+        'permission_callback' => $admin,
+        'callback' => 'cd_rest_replace_card',
+    ]);
+
     // ادغام: تاریخچه، کارت و فیلدهای خالی فرد from به این فرد منتقل و from حذف (نرم) می‌شود.
     register_rest_route(CD_NS, "/admin/events/$code/attendees/$aid/merge", [
         'methods' => 'POST',
@@ -1518,4 +1532,87 @@ function cd_rest_meal_people(WP_REST_Request $request) {
         ];
     }
     return ['meal' => ['code' => $meal['code'], 'name' => $meal['name']], 'people' => $out];
+}
+
+
+// ---------------------------------------------------------------- چاپ و جایگزینی کارت
+
+function cd_rest_mark_printed(WP_REST_Request $request) {
+    global $wpdb;
+    $event = cd_event_for_write($request);
+    if (is_wp_error($event)) {
+        return $event;
+    }
+    $ids = $request->get_param('ids');
+    if (!is_array($ids)) {
+        return cd_error('cd_bad_ids', 'لیست ids لازم است.');
+    }
+    $ids = array_values(array_unique(array_map('strtolower', array_filter($ids, 'cd_is_uuid'))));
+    if (!$ids) {
+        return ['printed' => 0];
+    }
+    $in = implode(',', array_fill(0, count($ids), '%s'));
+    $n = $wpdb->query($wpdb->prepare(
+        'UPDATE ' . cd_table('attendees') . " SET printed_at = %s, print_count = print_count + 1 WHERE event_id = %d AND id IN ($in)",
+        array_merge([cd_now(), (int) $event['id']], $ids)
+    ));
+    return ['printed' => (int) $n];
+}
+
+/**
+ * جایگزینی کارت گم‌شده. mode=reserve: کمترین شماره‌ی رزرو آزاد (یا token داده‌شده) به فرد وصل می‌شود.
+ * mode=new: کارت تازه با همان شماره ساخته می‌شود و فرد «چاپ‌نشده» می‌شود تا در «چاپ‌نشده‌ها» بیاید.
+ * کارت(های) قبلی فرد با revoked_at باطل می‌شوند و دیگر در گوشی‌ها و صفحه‌ی شخصی کار نمی‌کنند.
+ */
+function cd_rest_replace_card(WP_REST_Request $request) {
+    global $wpdb;
+    $event = cd_event_for_write($request);
+    if (is_wp_error($event)) {
+        return $event;
+    }
+    $eid = (int) $event['id'];
+    $aid = strtolower((string) $request['attendee']);
+    $cards = cd_table('cards');
+    $exists = $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cd_table('attendees') . " WHERE id = %s AND event_id = %d AND status <> 'deleted'", $aid, $eid));
+    if (!(int) $exists) {
+        return cd_error('cd_no_attendee', 'این نفر در این رویداد نیست.', 404);
+    }
+    $old = $wpdb->get_results($wpdb->prepare("SELECT * FROM $cards WHERE event_id = %d AND attendee_id = %s AND revoked_at IS NULL ORDER BY created_at", $eid, $aid), ARRAY_A);
+    $mode = (string) $request->get_param('mode');
+    $now = cd_now();
+
+    if ($mode === 'reserve') {
+        $token = $request->get_param('token');
+        $where = cd_is_card_token($token) ? $wpdb->prepare(' AND token = %s', $token) : '';
+        $card = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $cards WHERE event_id = %d AND is_reserve = 1 AND attendee_id IS NULL AND revoked_at IS NULL$where ORDER BY serial LIMIT 1",
+            $eid
+        ), ARRAY_A);
+        if (!$card) {
+            return cd_error('cd_no_reserve', 'کارت رزرو آزاد نمانده است.', 409);
+        }
+        $wpdb->query('START TRANSACTION');
+        $linked = $wpdb->query($wpdb->prepare("UPDATE $cards SET attendee_id = %s WHERE token = %s AND attendee_id IS NULL", $aid, $card['token']));
+        if (!$linked) {
+            $wpdb->query('ROLLBACK');
+            return cd_error('cd_no_reserve', 'این کارت رزرو همین حالا به کس دیگری وصل شد. دوباره امتحان کنید.', 409);
+        }
+        $new = ['token' => $card['token'], 'serial' => (int) $card['serial'], 'is_reserve' => true];
+    } elseif ($mode === 'new') {
+        $serial = $old ? (int) end($old)['serial'] : (int) $request->get_param('serial');
+        $token = cd_random_token(16);
+        $wpdb->query('START TRANSACTION');
+        $wpdb->insert($cards, ['token' => $token, 'event_id' => $eid, 'attendee_id' => $aid, 'serial' => $serial, 'is_reserve' => 0, 'created_at' => $now]);
+        // کارت تازه هنوز چاپ نشده.
+        $wpdb->query($wpdb->prepare('UPDATE ' . cd_table('attendees') . ' SET printed_at = NULL WHERE id = %s', $aid));
+        $new = ['token' => $token, 'serial' => $serial, 'is_reserve' => false];
+    } else {
+        return cd_error('cd_bad_mode', 'mode باید reserve یا new باشد.');
+    }
+    foreach ($old as $c) {
+        $wpdb->update($cards, ['revoked_at' => $now], ['token' => $c['token']]);
+    }
+    $wpdb->query('COMMIT');
+    cd_bump_config($eid);
+    return ['card' => $new, 'revoked' => count($old)];
 }

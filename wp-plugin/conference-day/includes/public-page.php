@@ -61,6 +61,15 @@ add_action('template_redirect', function () {
     $event = cd_get_event((int) $card['event_id']);
     $settings = cd_event_settings($event);
 
+    // کارت باطل (گم‌شده و جایگزین‌شده): پیام روشن، بدون شمردن به‌عنوان تلاش نامعتبر.
+    if (!empty($card['revoked_at'])) {
+        cd_send_nocache_headers();
+        status_header(410);
+        header('Content-Type: text/html; charset=utf-8');
+        echo cd_render_public_page($event, null, ['icon' => 'stop', 'text' => 'این کارت باطل شده است. اگر کارت عوض شده، کارت جدید گرفته‌اید؛ QR کارت جدید را اسکن کنید.'], $settings);
+        exit;
+    }
+
     // صفحه برای همه یکسان است و اطلاعات خصوصی ندارد؛ LiteSpeed می‌تواند ۶۰ ثانیه کشش کند.
     cd_send_public_cache_headers();
 

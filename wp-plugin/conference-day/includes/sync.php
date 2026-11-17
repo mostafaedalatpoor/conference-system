@@ -21,7 +21,7 @@ function cd_build_snapshot(array $event, $for_admin = false) {
     $cards = $wpdb->get_results($wpdb->prepare(
         'SELECT c.token, c.attendee_id, c.serial, c.is_reserve FROM ' . cd_table('cards') . ' c
          LEFT JOIN ' . cd_table('attendees') . ' a ON a.id = c.attendee_id
-         WHERE c.event_id = %d AND (c.attendee_id IS NULL OR a.' . $status_sql . ')',
+         WHERE c.event_id = %d AND c.revoked_at IS NULL AND (c.attendee_id IS NULL OR a.' . $status_sql . ')',
         $eid
     ), ARRAY_A);
     // نام همه‌ی نیروها (حتی غیرفعال) لازم است تا تاریخچه بگوید چه کسی کار را کرد.
@@ -58,6 +58,8 @@ function cd_build_snapshot(array $event, $for_admin = false) {
             'staff' => array_map($for_admin ? 'cd_staff_out' : function ($s) {
                 return ['id' => (int) $s['id'], 'name' => $s['name'], 'active' => (bool) $s['active']];
             }, $staff),
+            // کارت‌های باطل‌شده تا گوشی بگوید «این کارت باطل شده» نه «در لیست نیست».
+            'revoked_cards' => $wpdb->get_col($wpdb->prepare('SELECT token FROM ' . cd_table('cards') . ' WHERE event_id = %d AND revoked_at IS NOT NULL', $eid)),
             'log' => array_map('cd_log_out', $log),
             'cursor' => $cursor,
             'server_time' => gmdate('c'),
@@ -256,6 +258,16 @@ function cd_push_events(array $event, array $device, array $items) {
             $card = cd_card_for_event($card_token, $eid);
             if (!$card) {
                 $rejected[] = ['index' => $i, 'uuid' => $uuid, 'reason' => 'unknown_card'];
+                continue;
+            }
+            // کارت باطل: کاری که بعد از باطل‌شدن با آن ثبت شده رد می‌شود (کار پیش از آن، آفلاین، می‌ماند).
+            if (!empty($card['revoked_at']) && cd_to_utc_datetime($e['device_time'] ?? null) >= $card['revoked_at']) {
+                if ($wpdb->get_var($wpdb->prepare('SELECT seq FROM ' . cd_table('event_log') . ' WHERE uuid = %s', strtolower($e['uuid'])))) {
+                    $duplicates++; // پیش از باطل‌شدن پذیرفته شده بود
+                    continue;
+                }
+                cd_store_rejection($eid, $device, $e, 'card_revoked', $attendee_id ?? $card['attendee_id']);
+                $rejected[] = ['index' => $i, 'uuid' => strtolower($e['uuid']), 'reason' => 'card_revoked'];
                 continue;
             }
             if ($attendee_id === null && $card['attendee_id']) {

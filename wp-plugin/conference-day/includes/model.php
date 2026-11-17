@@ -152,6 +152,8 @@ function cd_attendee_out(array $r) {
         'website' => $r['website'] ?? '',
         'status' => $r['status'] ?? 'active',
         'import_batch' => $r['import_batch'] ?? '',
+        'printed_at' => !empty($r['printed_at']) ? cd_iso($r['printed_at']) : null,
+        'print_count' => (int) ($r['print_count'] ?? 0),
     ];
 }
 
