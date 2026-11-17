@@ -189,38 +189,38 @@ function cd_render_settings() {
     if (!current_user_can('manage_options')) {
         return;
     }
-    $new_key = null;
-    if (isset($_POST['cd_new_key']) && check_admin_referer('cd_new_key')) {
-        $new_key = 'cdk_' . cd_random_token(32);
-        update_option('cd_admin_key_hash', hash('sha256', $new_key), false);
-    }
-    $has_key = (string) get_option('cd_admin_key_hash', '') !== '';
-
-    // کلیدهای جدای گوشی مدیر (M1): هر گوشی کلید خودش را دارد و جدا باطل می‌شود.
-    $mobile_keys = get_option('cd_mobile_keys', []);
-    if (!is_array($mobile_keys)) {
-        $mobile_keys = [];
-    }
-    $new_mobile_key = null;
-    if (isset($_POST['cd_new_mobile_key']) && check_admin_referer('cd_mobile_keys')) {
-        $label = cd_str(wp_unslash($_POST['cd_mobile_label'] ?? ''), 64);
-        $new_mobile_key = 'cdm_' . cd_random_token(32);
-        $mobile_keys[wp_generate_uuid4()] = [
-            'label' => $label !== '' ? $label : 'گوشی مدیر',
-            'hash' => hash('sha256', $new_mobile_key),
-            'created_at' => cd_now(),
-            'last_used' => null,
-            'revoked' => false,
-        ];
-        update_option('cd_mobile_keys', $mobile_keys, false);
-    }
-    if (isset($_POST['cd_revoke_mobile_key']) && check_admin_referer('cd_mobile_keys')) {
-        $id = sanitize_text_field(wp_unslash($_POST['cd_revoke_mobile_key']));
-        if (isset($mobile_keys[$id])) {
-            $mobile_keys[$id]['revoked'] = true;
-            update_option('cd_mobile_keys', $mobile_keys, false);
+    $notice = null;
+    $shown = null; // [id, متن کلید] برای نمایش در همین صفحه
+    if (isset($_POST['cd_key_action']) && check_admin_referer('cd_admin_keys')) {
+        $action = sanitize_key(wp_unslash($_POST['cd_key_action']));
+        $id = sanitize_text_field(wp_unslash($_POST['cd_key_id'] ?? ''));
+        if ($action === 'create') {
+            $label = cd_str(wp_unslash($_POST['cd_key_label'] ?? ''), 64);
+            $role = sanitize_key(wp_unslash($_POST['cd_key_role'] ?? 'manager'));
+            $shown = cd_admin_key_create($label, $role);
+            $notice = 'کلید تازه ساخته شد. کلیدهای دیگر همچنان کار می‌کنند.';
+        } elseif ($action === 'reveal') {
+            $plain = cd_admin_key_reveal($id);
+            if ($plain !== null) {
+                $shown = [$id, $plain];
+            } else {
+                $notice = 'متن این کلید ذخیره نشده (کلید قدیمی). یک‌بار بازتولیدش کنید.';
+            }
+        } elseif ($action === 'revoke') {
+            cd_admin_key_revoke($id);
+            $notice = 'کلید باطل شد؛ اپی که با آن وصل بود دیگر دسترسی ندارد.';
+        } elseif ($action === 'regenerate') {
+            // کلید قدیمی بی‌متن: کلید تازه با همان نقش ساخته و قدیمی باطل می‌شود (به درخواست صریح مدیر).
+            $keys = cd_admin_keys();
+            if (isset($keys[$id])) {
+                $label = strpos((string) $keys[$id]['label'], 'قدیمی') === 0 ? '' : (string) $keys[$id]['label'];
+                $shown = cd_admin_key_create($label, (string) $keys[$id]['role']);
+                cd_admin_key_revoke($id);
+                $notice = 'کلید تازه جای کلید قدیمی را گرفت. آن را در اپ‌هایی که با کلید قدیمی وصل بودند وارد کنید.';
+            }
         }
     }
+    $keys = cd_admin_keys();
 
     echo '<div class="wrap" dir="rtl" style="text-align:right">';
     echo '<h1>تنظیمات رویدادیار</h1>';
@@ -228,47 +228,66 @@ function cd_render_settings() {
     echo '<h2>آدرس سرور برای اپ‌ها</h2>';
     printf('<p><code dir="ltr">%s</code></p>', esc_html(untrailingslashit(home_url())));
 
-    echo '<h2>کلید API اپ مدیریت</h2>';
-    if ($new_key) {
-        echo '<div class="notice notice-success"><p>کلید جدید ساخته شد. همین حالا کپی‌اش کنید و در اپ مدیریت وارد کنید؛ دوباره نمایش داده نمی‌شود.</p></div>';
-        printf('<p><input type="text" readonly value="%s" style="width:100%%;max-width:640px;direction:ltr;font-family:monospace" onclick="this.select()"></p>', esc_attr($new_key));
-    } elseif ($has_key) {
-        echo '<p>یک کلید فعال وجود دارد. ساختن کلید جدید، کلید قبلی را باطل می‌کند.</p>';
-    } else {
-        echo '<p>هنوز کلیدی ساخته نشده است.</p>';
+    echo '<h2>کلیدهای اپ مدیریت</h2>';
+    echo '<p>برای هر رایانه و گوشی کلید جدا بسازید. کلید را هر وقت لازم شد از همین صفحه دوباره ببینید و کپی کنید. '
+        . 'اگر دستگاهی گم شد، فقط کلید همان را باطل کنید؛ ساختن کلید تازه کلیدهای دیگر را باطل نمی‌کند.</p>';
+    if ($notice) {
+        printf('<div class="notice notice-info"><p>%s</p></div>', esc_html($notice));
     }
-    echo '<form method="post">';
-    wp_nonce_field('cd_new_key');
-    submit_button($has_key ? 'ساخت کلید جدید (کلید قبلی باطل می‌شود)' : 'ساخت کلید', 'primary', 'cd_new_key');
-    echo '</form>';
-
-    echo '<h2>کلیدهای گوشی مدیر</h2>';
-    echo '<p>برای اپ مدیریت روی گوشی یک کلید جدا بسازید. اگر گوشی گم شد، فقط همان کلید را باطل کنید؛ اپ ویندوز و گوشی‌های دیگر کار می‌کنند.</p>';
-    if ($new_mobile_key) {
-        echo '<div class="notice notice-success"><p>کلید گوشی ساخته شد. همین حالا در اپ مدیریت گوشی وارد کنید؛ دوباره نمایش داده نمی‌شود.</p></div>';
-        printf('<p><input type="text" readonly value="%s" style="width:100%%;max-width:640px;direction:ltr;font-family:monospace" onclick="this.select()"></p>', esc_attr($new_mobile_key));
-    }
-    echo '<form method="post">';
-    wp_nonce_field('cd_mobile_keys');
-    echo '<table class="widefat striped" style="max-width:760px"><thead><tr><th>گوشی</th><th>ساخته‌شده</th><th>آخرین استفاده</th><th></th></tr></thead><tbody>';
-    foreach ($mobile_keys as $id => $k) {
+    if ($shown) {
         printf(
-            '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>',
-            esc_html($k['label']),
-            esc_html(cd_admin_time(cd_iso($k['created_at']))),
-            esc_html(cd_admin_time($k['last_used'] ? cd_iso($k['last_used']) : null)),
-            $k['revoked']
-                ? 'باطل‌شده'
-                : sprintf('<button class="button button-small" name="cd_revoke_mobile_key" value="%s" onclick="return confirm(\'این کلید باطل شود؟ آن گوشی دیگر به مدیریت دسترسی ندارد.\')">باطل کردن</button>', esc_attr($id)) // phpcs:ignore WordPress.Security.EscapeOutput
+            '<p><input id="cd-shown-key" type="text" readonly value="%s" style="width:100%%;max-width:560px;direction:ltr;font-family:monospace" onclick="this.select()"> '
+            . '<button type="button" class="button" onclick="var i=document.getElementById(\'cd-shown-key\');i.select();(navigator.clipboard?navigator.clipboard.writeText(i.value):Promise.reject()).then(function(){},function(){document.execCommand(\'copy\')});this.textContent=\'کپی شد\'">کپی</button></p>',
+            esc_attr($shown[1])
         );
     }
-    if (!$mobile_keys) {
-        echo '<tr><td colspan="4">هنوز کلید گوشی ساخته نشده است.</td></tr>';
+    $form = function ($action, $id, $label, $confirm = '', $class = 'button button-small') {
+        return sprintf(
+            '<form method="post" style="display:inline">%s<input type="hidden" name="cd_key_action" value="%s"><input type="hidden" name="cd_key_id" value="%s"><button class="%s"%s>%s</button></form> ',
+            wp_nonce_field('cd_admin_keys', '_wpnonce', true, false),
+            esc_attr($action),
+            esc_attr($id),
+            esc_attr($class),
+            $confirm !== '' ? ' onclick="return confirm(\'' . esc_js($confirm) . '\')"' : '',
+            esc_html($label)
+        );
+    };
+    echo '<table class="widefat striped" style="max-width:900px"><thead><tr><th>کلید</th><th>دسترسی</th><th>ساخته‌شده</th><th>آخرین استفاده</th><th></th></tr></thead><tbody>';
+    foreach ($keys as $id => $k) {
+        $actions = '';
+        if (!empty($k['revoked'])) {
+            $actions = 'باطل‌شده';
+        } else {
+            $actions .= $k['enc'] !== ''
+                ? $form('reveal', $id, 'نمایش و کپی')
+                : $form('regenerate', $id, 'بازتولید', 'کلید تازه ساخته و این کلید باطل می‌شود. اپ‌هایی که با آن وصل‌اند باید کلید تازه را بگیرند. ادامه؟');
+            $actions .= $form('revoke', $id, 'باطل کردن', 'این کلید باطل شود؟ اپی که با آن وصل است دیگر دسترسی ندارد.');
+        }
+        printf(
+            '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>',
+            esc_html($k['label']),
+            esc_html(CD_KEY_ROLES[$k['role']] ?? $k['role']),
+            esc_html(cd_admin_time(cd_iso($k['created_at']))),
+            esc_html(cd_admin_time(!empty($k['last_used']) ? cd_iso($k['last_used']) : null)),
+            $actions // phpcs:ignore WordPress.Security.EscapeOutput
+        );
+    }
+    if (!$keys) {
+        echo '<tr><td colspan="5">هنوز کلیدی ساخته نشده است.</td></tr>';
     }
     echo '</tbody></table>';
-    echo '<p><input type="text" name="cd_mobile_label" placeholder="نام گوشی، مثلاً گوشی محمد" style="width:260px"> ';
-    echo '<button class="button button-primary" name="cd_new_mobile_key" value="1">ساخت کلید گوشی</button></p>';
+    echo '<form method="post" style="margin-top:12px">';
+    wp_nonce_field('cd_admin_keys');
+    echo '<input type="hidden" name="cd_key_action" value="create">';
+    echo '<input type="text" name="cd_key_label" placeholder="نام دستگاه، مثلاً لپ‌تاپ دفتر یا گوشی محمد" style="width:280px"> ';
+    echo '<select name="cd_key_role">';
+    foreach (CD_KEY_ROLES as $r => $label) {
+        printf('<option value="%s"%s>%s</option>', esc_attr($r), selected($r, 'manager', false), esc_html($label));
+    }
+    echo '</select> ';
+    echo '<button class="button button-primary">ساخت کلید</button>';
     echo '</form>';
+    echo '<p style="color:#646970">مالک: همه‌ی کارها. مدیر اجرایی: همه‌چیز جز حذف و بایگانی رویداد. فقط گزارش: فقط «امروز» و «افراد»، بدون تغییر.</p>';
 
     echo '<h2>درباره</h2>';
     echo '<div style="background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:16px;max-width:640px">';

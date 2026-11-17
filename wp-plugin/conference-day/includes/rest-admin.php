@@ -14,27 +14,27 @@ function cd_admin_permission(WP_REST_Request $request) {
     if ($key === '') {
         return cd_error('cd_admin_auth', 'کلید مدیریت نامعتبر است.', 401);
     }
-    $given = hash('sha256', $key);
-    $hash = (string) get_option('cd_admin_key_hash', '');
-    if ($hash !== '' && hash_equals($hash, $given)) {
-        cd_admin_actor('اپ مدیریت');
-        return true;
+    $k = cd_admin_find_key(hash('sha256', $key));
+    if (!$k) {
+        return cd_error('cd_admin_auth', 'کلید مدیریت نامعتبر است.', 401);
     }
-    // کلیدهای جدای گوشی مدیر؛ هر کدام در پیشخوان جدا باطل می‌شود (M1).
-    $keys = get_option('cd_mobile_keys', []);
-    if (is_array($keys)) {
-        foreach ($keys as $id => $k) {
-            if (empty($k['revoked']) && hash_equals((string) $k['hash'], $given)) {
-                if (empty($k['last_used']) || strtotime($k['last_used'] . ' UTC') < time() - 300) {
-                    $keys[$id]['last_used'] = cd_now();
-                    update_option('cd_mobile_keys', $keys, false);
-                }
-                cd_admin_actor((string) ($k['label'] ?? 'گوشی مدیر'));
-                return true;
-            }
-        }
+    $role = isset(CD_KEY_ROLES[$k['role'] ?? '']) ? $k['role'] : 'owner';
+    cd_admin_role($role);
+    // کلید قدیمی برچسب واقعی ندارد؛ فاعل کارها همان «اپ مدیریت» قبلی می‌ماند.
+    cd_admin_actor(!empty($k['legacy']) && strpos((string) $k['label'], 'قدیمی') === 0 ? 'اپ مدیریت' : (string) $k['label']);
+    if (!cd_role_allows($role, $request->get_method(), $request->get_route())) {
+        return cd_error('cd_admin_role', 'این کلید اجازه‌ی این کار را ندارد (دسترسی: ' . CD_KEY_ROLES[$role] . ').', 403);
     }
-    return cd_error('cd_admin_auth', 'کلید مدیریت نامعتبر است.', 401);
+    return true;
+}
+
+/** نقش کلید درخواست فعلی. */
+function cd_admin_role($set = null) {
+    static $role = 'owner';
+    if ($set !== null) {
+        $role = $set;
+    }
+    return $role;
 }
 
 /** برچسب کلیدی که درخواست فعلی با آن آمده؛ «فاعل» کارهای مدیریتی در دفتر و نیروها. */
@@ -71,7 +71,15 @@ add_action('rest_api_init', function () {
         'methods' => 'GET',
         'permission_callback' => $admin,
         'callback' => function () {
-            return ['ok' => true, 'version' => CD_VERSION, 'server_time' => gmdate('c')];
+            return [
+                'ok' => true,
+                'version' => CD_VERSION,
+                'server_time' => gmdate('c'),
+                // نقش کلید برای «دسترسی این کلید: …» و حالت دسترسی محدود در اپ.
+                'role' => cd_admin_role(),
+                'role_label' => CD_KEY_ROLES[cd_admin_role()],
+                'key_label' => cd_admin_actor(),
+            ];
         },
     ]);
 

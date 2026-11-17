@@ -24,6 +24,7 @@ define('CD_DIR', plugin_dir_path(__FILE__));
 require_once CD_DIR . 'includes/util.php';
 require_once CD_DIR . 'includes/db.php';
 require_once CD_DIR . 'includes/model.php';
+require_once CD_DIR . 'includes/keys.php';
 require_once CD_DIR . 'includes/sync.php';
 require_once CD_DIR . 'includes/report.php';
 require_once CD_DIR . 'includes/rest-admin.php';
