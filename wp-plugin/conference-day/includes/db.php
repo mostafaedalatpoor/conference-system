@@ -146,6 +146,8 @@ function cd_install_tables() {
   event_id bigint(20) unsigned NOT NULL,
   name varchar(191) NOT NULL,
   pin_hash varchar(255) NOT NULL DEFAULT '',
+  pin_enc varchar(255) NOT NULL DEFAULT '',
+  pin_lookup char(64) NULL,
   can_checkin tinyint(1) NOT NULL DEFAULT 1,
   can_serve tinyint(1) NOT NULL DEFAULT 1,
   is_admin tinyint(1) NOT NULL DEFAULT 0,
@@ -153,7 +155,8 @@ function cd_install_tables() {
   updated_at datetime NULL,
   updated_by varchar(191) NOT NULL DEFAULT '',
   PRIMARY KEY  (id),
-  UNIQUE KEY event_name (event_id,name)
+  UNIQUE KEY event_name (event_id,name),
+  UNIQUE KEY event_pin (event_id,pin_lookup)
 ) ENGINE=InnoDB $c;";
 
     $sql[] = "CREATE TABLE $devices (

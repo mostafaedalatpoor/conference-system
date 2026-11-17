@@ -118,14 +118,28 @@ function cd_rest_device_login(WP_REST_Request $request) {
 
     $staff = null;
     if ($event && preg_match('/^\d{4,8}$/', $pin)) {
-        $rows = $wpdb->get_results($wpdb->prepare(
-            'SELECT * FROM ' . cd_table('staff') . " WHERE event_id = %d AND active = 1 AND pin_hash <> ''",
-            (int) $event['id']
+        $eid = (int) $event['id'];
+        // یک کوئری با pin_lookup.
+        $staff = $wpdb->get_row($wpdb->prepare(
+            'SELECT * FROM ' . cd_table('staff') . ' WHERE event_id = %d AND active = 1 AND pin_lookup = %s',
+            $eid,
+            cd_pin_lookup($eid, $pin)
         ), ARRAY_A);
-        foreach ($rows as $s) {
-            if (wp_check_password($pin, $s['pin_hash'])) {
-                $staff = $s;
-                break;
+        if (!$staff) {
+            // نیروی قدیمی که فقط درهم‌شده دارد؛ اگر جور شد، همان لحظه pin_enc و pin_lookup نوشته می‌شود.
+            $rows = $wpdb->get_results($wpdb->prepare(
+                'SELECT * FROM ' . cd_table('staff') . " WHERE event_id = %d AND active = 1 AND pin_lookup IS NULL AND pin_hash <> ''",
+                $eid
+            ), ARRAY_A);
+            foreach ($rows as $s) {
+                if (wp_check_password($pin, $s['pin_hash'])) {
+                    $staff = $s;
+                    $wpdb->update(cd_table('staff'), [
+                        'pin_enc' => cd_secretbox_encrypt($pin, cd_pin_secret()),
+                        'pin_lookup' => cd_pin_lookup($eid, $pin),
+                    ], ['id' => (int) $s['id']]);
+                    break;
+                }
             }
         }
     }

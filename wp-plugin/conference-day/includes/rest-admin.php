@@ -131,7 +131,7 @@ add_action('rest_api_init', function () {
             'permission_callback' => $admin,
             'callback' => function (WP_REST_Request $request) {
                 $event = cd_event_from_request($request);
-                return is_wp_error($event) ? $event : cd_staff_list((int) $event['id']);
+                return is_wp_error($event) ? $event : cd_staff_list((int) $event['id'], true);
             },
         ],
         [
@@ -752,14 +752,24 @@ function cd_rest_save_card_template(WP_REST_Request $request) {
     return ['template' => $clean];
 }
 
-/** فهرست نیروهای رویداد برای اپ مدیریت (بدون PIN). */
-function cd_staff_list($event_id) {
+/**
+ * فهرست نیروهای رویداد برای اپ مدیریت. با $with_pins (فقط مسیر GET staff، کلید مالک یا مدیر) پین هر نیرو
+ * رمزگشایی‌شده برمی‌گردد؛ نیروی قدیمی که هنوز با پین تازه وارد نشده pin = null و pin_legacy = true دارد.
+ */
+function cd_staff_list($event_id, $with_pins = false) {
     global $wpdb;
     $rows = $wpdb->get_results($wpdb->prepare(
-        'SELECT id, name, active, can_checkin, can_serve, is_admin, (pin_hash <> \'\') AS has_pin, updated_at, updated_by FROM ' . cd_table('staff') . ' WHERE event_id = %d ORDER BY id',
+        'SELECT id, name, active, can_checkin, can_serve, is_admin, (pin_hash <> \'\') AS has_pin, pin_enc, updated_at, updated_by FROM ' . cd_table('staff') . ' WHERE event_id = %d ORDER BY id',
         $event_id
     ), ARRAY_A);
-    return array_map('cd_staff_out', $rows);
+    return array_map(function ($r) use ($with_pins) {
+        $out = cd_staff_out($r);
+        if ($with_pins) {
+            $out['pin'] = cd_pin_reveal($r);
+            $out['pin_legacy'] = $out['has_pin'] && $out['pin'] === null;
+        }
+        return $out;
+    }, $rows);
 }
 
 /**
@@ -864,12 +874,17 @@ function cd_rest_staff(WP_REST_Request $request) {
             $ids_with_new_pin[(int) $targets[$i]['id']] = true;
         }
     }
+    // با pin_lookup یک مقایسه؛ فقط نیروی قدیمی بی‌pin_lookup با درهم‌شده سنجیده می‌شود.
     foreach ($pins as $pin => $i) {
+        $lookup = cd_pin_lookup($eid, $pin);
         foreach ($existing as $s) {
-            if (isset($ids_with_new_pin[(int) $s['id']]) || $s['pin_hash'] === '') {
+            if (isset($ids_with_new_pin[(int) $s['id']])) {
                 continue;
             }
-            if (wp_check_password($pin, $s['pin_hash'])) {
+            $dup = !empty($s['pin_lookup'])
+                ? hash_equals((string) $s['pin_lookup'], $lookup)
+                : ($s['pin_hash'] !== '' && wp_check_password($pin, $s['pin_hash']));
+            if ($dup) {
                 return cd_error('cd_bad_staff', 'PIN تکراری است.', 400, ['errors' => [['index' => $i, 'reason' => 'duplicate_pin']]]);
             }
         }
@@ -889,7 +904,7 @@ function cd_rest_staff(WP_REST_Request $request) {
             }
         }
         if (!empty($s['pin'])) {
-            $data['pin_hash'] = wp_hash_password(cd_latin_digits((string) $s['pin']));
+            $data = array_merge($data, cd_pin_columns($eid, cd_latin_digits((string) $s['pin'])));
         }
         if ($old === null) {
             $data['event_id'] = $eid;

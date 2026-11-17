@@ -24,15 +24,16 @@ function cd_keys_secret() {
     return hash('sha256', 'cd-admin-keys|' . wp_salt('auth'), true);
 }
 
-function cd_key_encrypt($plain) {
+/** رمز کردن با sodium_crypto_secretbox؛ خروجی base64(nonce + متن رمزشده)، یا خالی اگر sodium نیست. */
+function cd_secretbox_encrypt($plain, $secret) {
     if (!function_exists('sodium_crypto_secretbox')) {
         return '';
     }
     $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-    return base64_encode($nonce . sodium_crypto_secretbox($plain, $nonce, cd_keys_secret()));
+    return base64_encode($nonce . sodium_crypto_secretbox($plain, $nonce, $secret));
 }
 
-function cd_key_decrypt($enc) {
+function cd_secretbox_decrypt($enc, $secret) {
     if ($enc === '' || !function_exists('sodium_crypto_secretbox_open')) {
         return null;
     }
@@ -43,9 +44,46 @@ function cd_key_decrypt($enc) {
     $plain = sodium_crypto_secretbox_open(
         substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES),
         substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES),
-        cd_keys_secret()
+        $secret
     );
     return $plain === false ? null : $plain;
+}
+
+function cd_key_encrypt($plain) {
+    return cd_secretbox_encrypt($plain, cd_keys_secret());
+}
+
+function cd_key_decrypt($enc) {
+    return cd_secretbox_decrypt($enc, cd_keys_secret());
+}
+
+/*
+ * پین نیروها (آ-۱): پین ۴ تا ۸ رقمی است و درهم‌سازی‌اش در عمل چند ثانیه‌ای شکسته می‌شود؛ محافظ واقعی قفل
+ * تلاش ناموفق و کلید مدیریت است. پس پین رمزشده (pin_enc) نگه داشته می‌شود تا مدیر ببیند، و pin_lookup
+ * (HMAC-SHA256 پین همراه شناسه‌ی رویداد) ورود را با یک کوئری پیدا می‌کند و تکراری‌بودن را می‌سنجد.
+ * ریسک پذیرفته‌شده: هر کس به دیتابیس و wp-config.php دسترسی داشته باشد پین‌ها را می‌خواند.
+ * پین هیچ‌جا در لاگ نوشته نمی‌شود.
+ */
+function cd_pin_secret() {
+    return hash('sha256', 'cd-pin-enc|' . wp_salt('auth'), true);
+}
+
+function cd_pin_lookup($event_id, $pin) {
+    return hash_hmac('sha256', (int) $event_id . '|' . $pin, hash('sha256', 'cd-pin-lookup|' . wp_salt('auth'), true));
+}
+
+/** ستون‌های ذخیره‌ی یک پین تازه (pin_hash هم برای سازگاری با نسخه‌ی قبلی افزونه نوشته می‌شود). */
+function cd_pin_columns($event_id, $pin) {
+    return [
+        'pin_hash' => wp_hash_password($pin),
+        'pin_enc' => cd_secretbox_encrypt($pin, cd_pin_secret()),
+        'pin_lookup' => cd_pin_lookup($event_id, $pin),
+    ];
+}
+
+/** پین قابل نمایش، یا null برای نیروی قدیمی که هنوز وارد نشده یا پین ندارد. */
+function cd_pin_reveal(array $staff_row) {
+    return cd_secretbox_decrypt((string) ($staff_row['pin_enc'] ?? ''), cd_pin_secret());
 }
 
 /** فهرست کلیدها؛ بار اول کلیدهای قدیمی را منتقل می‌کند. */
