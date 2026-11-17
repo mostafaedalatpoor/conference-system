@@ -8,6 +8,7 @@ import '../store.dart';
 import '../theme/daftar.dart';
 import '../theme/widgets.dart';
 import '../widgets/scan_input.dart';
+import '../widgets/undo_bar.dart';
 import 'scanner.dart';
 import 'walkin.dart';
 
@@ -258,7 +259,10 @@ class _CheckinScreenState extends State<CheckinScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(DaftarSize.space4, DaftarSize.space3, DaftarSize.space4, DaftarSize.space2),
             child: Meter(
-              label: 'پذیرش‌شده',
+              // رویداد چندروزه: «پذیرش‌شده · روز ۲ از ۳»
+              label: store.eventDayOf == null
+                  ? 'پذیرش‌شده'
+                  : 'پذیرش‌شده · روز ${faDigits(store.eventDayOf!.$1)} از ${faDigits(store.eventDayOf!.$2)}',
               value: store.checkins.length,
               total: store.attendees.length,
               format: faDigits,
@@ -408,6 +412,18 @@ class AttendeeRow extends StatelessWidget {
                   ],
                 ),
               ),
+              // حضور روزانه: روز دیگری آمده ولی امروز نه.
+              if (state == null && store.dailyAttendance && (store.checkinDays[a.id]?.isNotEmpty ?? false)) ...[
+                const SizedBox(width: DaftarSize.space2),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: x.sunken, borderRadius: BorderRadius.circular(DaftarSize.radiusPill)),
+                  child: Text(
+                    '${store.checkinDays[a.id]!.map(store.dayName).join('، ')} ✓ · امروز —',
+                    style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
               if (state != null) ...[
                 const SizedBox(width: DaftarSize.space2),
                 Container(
@@ -607,6 +623,19 @@ class AttendeePanel extends StatelessWidget {
             label: Text('نفر بعدی$enter'),
             onPressed: onNext,
           ),
+          // «اشتباه زدم؟» ۸ ثانیه فقط برای پذیرشی که همین گوشی زده.
+          if (state != null && state.staffId == store.staffId) ...[
+            const SizedBox(height: DaftarSize.space3),
+            UndoBar(
+              key: ValueKey(state.at),
+              deadline: state.at.add(undoWindow),
+              onUndo: () {
+                store.undoCheckin(a, reason: 'اشتباه زدم');
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('پذیرش ${a.fullName} برگشت.')));
+                onNext();
+              },
+            ),
+          ],
         ],
       );
     } else if (state != null) {

@@ -10,6 +10,7 @@ import '../normalize.dart';
 import '../store.dart';
 import '../theme/daftar.dart';
 import '../theme/widgets.dart';
+import '../widgets/undo_bar.dart';
 import '../widgets/scan_input.dart';
 
 /// پذیرایی: اسکن پشت‌سرهم کارت‌ها برای وعده‌ی جاری.
@@ -69,6 +70,9 @@ class _MealScreenState extends State<MealScreen> {
   DateTime _lastAt = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _clear;
   int _seq = 0;
+
+  /// آخرین تحویل همین گوشی، برای «اشتباه زدم؟ برگردان» ۸ ثانیه‌ای.
+  (Attendee, Meal, DateTime)? _lastServe;
 
   /// ۸ نتیجه‌ی آخر برای جواب‌دادن به «من را زدی؟» (ویندوز).
   final List<_Result> _recent = [];
@@ -173,6 +177,7 @@ class _MealScreenState extends State<MealScreen> {
     switch (c.verdict) {
       case MealVerdict.ok:
         store.serveMeal(a, meal);
+        _lastServe = (a, meal, DateTime.now());
         _show(_Kind.ok, 'مجاز — تحویل شود', a.displayName);
       case MealVerdict.duplicate:
         _show(_Kind.duplicate, 'قبلاً گرفته', '${a.displayName}\nساعت ${hm(c.previousAt!)}');
@@ -407,6 +412,24 @@ class _MealScreenState extends State<MealScreen> {
               value: store.servedCount(meal.id),
               total: store.entitledCount(meal),
               format: faDigits,
+            ),
+          ),
+        if (_lastServe != null && _lastServe!.$2.id == meal?.id)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space3),
+            child: UndoBar(
+              key: ValueKey(_lastServe!.$3),
+              label: 'اشتباه زدم؟ ${_lastServe!.$1.fullName}',
+              deadline: _lastServe!.$3.add(undoWindow),
+              onUndo: () {
+                final (a, m, _) = _lastServe!;
+                store.undoMeal(a, m, reason: 'اشتباه زدم');
+                setState(() {
+                  _lastServe = null;
+                  _result = null;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تحویل ${m.name} به ${a.fullName} برگشت.')));
+              },
             ),
           ),
         if (meal != null && !store.cameraScan)

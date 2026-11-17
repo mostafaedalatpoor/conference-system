@@ -54,6 +54,38 @@ class AppStore extends ChangeNotifier {
 
   int? selectedMealId;
 
+  /// حضور روزانه: پذیرش هر روز جدا است و «قبلاً پذیرش شده» فقط امروز را می‌بیند.
+  bool dailyAttendance = false;
+  String? eventStart;
+  String? eventEnd;
+
+  /// امروز (وقت گوشی)؛ در آزمون عوض می‌شود.
+  @visibleForTesting
+  DateTime Function() now = DateTime.now;
+  String get today => isoDay(now());
+
+  /// «روز ۲ از ۳» برای رویداد چندروزه؛ null برای یک‌روزه یا بیرون از بازه.
+  (int, int)? get eventDayOf {
+    final s = DateTime.tryParse(eventStart ?? ''), e = DateTime.tryParse(eventEnd ?? '');
+    final t = DateTime.tryParse(today);
+    if (s == null || e == null || t == null) return null;
+    final total = e.difference(s).inDays + 1;
+    final n = t.difference(s).inDays + 1;
+    if (total < 2 || n < 1 || n > total) return null;
+    return (n, total);
+  }
+
+  /// «روز ۱» برای یک تاریخ در بازه‌ی رویداد، وگرنه خود تاریخ.
+  String dayName(String iso) {
+    final s = DateTime.tryParse(eventStart ?? ''), d = DateTime.tryParse(iso);
+    if (s == null || d == null) return iso;
+    final n = d.difference(s).inDays + 1;
+    return n >= 1 ? 'روز ${faDigits(n)}' : iso;
+  }
+
+  /// روزهایی که هر نفر پذیرش شده (برای «روز ۱ ✓ · امروز —»).
+  Map<String, Set<String>> checkinDays = {};
+
   /// «شناسایی در روز اجرا» (IdentifyMode) از پیکربندی رویداد:
   /// scan = کارت QR با اسکن، card = کارت بدون اسکن، none = بدون کارت.
   String identifyMode = 'scan';
@@ -144,7 +176,9 @@ class AppStore extends ChangeNotifier {
         'cursor': cursor,
         'last_sync_ok': lastSyncOk?.toIso8601String(),
         'selected_meal_id': selectedMealId,
-        'settings': {'identify_mode': identifyMode},
+        'settings': {'identify_mode': identifyMode, 'daily_attendance': dailyAttendance},
+        'event_start': eventStart,
+        'event_end': eventEnd,
       };
 
   void _fromJson(Map<String, dynamic> j) {
@@ -177,6 +211,8 @@ class AppStore extends ChangeNotifier {
     final ev = (j['event'] as Map?)?.cast<String, dynamic>();
     if (ev != null) {
       eventName = (ev['name'] ?? '').toString();
+      eventStart = ev['start_date']?.toString();
+      eventEnd = ev['end_date']?.toString();
       configVersion = (ev['config_version'] as int?) ?? 0;
       eventCode = (ev['code'] ?? eventCode)?.toString();
     } else {
@@ -186,6 +222,11 @@ class AppStore extends ChangeNotifier {
     final settings = ((j['settings'] as Map?) ?? (ev?['settings'] as Map?))?.cast<String, dynamic>();
     final mode = settings?['identify_mode']?.toString();
     identifyMode = const ['scan', 'card', 'none'].contains(mode) ? mode! : 'scan';
+    dailyAttendance = settings?['daily_attendance'] == true;
+    if (ev == null) {
+      eventStart = j['event_start']?.toString();
+      eventEnd = j['event_end']?.toString();
+    }
     types = _list(j['types'] ?? j['registration_types']).map(NamedItem.fromJson).toList();
     roles = _list(j['roles']).map(NamedItem.fromJson).toList();
     meals = _list(j['meals']).map(Meal.fromJson).toList();
@@ -207,7 +248,9 @@ class AppStore extends ChangeNotifier {
       if (c.attendeeId != null) owner[c.token] = c.attendeeId!;
     }
     final chk = <String, CheckState>{};
+    final days = <String, Set<String>>{};
     final served = <String, Map<int, List<DateTime>>>{};
+    final today = this.today;
 
     final all = [...serverLog, ...pending];
     for (final e in all) {
@@ -223,23 +266,40 @@ class AppStore extends ChangeNotifier {
           }
           break;
         case 'checkin':
-          if (aid != null) chk.putIfAbsent(aid, () => CheckState(e.deviceTime, e.staffId));
+          if (aid != null) {
+            days.putIfAbsent(aid, () => {}).add(e.eventDay);
+            // حضور روزانه: فقط پذیرش امروز «پذیرش‌شده» است.
+            if (!dailyAttendance || e.eventDay == today) chk.putIfAbsent(aid, () => CheckState(e.deviceTime, e.staffId));
+          }
           break;
         case 'checkin_undo':
-          if (aid != null) chk.remove(aid);
+          if (aid != null) {
+            days[aid]?.remove(e.eventDay);
+            if (!dailyAttendance || e.eventDay == today) chk.remove(aid);
+          }
           break;
         case 'meal_served':
           if (aid != null && e.mealId != null) {
             served.putIfAbsent(aid, () => {}).putIfAbsent(e.mealId!, () => []).add(e.deviceTime);
           }
           break;
+        case 'meal_undo':
+          // برگرداندن: آخرین تحویل همان وعده حذف می‌شود.
+          final l = aid == null || e.mealId == null ? null : served[aid]?[e.mealId!];
+          if (l != null && l.isNotEmpty) l.removeLast();
+          break;
       }
     }
     attendees = att;
     cardOwner = owner;
     checkins = chk;
+    checkinDays = days;
     mealsServed = served;
   }
+
+  /// برای آزمون واحد: محاسبه‌ی دوباره‌ی وضعیت (مثلاً بعد از عوض کردن [now]).
+  @visibleForTesting
+  void recomputeForTest() => _recompute();
 
   // ---------------------------------------------------------------- پرس‌وجو
 
@@ -329,8 +389,9 @@ class AppStore extends ChangeNotifier {
       attendeeId: attendeeId,
       mealId: mealId,
       payload: payload,
-      deviceTime: DateTime.now().toUtc(),
+      deviceTime: now().toUtc(),
       staffId: staffId,
+      day: today,
     );
     pending.add(e);
     _recompute();
@@ -342,7 +403,12 @@ class AppStore extends ChangeNotifier {
 
   void checkin(Attendee a) => _record('checkin', attendeeId: a.id, cardToken: cardOf(a.id)?.token);
 
-  void undoCheckin(Attendee a) => _record('checkin_undo', attendeeId: a.id);
+  void undoCheckin(Attendee a, {String reason = ''}) =>
+      _record('checkin_undo', attendeeId: a.id, payload: reason.isEmpty ? null : {'reason': reason});
+
+  /// برگرداندن یک تحویل وعده (مثل «اشتباه زدم» بعد از پذیرش).
+  void undoMeal(Attendee a, Meal m, {String reason = ''}) => _record('meal_undo',
+      attendeeId: a.id, mealId: m.id, payload: reason.isEmpty ? null : {'reason': reason});
 
   void serveMeal(Attendee a, Meal m) =>
       _record('meal_served', attendeeId: a.id, mealId: m.id, cardToken: cardOf(a.id)?.token);
@@ -354,6 +420,7 @@ class AppStore extends ChangeNotifier {
     required String mobile,
     required String email,
     required int registrationTypeId,
+    int? roleId,
     required PassCard? card,
   }) {
     final a = Attendee(
@@ -363,6 +430,7 @@ class AppStore extends ChangeNotifier {
       mobile: normalizeMobile(mobile),
       email: email.trim(),
       registrationTypeId: registrationTypeId,
+      roleId: roleId,
       source: 'walkin',
     );
     _record('walkin_register', cardToken: card?.token, attendeeId: a.id, payload: {
@@ -373,6 +441,7 @@ class AppStore extends ChangeNotifier {
         'mobile': a.mobile,
         'email': a.email,
         'registration_type_id': registrationTypeId,
+        if (roleId != null) 'role_id': roleId,
       },
     });
     _record('checkin', attendeeId: a.id, cardToken: card?.token);

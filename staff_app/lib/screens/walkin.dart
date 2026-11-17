@@ -28,6 +28,9 @@ class _WalkinScreenState extends State<WalkinScreen> {
   final _emailFocus = FocusNode();
   final _serialFocus = FocusNode();
   int? _typeId;
+
+  /// نقش اختیاری (null = بدون نقش)؛ به سرور فرستاده و ثبت می‌شود.
+  int? _roleId;
   PassCard? _card;
 
   // خطای هر فیلد زیر همان فیلد نمایش داده می‌شود.
@@ -154,6 +157,7 @@ class _WalkinScreenState extends State<WalkinScreen> {
       mobile: _mobile.text,
       email: _email.text,
       registrationTypeId: _typeId!,
+      roleId: _roleId,
       card: store.usesCards ? _card : null,
     );
     if (!mounted) return;
@@ -249,6 +253,25 @@ class _WalkinScreenState extends State<WalkinScreen> {
                     onChanged: (v) => setState(() => _typeId = v),
                   ),
           ),
+          if (store.roles.isNotEmpty) ...[
+            gap,
+            DaftarField(
+              label: 'نقش (اختیاری)',
+              child: Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+                ChoiceChip(
+                  label: const Text('بدون نقش'),
+                  selected: _roleId == null,
+                  onSelected: (_) => setState(() => _roleId = null),
+                ),
+                for (final r in store.roles)
+                  ChoiceChip(
+                    label: Text(r.name),
+                    selected: _roleId == r.id,
+                    onSelected: (_) => setState(() => _roleId = r.id),
+                  ),
+              ]),
+            ),
+          ],
           if (store.usesCards) ...[
           const SizedBox(height: DaftarSize.space5),
           Row(children: [

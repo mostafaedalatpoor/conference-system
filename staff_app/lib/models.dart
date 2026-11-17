@@ -146,6 +146,9 @@ class LogEvent {
   final int? seq;
   final String? flag;
 
+  /// روز رویداد (YYYY-MM-DD به وقت گوشی) برای پذیرش؛ رخداد قدیمی سرور ممکن است نداشته باشد.
+  final String? day;
+
   LogEvent({
     required this.uuid,
     required this.kind,
@@ -157,6 +160,7 @@ class LogEvent {
     this.staffId,
     this.seq,
     this.flag,
+    this.day,
   });
 
   factory LogEvent.fromJson(Map<String, dynamic> j) => LogEvent(
@@ -170,6 +174,7 @@ class LogEvent {
         staffId: _int(j['staff_id']),
         seq: _int(j['seq']),
         flag: j['flag']?.toString(),
+        day: j['day']?.toString(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -183,6 +188,7 @@ class LogEvent {
         'staff_id': staffId,
         'seq': seq,
         'flag': flag,
+        'day': day,
       };
 
   /// شکلی که به /device/sync فرستاده می‌شود.
@@ -193,8 +199,12 @@ class LogEvent {
         if (attendeeId != null) 'attendee_id': attendeeId,
         if (mealId != null) 'meal_id': mealId,
         if (payload != null) 'payload': payload,
+        if (day != null) 'day': day,
         'device_time': deviceTime.toUtc().toIso8601String(),
       };
+
+  /// روز این رخداد: فیلد day، وگرنه تاریخ محلی زمان دستگاه.
+  String get eventDay => day ?? isoDay(deviceTime.toLocal());
 }
 
 class Session {
@@ -232,3 +242,7 @@ class MealCheck {
   final DateTime? previousAt;
   MealCheck(this.verdict, [this.previousAt]);
 }
+
+/// تاریخ میلادی YYYY-MM-DD.
+String isoDay(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
