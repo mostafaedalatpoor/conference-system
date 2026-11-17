@@ -39,6 +39,71 @@ class _CardsScreenState extends State<CardsScreen> {
   /// «هر قالب یک فایل» به‌جای «همه در یک فایل».
   bool _filePerTemplate = false;
 
+  /// «چه کسانی»: همه، چاپ‌نشده‌ها یا انتخاب دستی (۱۶).
+  PrintScope _scope = PrintScope.all;
+  final Set<String> _picked = {};
+
+  List<Person> _selected(AdminState s) =>
+      selectForPrint(s.sortedPeople, _scope, printed: (p) => p.printed, idOf: (p) => p.id, picked: _picked);
+
+  /// انتخاب دستی افراد با جستجو.
+  Future<void> _pickPeople(AdminState s) async {
+    final chosen = {..._picked};
+    final q = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(builder: (c, setState) {
+        final n = normalizeText(q.text);
+        final list = s.sortedPeople
+            .where((p) => n.isEmpty || normalizeText('${p.displayName} ${p.organization} ${p.serial ?? ''}').contains(n))
+            .toList();
+        return AlertDialog(
+          title: Text('انتخاب دستی · ${faDigits(chosen.length)} نفر'),
+          content: SizedBox(
+            width: 460,
+            height: 420,
+            child: Column(children: [
+              TextField(
+                controller: q,
+                autofocus: true,
+                decoration: const InputDecoration(prefixIcon: Icon(Icons.search_rounded), hintText: 'نام، سازمان یا شماره‌ی کارت'),
+                onChanged: (_) => setState(() {}),
+              ),
+              Expanded(
+                child: ListView(children: [
+                  for (final p in list)
+                    CheckboxListTile(
+                      dense: true,
+                      value: chosen.contains(p.id),
+                      onChanged: (v) => setState(() => v == true ? chosen.add(p.id) : chosen.remove(p.id)),
+                      title: Text(p.displayName),
+                      subtitle: Text([
+                        if (p.serial != null) 'کارت ${faDigits(p.serial!)}',
+                        p.printed ? 'چاپ شده${p.printCount > 1 ? ' ×${faDigits(p.printCount)}' : ''}' : 'چاپ‌نشده',
+                      ].join(' · ')),
+                    ),
+                ]),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => setState(chosen.clear), child: const Text('هیچ‌کس')),
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('همین‌ها')),
+          ],
+        );
+      }),
+    );
+    q.dispose();
+    if (ok != true || !mounted) return;
+    setState(() {
+      _picked
+        ..clear()
+        ..addAll(chosen);
+      _scope = PrintScope.manual;
+    });
+  }
+
   /// متن خام فیلدهای اعتبارسنجی‌شده تا وقتی درست نشده؛ مدل همیشه آخرین مقدار درست را دارد.
   final Map<String, String> _raw = {};
   int _seenCardsRev = -1;
@@ -179,8 +244,8 @@ class _CardsScreenState extends State<CardsScreen> {
   /// فایل‌های PDF کارت: «همه در یک فایل» یا «هر قالب یک فایل» (رزروها در فایل قالب رزرو).
   List<(String, List<CardItem>)> _plan(AdminState s, {required bool draft}) {
     final set = s.cards;
-    final people = s.sortedPeople;
-    final reserves = s.reserveCards.where((r) => !r.used).toList();
+    final people = _selected(s);
+    final reserves = printIncludesReserves(_scope) ? s.reserveCards.where((r) => !r.used).toList() : <ReserveCard>[];
     final prefix = '${draft ? 'draft-' : ''}cards-${s.eventCode}';
     if (!(_filePerTemplate && set.separate)) {
       return [
@@ -238,10 +303,19 @@ class _CardsScreenState extends State<CardsScreen> {
     } else {
       saved = await _saveMany(s, built);
     }
-    if (!saved || draft || !mounted || (s.event?.locked ?? true)) return;
+    if (!saved || draft || !mounted) return;
+    // «چاپ‌شده»: کارت‌های PDF نهایی که به چاپخانه می‌روند؛ پیش‌نویس و «فعلاً نه» حساب نمی‌شوند.
+    final printedIds = [for (final (_, items) in plan) for (final it in items) if (it.person != null) it.person!.id];
+    if (s.event?.locked ?? true) {
+      await s.markPrinted(printedIds);
+      return;
+    }
     final name = (_savedPath ?? built.first.$1).split(Platform.pathSeparator).last;
     final lock = isMobilePlatform ? await _askLockSheet(name) : await _askLockDialog(name);
-    if (lock == true) await s.setLocked(true);
+    if (lock == true) {
+      await s.setLocked(true);
+      await s.markPrinted(printedIds);
+    }
   }
 
   Future<bool?> _askLockDialog(String name) => showDialog<bool>(
@@ -518,12 +592,14 @@ class _CardsScreenState extends State<CardsScreen> {
     final errorCount = errors.values.where((e) => e != null).length + (t.name.trim().isEmpty ? 1 : 0);
     final hasErrors = errorCount > 0;
     final free = s.reserveCards.where((r) => !r.used).length;
-    final people = s.sortedPeople;
+    final all = s.sortedPeople;
+    final people = _selected(s);
+    final unprinted = all.where((p) => !p.printed).length;
     final mine = set.separate ? people.where((p) => s.templateOf(p).id == t.id).toList() : people;
     final mobile = isMobilePlatform;
     final locked = s.event?.locked ?? false;
     if (_reserveCount.text.isEmpty) {
-      _reserveCount.text = '${(people.length / 10).ceil().clamp(1, 1000)}';
+      _reserveCount.text = '${(all.length / 10).ceil().clamp(1, 1000)}';
     }
     final longest = mine.isEmpty ? null : mine.reduce((a, b) => a.displayName.length >= b.displayName.length ? a : b);
     final g = CardPageGeometry(trimW: set.widthMm, trimH: set.heightMm, bleed: set.bleedMm, cropMarks: set.cropMarks);
@@ -552,7 +628,7 @@ class _CardsScreenState extends State<CardsScreen> {
         ),
       const SectionTitle('کارت‌های رزرو (برای ثبت‌نام در محل)'),
       Text('${faDigits(s.reserveCards.length)} کارت رزرو ساخته شده؛ ${faDigits(free)} هنوز آزاد است. '
-          'پیشنهاد: حدود ۱۰٪ ثبت‌نامی‌ها (${faDigits((people.length / 10).ceil())} کارت).'),
+          'پیشنهاد: حدود ۱۰٪ ثبت‌نامی‌ها (${faDigits((all.length / 10).ceil())} کارت).'),
       const SizedBox(height: 8),
       Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
         SizedBox(width: 120, child: TextField(controller: _reserveCount, decoration: const InputDecoration(labelText: 'تعداد', isDense: true))),
@@ -692,6 +768,33 @@ class _CardsScreenState extends State<CardsScreen> {
                 'پیش‌نویس قفل نمی‌کند.',
           ),
         ),
+      Text('چه کسانی', style: Theme.of(context).textTheme.labelLarge),
+      const SizedBox(height: DaftarSize.space2),
+      Padding(
+        padding: const EdgeInsets.only(bottom: DaftarSize.space3),
+        child: Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+          ChoiceChip(
+            label: Text('همه ${faDigits(all.length)}'),
+            selected: _scope == PrintScope.all,
+            onSelected: (_) => setState(() => _scope = PrintScope.all),
+          ),
+          ChoiceChip(
+            label: Text('چاپ‌نشده‌ها ${faDigits(unprinted)}'),
+            selected: _scope == PrintScope.unprinted,
+            onSelected: (_) => setState(() => _scope = PrintScope.unprinted),
+          ),
+          ChoiceChip(
+            label: Text(_picked.isEmpty ? 'انتخاب دستی…' : 'انتخاب دستی ${faDigits(_picked.length)}…'),
+            selected: _scope == PrintScope.manual,
+            onSelected: (_) => _pickPeople(s),
+          ),
+        ]),
+      ),
+      if (_scope != PrintScope.all)
+        const Padding(
+          padding: EdgeInsets.only(bottom: DaftarSize.space3),
+          child: Hint('کارت‌های رزرو فقط با «همه» ساخته می‌شوند؛ برای رزرو جدا «PDF کارت‌های رزرو آزاد» را بزنید.'),
+        ),
       if (set.separate && set.templates.length > 1)
         Padding(
           padding: const EdgeInsets.only(bottom: DaftarSize.space3),
@@ -724,7 +827,8 @@ class _CardsScreenState extends State<CardsScreen> {
           onPressed: s.busy || people.isEmpty || hasErrors ? null : () => _generateCards(s, draft: false),
           label: Text(hasErrors
               ? errorLabel
-              : '${locked ? 'ساخت PDF کارت‌ها' : 'ساخت و قفل…'} (${faDigits(people.length)} نفر + ${faDigits(free)} رزرو)'),
+              : '${locked ? 'ساخت PDF کارت‌ها' : 'ساخت و قفل…'} (${faDigits(people.length)} نفر'
+                  '${printIncludesReserves(_scope) ? ' + ${faDigits(free)} رزرو' : ''})'),
         ),
         OutlinedButton.icon(
           icon: const Icon(Icons.style_rounded),

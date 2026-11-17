@@ -83,4 +83,13 @@ void main() {
     expect(LogEvent.fromJson(e.toJson()).day, '2026-11-20');
     expect(ev('checkin', 'a', d1).toPush().containsKey('day'), isFalse);
   });
+
+  test('unknown card message: revoked, unowned reserve, unknown', () {
+    final s = AppStore()
+      ..revokedCards = {'old'}
+      ..cards = {'res': PassCard('res', null, 5001, true)};
+    expect(s.unknownCardMessage('old'), contains('باطل'));
+    expect(s.unknownCardMessage('res'), contains('رزرو'));
+    expect(s.unknownCardMessage('zzz'), contains('در لیست نیست'));
+  });
 }

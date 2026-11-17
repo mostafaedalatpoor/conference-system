@@ -72,7 +72,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
   void _notFound(String token) {
     final store = StoreScope.read(context);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(store.cards.containsKey(token) ? 'این کارت رزرو هنوز به کسی وصل نشده.' : 'این کارت در لیست نیست.'),
+      content: Text(store.unknownCardMessage(token)),
     ));
   }
 

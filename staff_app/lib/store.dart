@@ -36,6 +36,9 @@ class AppStore extends ChangeNotifier {
   List<Session> sessions = [];
   Map<String, Attendee> _baseAttendees = {};
   Map<String, PassCard> cards = {};
+
+  /// کارت‌های باطل‌شده (گم‌شده و جایگزین‌شده)؛ از snapshot افزونه‌ی ۰٫۵ به بعد.
+  Set<String> revokedCards = {};
   Map<int, String> staffNames = {};
 
   // دفتر رخدادها
@@ -59,8 +62,7 @@ class AppStore extends ChangeNotifier {
   String? eventStart;
   String? eventEnd;
 
-  /// امروز (وقت گوشی)؛ در آزمون عوض می‌شود.
-  @visibleForTesting
+  /// امروز (وقت گوشی)؛ فقط آزمون‌های unit_test/ عوضش می‌کنند.
   DateTime Function() now = DateTime.now;
   String get today => isoDay(now());
 
@@ -169,6 +171,7 @@ class AppStore extends ChangeNotifier {
         'sessions': sessions.map((e) => e.toJson()).toList(),
         'attendees': _baseAttendees.values.map((e) => e.toJson()).toList(),
         'cards': cards.values.map((e) => e.toJson()).toList(),
+        'revoked_cards': revokedCards.toList(),
         'staff': staffNames.entries.map((e) => {'id': e.key, 'name': e.value}).toList(),
         'log': serverLog.map((e) => e.toJson()).toList(),
         'pending': pending.map((e) => e.toJson()).toList(),
@@ -233,6 +236,7 @@ class AppStore extends ChangeNotifier {
     sessions = _list(j['sessions']).map(Session.fromJson).toList();
     _baseAttendees = {for (final a in _list(j['attendees']).map(Attendee.fromJson)) a.id: a};
     cards = {for (final c in _list(j['cards']).map(PassCard.fromJson)) c.token: c};
+    revokedCards = ((j['revoked_cards'] as List?) ?? const []).map((e) => e.toString()).toSet();
     staffNames = {
       for (final s in _list(j['staff'])) (s['id'] as int): (s['name'] ?? '').toString(),
     };
@@ -298,7 +302,6 @@ class AppStore extends ChangeNotifier {
   }
 
   /// برای آزمون واحد: محاسبه‌ی دوباره‌ی وضعیت (مثلاً بعد از عوض کردن [now]).
-  @visibleForTesting
   void recomputeForTest() => _recompute();
 
   // ---------------------------------------------------------------- پرس‌وجو
@@ -338,6 +341,13 @@ class AppStore extends ChangeNotifier {
       return x.lastName.compareTo(y.lastName);
     });
     return out.length > limit ? out.sublist(0, limit) : out;
+  }
+
+  /// پیام کارتی که به کسی نمی‌رسد: باطل‌شده، رزرو بی‌صاحب، یا ناشناخته.
+  String unknownCardMessage(String token) {
+    if (revokedCards.contains(token)) return 'این کارت باطل شده؛ صاحبش کارت تازه دارد. با نام جستجو کنید.';
+    if (cards.containsKey(token)) return 'این کارت رزرو هنوز به کسی وصل نشده.';
+    return 'این کارت در لیست نیست.';
   }
 
   Attendee? findByMobile(String mobile) {

@@ -75,7 +75,9 @@ class _WalkinScreenState extends State<WalkinScreen> {
     setState(() {
       if (c == null) {
         _card = null;
-        _cardError = 'این کارت در لیست نیست. اگر کارت تازه است، از «وضعیت» لیست را دوباره بگیرید.';
+        _cardError = store.revokedCards.contains(token)
+            ? 'این کارت باطل شده است؛ کارت رزرو دیگری بدهید.'
+            : 'این کارت در لیست نیست. اگر کارت تازه است، از «وضعیت» لیست را دوباره بگیرید.';
       } else if (!c.isReserve) {
         _card = null;
         _cardError = 'این کارت رزرو نیست؛ مال ${store.attendeeForToken(token)?.fullName ?? 'شخص دیگری'} است.';

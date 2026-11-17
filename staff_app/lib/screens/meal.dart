@@ -164,7 +164,7 @@ class _MealScreenState extends State<MealScreen> {
       final a = store.attendeeForToken(token);
       if (a == null) {
         _show(_Kind.invalid, 'کارت نامعتبر',
-            store.cards.containsKey(token) ? 'کارت رزرو به کسی وصل نشده.' : 'این کارت در لیست نیست.');
+            store.unknownCardMessage(token));
         return;
       }
       _evaluate(store, a, meal);
@@ -200,7 +200,7 @@ class _MealScreenState extends State<MealScreen> {
     final a = store.attendeeForToken(token);
     if (a == null) {
       _show(_Kind.invalid, 'کارت نامعتبر',
-          store.cards.containsKey(token) ? 'کارت رزرو به کسی وصل نشده.' : 'این کارت در لیست نیست.');
+          store.unknownCardMessage(token));
       return true;
     }
     _evaluate(store, a, meal);

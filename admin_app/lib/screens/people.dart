@@ -166,6 +166,43 @@ class _PersonPageState extends State<PersonPage> {
     };
   }
 
+  /// «کارت گم شد» (حالت ۱۳ طراحی): کارت رزرو بده، یا کارت تازه با همان شماره. کارت قبلی باطل می‌شود.
+  Future<void> _lostCard(AdminState s, Person p) async {
+    final free = s.reserveCards.where((r) => !r.used).length;
+    var mode = free > 0 ? 'reserve' : 'new';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setState) => AlertDialog(
+          title: Text('کارت ${p.displayName} گم شد'),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (final (value, title, sub, enabled) in [
+              ('reserve', 'کارت رزرو بده', free == 0 ? 'کارت رزرو آزاد نمانده.' : '${faDigits(free)} کارت رزرو آزاد؛ همین حالا تحویل بدهید.', free > 0),
+              ('new', 'کارت تازه با همان شماره', 'در «کارت‌ها ← چاپ‌نشده‌ها» چاپ می‌شود.', true),
+            ])
+              ListTile(
+                enabled: enabled,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(mode == value ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded),
+                title: Text(title),
+                subtitle: Text(sub),
+                onTap: () => setState(() => mode = value),
+              ),
+            const SizedBox(height: DaftarSize.space2),
+            const Notice(tone: NoticeTone.wait, text: 'کارت قبلی باطل می‌شود: اسکنش در گوشی نیروها رد می‌شود و صفحه‌ی شخصی‌اش باز نمی‌شود.'),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('ادامه')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    await s.replaceCard(p.id, mode);
+    if (mounted) setState(() {});
+  }
+
   Future<void> _merge(AdminState s, Person keep, Person from) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -351,6 +388,25 @@ class _PersonPageState extends State<PersonPage> {
                 SizedBox(width: 100, child: Text(d.$1, style: theme.textTheme.bodyMedium?.copyWith(color: x.inkMuted))),
                 Expanded(
                   child: SelectableText(d.$2, textDirection: d.$3 ? TextDirection.ltr : null, textAlign: TextAlign.start),
+                ),
+              ]),
+            ),
+          if (s.settings.usesCards && p.token != null)
+            Padding(
+              padding: const EdgeInsets.only(top: DaftarSize.space3),
+              child: Row(children: [
+                Icon(Icons.style_rounded, size: 20, color: x.stamp),
+                const SizedBox(width: DaftarSize.space2),
+                Expanded(
+                  child: Text([
+                    'کارت ${faDigits(p.serial ?? '')}',
+                    p.printed ? 'چاپ شده${p.printCount > 1 ? ' ×${faDigits(p.printCount)}' : ''}' : 'چاپ‌نشده',
+                  ].join(' · ')),
+                ),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(foregroundColor: x.stop, side: BorderSide(color: x.stop, width: 1.5)),
+                  onPressed: s.busy || s.event?.archived == true ? null : () => _lostCard(s, p),
+                  child: const Text('کارت گم شد…'),
                 ),
               ]),
             ),

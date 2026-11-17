@@ -273,4 +273,23 @@ void main() {
       expect(artworkMessage('پشت', f), contains('کوچک می‌شود'));
     });
   });
+
+  group('selectForPrint (16)', () {
+    final people = [('a', true), ('b', false), ('c', false), ('d', true)];
+    List<String> ids(PrintScope sc, [Set<String> picked = const {}]) => selectForPrint(people, sc,
+            printed: (p) => p.$2, idOf: (p) => p.$1, picked: picked)
+        .map((p) => p.$1)
+        .toList();
+
+    test('all keeps order', () => expect(ids(PrintScope.all), ['a', 'b', 'c', 'd']));
+    test('unprinted', () => expect(ids(PrintScope.unprinted), ['b', 'c']));
+    test('manual keeps list order, ignores unknown ids', () => expect(ids(PrintScope.manual, {'d', 'a', 'zz'}), ['a', 'd']));
+    test('manual empty', () => expect(ids(PrintScope.manual), isEmpty));
+    test('reserves only with all', () {
+      expect(printIncludesReserves(PrintScope.all), isTrue);
+      expect(printIncludesReserves(PrintScope.unprinted), isFalse);
+      expect(printIncludesReserves(PrintScope.manual), isFalse);
+    });
+  });
 }
+

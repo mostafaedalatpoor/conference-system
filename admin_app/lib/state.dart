@@ -242,6 +242,10 @@ class Person {
   String status;
   String importBatch;
 
+  /// آخرین بار که کارتش برای چاپخانه ساخته شد؛ null یعنی «چاپ‌نشده».
+  String? printedAt;
+  int printCount;
+
   Person({
     required this.id,
     this.title = '',
@@ -261,7 +265,11 @@ class Person {
     this.website = '',
     this.status = 'active',
     this.importBatch = '',
+    this.printedAt,
+    this.printCount = 0,
   });
+
+  bool get printed => printedAt != null;
 
   bool get isActive => status == 'active';
 
@@ -627,6 +635,8 @@ class AdminState extends ChangeNotifier {
         website: (a['website'] ?? '').toString(),
         status: (a['status'] ?? 'active').toString(),
         importBatch: (a['import_batch'] ?? '').toString(),
+        printedAt: a['printed_at']?.toString(),
+        printCount: (a['print_count'] as int?) ?? 0,
       );
     }
 
@@ -1009,6 +1019,29 @@ class AdminState extends ChangeNotifier {
     if (st == null || d == null) return iso;
     final n = d.difference(st).inDays + 1;
     return n >= 1 ? 'روز ${faDigits(n)}' : iso;
+  }
+
+  /// کارت این افراد به چاپخانه رفت (PDF نهایی). خطا فقط پیام می‌شود؛ PDF ساخته شده است.
+  Future<void> markPrinted(List<String> ids) => run('', () async {
+        if (ids.isEmpty) return;
+        await api.post('/admin/events/$eventCode/attendees/printed', {'ids': ids});
+        await _loadEvent(eventCode!);
+      });
+
+  /// «کارت گم شد»: [mode] reserve = کارت رزرو آزاد، new = کارت تازه با همان شماره. کارت قبلی باطل می‌شود.
+  /// خروجی: شماره‌ی کارت تازه، یا null اگر نشد.
+  Future<int?> replaceCard(String id, String mode) async {
+    int? serial;
+    await run('', () async {
+      final r = (await api.post('/admin/events/$eventCode/attendees/$id/replace-card', {'mode': mode}) as Map)
+          .cast<String, dynamic>();
+      serial = ((r['card'] as Map?)?['serial']) as int?;
+      await _loadEvent(eventCode!);
+      message = mode == 'reserve'
+          ? 'کارت رزرو ${faDigits(serial ?? '')} به او داده شد؛ کارت قبلی باطل شد.'
+          : 'کارت تازه با شماره‌ی ${faDigits(serial ?? '')} ساخته شد؛ کارت قبلی باطل شد. در «کارت‌ها ← چاپ‌نشده‌ها» چاپش کنید.';
+    });
+    return serial;
   }
 
   /// افراد فعال دیگری که موبایل یا ایمیل یکسان دارند («احتمالاً همان … است»).

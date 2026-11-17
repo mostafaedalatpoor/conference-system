@@ -415,3 +415,25 @@ String artworkMessage(String side, ArtworkFit f) {
   if (f.cropPct >= 1) parts.add('${faDigits(crop)}٪ از ${f.cropsWidth ? 'عرض' : 'ارتفاع'}ش بریده می‌شود');
   return 'طرح $side $art است؛ ${parts.join(' و ')}. (اندازه‌ی لازم با حاشیه‌ی اضافه: $need)';
 }
+
+// ---------------------------------------------------------------- چه کسانی چاپ شوند (۱۶)
+
+/// «همه · چاپ‌نشده‌ها · انتخاب دستی» در ساخت کارت.
+enum PrintScope { all, unprinted, manual }
+
+/// افرادی که در PDF کارت می‌آیند. ترتیب ورودی حفظ می‌شود.
+List<P> selectForPrint<P>(
+  List<P> people,
+  PrintScope scope, {
+  required bool Function(P) printed,
+  required String Function(P) idOf,
+  Set<String> picked = const {},
+}) =>
+    switch (scope) {
+      PrintScope.all => List.of(people),
+      PrintScope.unprinted => people.where((p) => !printed(p)).toList(),
+      PrintScope.manual => people.where((p) => picked.contains(idOf(p))).toList(),
+    };
+
+/// کارت‌های رزرو آزاد فقط در «همه» می‌آیند؛ چاپ تکمیلی دوباره رزرو نمی‌سازد.
+bool printIncludesReserves(PrintScope scope) => scope == PrintScope.all;
