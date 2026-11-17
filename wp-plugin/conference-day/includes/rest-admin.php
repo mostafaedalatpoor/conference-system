@@ -235,7 +235,8 @@ add_action('rest_api_init', function () {
         'permission_callback' => $admin,
         'callback' => function (WP_REST_Request $request) {
             $event = cd_event_from_request($request);
-            return is_wp_error($event) ? $event : cd_build_report($event);
+            $day = $request->get_param('day');
+            return is_wp_error($event) ? $event : cd_build_report($event, is_string($day) && $day !== '' ? $day : null);
         },
     ]);
 
@@ -249,7 +250,34 @@ add_action('rest_api_init', function () {
     ]);
 
     // حذف یک نفر (حذف نرم). اگر پذیرش یا وعده دارد، بدون force=1 پاسخ 409 با شمارش می‌دهد.
+    // ادغام: تاریخچه، کارت و فیلدهای خالی فرد from به این فرد منتقل و from حذف (نرم) می‌شود.
+    register_rest_route(CD_NS, "/admin/events/$code/attendees/$aid/merge", [
+        'methods' => 'POST',
+        'permission_callback' => $admin,
+        'callback' => 'cd_rest_merge_attendees',
+    ]);
+
+    // برگرداندن یک تحویل وعده از اپ مدیریت («لغو تحویل…»).
+    register_rest_route(CD_NS, "/admin/events/$code/attendees/$aid/meal-undo", [
+        'methods' => 'POST',
+        'permission_callback' => $admin,
+        'callback' => 'cd_rest_admin_meal_undo',
+    ]);
+
+    // «دیدن فهرست» یک وعده: افراد فعالِ دارای حق، و هر کس تحویل گرفته، با زمان تحویل.
+    register_rest_route(CD_NS, "/admin/events/$code/meals/(?P<item>[A-Za-z0-9_-]{1,64})/people", [
+        'methods' => 'GET',
+        'permission_callback' => $admin,
+        'callback' => 'cd_rest_meal_people',
+    ]);
+
     register_rest_route(CD_NS, "/admin/events/$code/attendees/$aid", [
+        [
+            'methods' => 'PATCH',
+            'permission_callback' => $admin,
+            'callback' => 'cd_rest_patch_attendee',
+        ],
+        [
         'methods' => 'DELETE',
         'permission_callback' => $admin,
         'callback' => function (WP_REST_Request $request) {
@@ -267,6 +295,7 @@ add_action('rest_api_init', function () {
             }
             return $r;
         },
+        ],
     ]);
 
     // لغو پذیرش از اپ مدیریت؛ مثل رخداد checkin_undo گوشی در دفتر ثبت می‌شود.
@@ -490,7 +519,7 @@ function cd_rest_timeline(WP_REST_Request $request) {
         return $event;
     }
     $rows = $wpdb->get_results($wpdb->prepare(
-        'SELECT l.seq, l.kind, l.flag, l.device_time, l.meal_id, l.payload, m.name AS meal_name, d.label AS device_label, s.name AS staff_name
+        'SELECT l.seq, l.kind, l.flag, l.day, l.device_time, l.meal_id, l.payload, m.name AS meal_name, d.label AS device_label, s.name AS staff_name
          FROM ' . cd_table('event_log') . ' l
          LEFT JOIN ' . cd_table('meals') . ' m ON m.id = l.meal_id
          LEFT JOIN ' . cd_table('devices') . ' d ON d.id = l.device_id
@@ -503,10 +532,13 @@ function cd_rest_timeline(WP_REST_Request $request) {
     return [
         'events' => array_map(function ($r) {
             $p = $r['payload'] ? json_decode($r['payload'], true) : null;
-            $actor = is_array($p) && $r['kind'] === 'checkin_undo' ? (string) ($p['actor'] ?? '') : '';
+            $undo = in_array($r['kind'], ['checkin_undo', 'meal_undo'], true);
+            $actor = is_array($p) && $undo ? (string) ($p['actor'] ?? '') : '';
             return [
                 'seq' => (int) $r['seq'],
-                'reason' => is_array($p) && $r['kind'] === 'checkin_undo' ? (string) ($p['reason'] ?? '') : '',
+                'day' => cd_log_day($r),
+                'meal_id' => $r['meal_id'] !== null ? (int) $r['meal_id'] : null,
+                'reason' => is_array($p) && $undo ? (string) ($p['reason'] ?? '') : '',
                 'actor' => $actor,
                 'kind' => $r['kind'],
                 'meal_name' => $r['meal_name'],
@@ -534,11 +566,16 @@ function cd_rest_admin_undo_checkin(WP_REST_Request $request) {
         return cd_error('cd_no_attendee', 'این نفر در این رویداد نیست.', 404);
     }
     // لغو فقط برای کسی که الان پذیرش‌شده است؛ دلیل و فاعل در payload می‌ماند.
-    if (!cd_is_checked_in($eid, $aid)) {
+    // حضور روزانه: لغو پذیرش روز داده‌شده، وگرنه امروز (وقت سایت).
+    $now = cd_now();
+    $daily = !empty(cd_event_settings($event)['daily_attendance']);
+    $day = $request->get_param('day');
+    $day = is_string($day) && cd_valid_date($day) ? $day : cd_event_day($now);
+    if (!cd_is_checked_in($eid, $aid, $daily ? $day : null)) {
         return cd_error('cd_not_checked_in', 'این نفر هنوز پذیرش نشده است.', 409);
     }
-    $now = cd_now();
     $wpdb->insert(cd_table('event_log'), [
+        'day' => $day,
         'uuid' => wp_generate_uuid4(),
         'event_id' => $eid,
         'kind' => 'checkin_undo',
@@ -782,6 +819,9 @@ function cd_rest_attendees(WP_REST_Request $request) {
     $saved = 0;
     $errors = [];
 
+    // «افزودن فرد» در اپ مدیریت با source=manual؛ پیش‌فرض همان import.
+    $source = $request->get_param('source') === 'manual' ? 'manual' : 'import';
+
     // ورودی اکسل (اختیاری): {id, file_name}. هر فرد شناسه‌ی آخرین ورودی‌ای که آورده‌اش را می‌گیرد.
     $batch_id = '';
     $batch = $request->get_param('batch');
@@ -853,7 +893,7 @@ function cd_rest_attendees(WP_REST_Request $request) {
         $a['registration_type_id'] = $types[$tc];
         $a['role_id'] = ($rc !== null && $rc !== '') ? $roles[$rc] : null;
         $a['import_batch'] = $batch_id;
-        if (!cd_upsert_attendee($eid, $a, 'import')) {
+        if (!cd_upsert_attendee($eid, $a, $source)) {
             $errors[] = ['index' => $i, 'reason' => 'db_error', 'detail' => $wpdb->last_error];
             continue;
         }
@@ -1190,4 +1230,201 @@ function cd_rest_meal_active(WP_REST_Request $request) {
     $wpdb->update(cd_table('meals'), ['active' => $active ? 1 : 0], ['id' => $map[$code]]);
     cd_bump_config($eid);
     return ['code' => $code, 'active' => $active];
+}
+
+
+// ---------------------------------------------------------------- ویرایش، ادغام، لغو تحویل
+
+/** ویرایش جزئی یک نفر: فقط فیلدهای فرستاده‌شده عوض می‌شوند. نوع و نقش با کد. */
+function cd_rest_patch_attendee(WP_REST_Request $request) {
+    global $wpdb;
+    $event = cd_event_for_write($request);
+    if (is_wp_error($event)) {
+        return $event;
+    }
+    $eid = (int) $event['id'];
+    $aid = strtolower((string) $request['attendee']);
+    $row = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cd_table('attendees') . " WHERE id = %s AND event_id = %d AND status <> 'deleted'", $aid, $eid), ARRAY_A);
+    if (!$row) {
+        return cd_error('cd_no_attendee', 'این نفر در این رویداد نیست.', 404);
+    }
+    $data = [];
+    $text = ['title' => 64, 'first_name' => 191, 'last_name' => 191, 'organization' => 191, 'country' => 64, 'presentation_kind' => 16];
+    foreach ($text as $k => $max) {
+        if ($request->has_param($k)) {
+            $data[$k] = cd_str($request->get_param($k), $max);
+        }
+    }
+    if (isset($data['first_name']) && $data['first_name'] === '' || isset($data['last_name']) && $data['last_name'] === '') {
+        return cd_error('cd_bad_name', 'نام و نام خانوادگی خالی نمی‌شود.');
+    }
+    if ($request->has_param('email')) {
+        $data['email'] = sanitize_email((string) $request->get_param('email'));
+    }
+    if ($request->has_param('mobile')) {
+        $data['mobile'] = cd_normalize_mobile($request->get_param('mobile'));
+    }
+    if ($request->has_param('website')) {
+        $data['website'] = esc_url_raw(cd_str($request->get_param('website'), 255));
+    }
+    if ($request->has_param('registration_type')) {
+        $types = cd_code_map('registration_types', $eid);
+        $tc = (string) $request->get_param('registration_type');
+        if (!isset($types[$tc])) {
+            return cd_error('cd_bad_type', 'نوع ثبت‌نام نامعتبر است.');
+        }
+        $data['registration_type_id'] = $types[$tc];
+    }
+    $role_null = false;
+    if ($request->has_param('role')) {
+        $rc = $request->get_param('role');
+        if ($rc === null || $rc === '') {
+            $role_null = true;
+        } else {
+            $roles = cd_code_map('roles', $eid);
+            if (!isset($roles[$rc])) {
+                return cd_error('cd_bad_role', 'نقش نامعتبر است.');
+            }
+            $data['role_id'] = $roles[$rc];
+        }
+    }
+    $merged = array_merge($row, $data);
+    $data['search_key'] = cd_search_key($merged);
+    $data['updated_at'] = cd_now();
+    $wpdb->update(cd_table('attendees'), $data, ['id' => $aid]);
+    if ($role_null) {
+        $wpdb->query($wpdb->prepare('UPDATE ' . cd_table('attendees') . ' SET role_id = NULL WHERE id = %s', $aid));
+    }
+    cd_bump_config($eid);
+    return cd_attendee_out($wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cd_table('attendees') . ' WHERE id = %s', $aid), ARRAY_A));
+}
+
+/**
+ * ادغام فرد from در این فرد: رخدادهای دفتر و کارهای ردشده و کارت‌ها به این فرد منتقل می‌شوند،
+ * فیلدهای خالی این فرد از from پر می‌شود و from حذف نرم می‌شود.
+ */
+function cd_rest_merge_attendees(WP_REST_Request $request) {
+    global $wpdb;
+    $event = cd_event_for_write($request);
+    if (is_wp_error($event)) {
+        return $event;
+    }
+    $eid = (int) $event['id'];
+    $keep = strtolower((string) $request['attendee']);
+    $from = strtolower((string) $request->get_param('from'));
+    if (!cd_is_uuid($from) || $from === $keep) {
+        return cd_error('cd_bad_merge', 'فردی که باید ادغام شود نامعتبر است.');
+    }
+    $att = cd_table('attendees');
+    $k = $wpdb->get_row($wpdb->prepare("SELECT * FROM $att WHERE id = %s AND event_id = %d AND status <> 'deleted'", $keep, $eid), ARRAY_A);
+    $f = $wpdb->get_row($wpdb->prepare("SELECT * FROM $att WHERE id = %s AND event_id = %d AND status <> 'deleted'", $from, $eid), ARRAY_A);
+    if (!$k || !$f) {
+        return cd_error('cd_no_attendee', 'یکی از دو نفر در این رویداد نیست.', 404);
+    }
+    $fill = [];
+    foreach (['title', 'email', 'mobile', 'organization', 'country', 'presentation_kind', 'website'] as $col) {
+        if ((string) $k[$col] === '' && (string) $f[$col] !== '') {
+            $fill[$col] = $f[$col];
+        }
+    }
+    if ($k['role_id'] === null && $f['role_id'] !== null) {
+        $fill['role_id'] = (int) $f['role_id'];
+    }
+    $wpdb->query('START TRANSACTION');
+    $moved = (int) $wpdb->query($wpdb->prepare('UPDATE ' . cd_table('event_log') . ' SET attendee_id = %s WHERE event_id = %d AND attendee_id = %s', $keep, $eid, $from));
+    $wpdb->query($wpdb->prepare('UPDATE ' . cd_table('rejected_events') . ' SET attendee_id = %s WHERE event_id = %d AND attendee_id = %s', $keep, $eid, $from));
+    $cards = (int) $wpdb->query($wpdb->prepare('UPDATE ' . cd_table('cards') . ' SET attendee_id = %s WHERE event_id = %d AND attendee_id = %s', $keep, $eid, $from));
+    if ($fill) {
+        $fill['search_key'] = cd_search_key(array_merge($k, $fill));
+        $fill['updated_at'] = cd_now();
+        $wpdb->update($att, $fill, ['id' => $keep]);
+    }
+    $wpdb->update($att, ['status' => 'deleted', 'updated_at' => cd_now()], ['id' => $from]);
+    $wpdb->query('COMMIT');
+    cd_bump_config($eid);
+    return ['merged' => true, 'events_moved' => $moved, 'cards_moved' => $cards, 'filled' => array_keys($fill)];
+}
+
+function cd_rest_admin_meal_undo(WP_REST_Request $request) {
+    global $wpdb;
+    $event = cd_event_for_write($request);
+    if (is_wp_error($event)) {
+        return $event;
+    }
+    $eid = (int) $event['id'];
+    $aid = strtolower((string) $request['attendee']);
+    $meals = cd_code_map('meals', $eid);
+    $mc = (string) $request->get_param('meal');
+    if (!isset($meals[$mc])) {
+        return cd_error('cd_no_item', 'این وعده پیدا نشد.', 404);
+    }
+    if (cd_meal_count($eid, $aid, $meals[$mc]) < 1) {
+        return cd_error('cd_not_served', 'این وعده به این نفر تحویل نشده است.', 409);
+    }
+    $now = cd_now();
+    $wpdb->insert(cd_table('event_log'), [
+        'uuid' => wp_generate_uuid4(),
+        'event_id' => $eid,
+        'kind' => 'meal_undo',
+        'attendee_id' => $aid,
+        'meal_id' => $meals[$mc],
+        'payload' => wp_json_encode([
+            'reason' => cd_str($request->get_param('reason') ?? '', 191),
+            'actor' => cd_admin_actor(),
+            'actor_type' => 'admin',
+        ]),
+        'day' => cd_event_day($now),
+        'device_time' => $now,
+        'received_at' => $now,
+    ]);
+    return ['ok' => true, 'seq' => (int) $wpdb->insert_id];
+}
+
+function cd_rest_meal_people(WP_REST_Request $request) {
+    global $wpdb;
+    $event = cd_event_from_request($request);
+    if (is_wp_error($event)) {
+        return $event;
+    }
+    $eid = (int) $event['id'];
+    $meal = null;
+    foreach (cd_event_config($eid)['meals'] as $m) {
+        if ($m['code'] === (string) $request['item']) {
+            $meal = $m;
+        }
+    }
+    if (!$meal) {
+        return cd_error('cd_no_item', 'این وعده پیدا نشد.', 404);
+    }
+    $states = cd_attendee_states($eid);
+    $served_at = [];
+    $rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT attendee_id, MIN(device_time) AS t FROM " . cd_table('event_log') . " WHERE event_id = %d AND meal_id = %d AND kind = 'meal_served' GROUP BY attendee_id",
+        $eid,
+        $meal['id']
+    ), ARRAY_A);
+    foreach ($rows as $r) {
+        $served_at[$r['attendee_id']] = $r['t'];
+    }
+    $people = $wpdb->get_results($wpdb->prepare(
+        'SELECT id, title, first_name, last_name, organization, registration_type_id, role_id FROM ' . cd_table('attendees') . " WHERE event_id = %d AND status = 'active' ORDER BY last_name, first_name",
+        $eid
+    ), ARRAY_A);
+    $out = [];
+    foreach ($people as $p) {
+        $entitled = cd_is_entitled($meal['rules'], $p['registration_type_id'], $p['role_id'] !== null ? (int) $p['role_id'] : null);
+        $count = $states[$p['id']]['meals'][$meal['id']] ?? 0;
+        if (!$entitled && $count < 1) {
+            continue;
+        }
+        $out[] = [
+            'id' => $p['id'],
+            'name' => trim($p['title'] . ' ' . $p['first_name'] . ' ' . $p['last_name']),
+            'organization' => $p['organization'],
+            'entitled' => $entitled,
+            'served' => $count,
+            'served_at' => $count > 0 && isset($served_at[$p['id']]) ? cd_iso($served_at[$p['id']]) : null,
+        ];
+    }
+    return ['meal' => ['code' => $meal['code'], 'name' => $meal['name']], 'people' => $out];
 }

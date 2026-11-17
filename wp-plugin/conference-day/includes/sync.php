@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served'];
+const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served', 'meal_undo'];
 const CD_PULL_LIMIT = 1000;
 const CD_PUSH_LIMIT = 500;
 
@@ -100,17 +100,39 @@ function cd_staff_out(array $s) {
     ];
 }
 
-/** آیا این فرد الان پذیرش‌شده است؟ (آخرین checkin/checkin_undo او checkin است) */
-function cd_is_checked_in($event_id, $attendee_id) {
+/**
+ * آیا این فرد الان پذیرش‌شده است؟ (آخرین checkin/checkin_undo او checkin است)
+ * با $day (حضور روزانه) فقط رخدادهای همان روز حساب می‌شوند.
+ */
+function cd_is_checked_in($event_id, $attendee_id, $day = null) {
     global $wpdb;
-    $last = $wpdb->get_var($wpdb->prepare(
-        "SELECT kind FROM " . cd_table('event_log') . "
+    $rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT kind, day, device_time FROM " . cd_table('event_log') . "
          WHERE event_id = %d AND attendee_id = %s AND kind IN ('checkin','checkin_undo')
-         ORDER BY seq DESC LIMIT 1",
+         ORDER BY seq DESC",
         $event_id,
         $attendee_id
+    ), ARRAY_A);
+    foreach ($rows as $r) {
+        if ($day !== null && cd_log_day($r) !== $day) {
+            continue;
+        }
+        return $r['kind'] === 'checkin';
+    }
+    return false;
+}
+
+/** شمار تحویل فعلی یک وعده به یک نفر (تحویل منهای برگردان)، پیش از seq اگر داده شود. */
+function cd_meal_count($event_id, $attendee_id, $meal_id, $before_seq = null) {
+    global $wpdb;
+    $n = $wpdb->get_var($wpdb->prepare(
+        "SELECT COALESCE(SUM(CASE kind WHEN 'meal_served' THEN 1 WHEN 'meal_undo' THEN -1 ELSE 0 END), 0) FROM " . cd_table('event_log') . "
+         WHERE event_id = %d AND attendee_id = %s AND meal_id = %d AND kind IN ('meal_served','meal_undo')" . ($before_seq !== null ? ' AND seq < %d' : ''),
+        array_values(array_filter([$event_id, $attendee_id, (int) $meal_id, $before_seq], function ($v) {
+            return $v !== null;
+        }))
     ));
-    return $last === 'checkin';
+    return max(0, (int) $n);
 }
 
 /**
@@ -124,6 +146,8 @@ function cd_staff_may(array $device, $kind, $event_id, $attendee_id) {
             return (bool) (int) $device['can_checkin'];
         case 'meal_served':
             return (bool) (int) $device['can_serve'];
+        case 'meal_undo':
+            return (int) $device['can_serve'] || (int) $device['is_admin'];
         case 'checkin_undo':
             if ((int) $device['is_admin']) {
                 return true;
@@ -194,6 +218,10 @@ function cd_push_events(array $event, array $device, array $items) {
     $type_ids = array_map(function ($t) {
         return $t['id'];
     }, $config['registration_types']);
+    $role_ids = array_map(function ($r) {
+        return $r['id'];
+    }, $config['roles']);
+    $daily = !empty(cd_event_settings($event)['daily_attendance']);
     // در رویداد «بدون کارت» ثبت‌نام در محل کارت نمی‌خواهد.
     $cards_required = cd_event_settings($event)['identify_mode'] !== 'none';
 
@@ -219,6 +247,9 @@ function cd_push_events(array $event, array $device, array $items) {
         $attendee_id = isset($e['attendee_id']) && $e['attendee_id'] !== '' ? strtolower($e['attendee_id']) : null;
         $meal_id = isset($e['meal_id']) ? (int) $e['meal_id'] : null;
         $payload = isset($e['payload']) && is_array($e['payload']) ? $e['payload'] : null;
+        $device_time = cd_to_utc_datetime($e['device_time'] ?? null);
+        // روز رویداد: اپ جدید می‌فرستد؛ اپ قدیمی نه، پس از زمان دستگاه به وقت سایت ساخته می‌شود.
+        $day = isset($e['day']) && is_string($e['day']) && cd_valid_date($e['day']) ? $e['day'] : cd_event_day($device_time);
 
         $card = null;
         if ($card_token !== null) {
@@ -245,15 +276,17 @@ function cd_push_events(array $event, array $device, array $items) {
         $deny = null;
         if (!cd_staff_may($device, $kind, $eid, $attendee_id)) {
             $deny = 'not_permitted';
-        } elseif ($kind === 'checkin_undo' && ($attendee_id === null || !cd_is_checked_in($eid, $attendee_id))) {
+        } elseif ($kind === 'checkin_undo' && ($attendee_id === null || !cd_is_checked_in($eid, $attendee_id, $daily ? $day : null))) {
             $deny = 'not_checked_in';
+        } elseif ($kind === 'meal_undo' && ($attendee_id === null || cd_meal_count($eid, $attendee_id, $meal_id) < 1)) {
+            $deny = 'not_served';
         }
         if ($deny !== null) {
             cd_store_rejection($eid, $device, $e, $deny, $attendee_id);
             $rejected[] = ['index' => $i, 'uuid' => $uuid, 'reason' => $deny];
             continue;
         }
-        if ($kind === 'checkin_undo') {
+        if ($kind === 'checkin_undo' || $kind === 'meal_undo') {
             // فاعل لغو همیشه ثبت می‌شود؛ دلیل اگر گوشی فرستاده باشد.
             $payload = [
                 'reason' => cd_str(is_array($payload) ? ($payload['reason'] ?? '') : '', 191),
@@ -265,8 +298,8 @@ function cd_push_events(array $event, array $device, array $items) {
         $wpdb->query('START TRANSACTION');
         $inserted = $wpdb->query($wpdb->prepare(
             'INSERT IGNORE INTO ' . cd_table('event_log') . '
-                (uuid, event_id, device_id, staff_id, kind, card_token, attendee_id, meal_id, payload, flag, device_time, received_at)
-             VALUES (%s, %d, %d, %d, %s, ' . ($card_token === null ? 'NULL' : '%s') . ', ' . ($attendee_id === null ? 'NULL' : '%s') . ', ' . ($meal_id === null ? 'NULL' : '%d') . ', ' . ($payload === null ? 'NULL' : '%s') . ', NULL, %s, %s)',
+                (uuid, event_id, device_id, staff_id, kind, card_token, attendee_id, meal_id, payload, flag, day, device_time, received_at)
+             VALUES (%s, %d, %d, %d, %s, ' . ($card_token === null ? 'NULL' : '%s') . ', ' . ($attendee_id === null ? 'NULL' : '%s') . ', ' . ($meal_id === null ? 'NULL' : '%d') . ', ' . ($payload === null ? 'NULL' : '%s') . ', NULL, %s, %s, %s)',
             array_values(array_filter([
                 $uuid,
                 $eid,
@@ -277,7 +310,8 @@ function cd_push_events(array $event, array $device, array $items) {
                 $attendee_id,
                 $meal_id,
                 $payload === null ? null : wp_json_encode($payload),
-                cd_to_utc_datetime($e['device_time'] ?? null),
+                $day,
+                $device_time,
                 cd_now(),
             ], function ($v) {
                 return $v !== null;
@@ -293,9 +327,9 @@ function cd_push_events(array $event, array $device, array $items) {
 
         $flag = null;
         if ($kind === 'walkin_register') {
-            $flag = cd_apply_walkin($eid, $payload['attendee'], $card, $type_ids);
+            $flag = cd_apply_walkin($eid, $payload['attendee'], $card, $type_ids, $role_ids);
         } elseif ($kind === 'checkin') {
-            $flag = $attendee_id === null ? 'unknown_attendee' : cd_checkin_flag($eid, $attendee_id, $seq);
+            $flag = $attendee_id === null ? 'unknown_attendee' : cd_checkin_flag($eid, $attendee_id, $seq, $daily ? $day : null);
         } elseif ($kind === 'meal_served') {
             $flag = $attendee_id === null ? 'unknown_attendee' : cd_meal_flag($eid, $attendee_id, $meals[$meal_id], $seq);
         }
@@ -339,6 +373,7 @@ function cd_validate_event_item($e, array $meals, $cards_required = true) {
             }
             break;
         case 'meal_served':
+        case 'meal_undo':
             if (!$has_card && !$has_att) {
                 return 'missing_target';
             }
@@ -363,15 +398,22 @@ function cd_validate_event_item($e, array $meals, $cards_required = true) {
 }
 
 /** ساخت شرکت‌کننده‌ی ثبت‌نام در محل و وصل‌کردن کارت رزرو (اگر هست). خروجی: flag یا null. */
-function cd_apply_walkin($event_id, array $a, ?array $card, array $type_ids) {
+function cd_apply_walkin($event_id, array $a, ?array $card, array $type_ids, array $role_ids = []) {
     global $wpdb;
     $type_id = (int) ($a['registration_type_id'] ?? 0);
     if (!in_array($type_id, $type_ids, true)) {
         return 'bad_registration_type';
     }
 
+    // نقش انتخاب‌شده در ثبت‌نام در محل ثبت می‌شود (قبلاً دور ریخته می‌شد). نقش ناشناخته: بی‌نقش و پرچم.
+    $role_flag = null;
+    $role_id = isset($a['role_id']) && $a['role_id'] !== null && $a['role_id'] !== '' ? (int) $a['role_id'] : null;
+    if ($role_id !== null && !in_array($role_id, $role_ids, true)) {
+        $role_id = null;
+        $role_flag = 'bad_role';
+    }
     $a['registration_type_id'] = $type_id;
-    $a['role_id'] = null;
+    $a['role_id'] = $role_id;
     cd_upsert_attendee($event_id, $a, 'walkin', true);
     $attendee_id = strtolower($a['id']);
 
@@ -395,6 +437,9 @@ function cd_apply_walkin($event_id, array $a, ?array $card, array $type_ids) {
         }
     }
 
+    if ($flag === null) {
+        $flag = $role_flag;
+    }
     $mobile = cd_normalize_mobile($a['mobile'] ?? '');
     if ($flag === null && $mobile !== '') {
         $other = $wpdb->get_var($wpdb->prepare(
@@ -410,18 +455,24 @@ function cd_apply_walkin($event_id, array $a, ?array $card, array $type_ids) {
     return $flag;
 }
 
-/** آیا این فرد پیش از این رخداد در وضعیت «پذیرش‌شده» بوده؟ */
-function cd_checkin_flag($event_id, $attendee_id, $seq) {
+/** آیا این فرد پیش از این رخداد در وضعیت «پذیرش‌شده» بوده؟ با $day فقط همان روز (حضور روزانه). */
+function cd_checkin_flag($event_id, $attendee_id, $seq, $day = null) {
     global $wpdb;
-    $last = $wpdb->get_var($wpdb->prepare(
-        "SELECT kind FROM " . cd_table('event_log') . "
+    $rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT kind, day, device_time FROM " . cd_table('event_log') . "
          WHERE event_id = %d AND attendee_id = %s AND kind IN ('checkin','checkin_undo') AND seq < %d
-         ORDER BY seq DESC LIMIT 1",
+         ORDER BY seq DESC",
         $event_id,
         $attendee_id,
         $seq
-    ));
-    return $last === 'checkin' ? 'duplicate_checkin' : null;
+    ), ARRAY_A);
+    foreach ($rows as $r) {
+        if ($day !== null && cd_log_day($r) !== $day) {
+            continue;
+        }
+        return $r['kind'] === 'checkin' ? 'duplicate_checkin' : null;
+    }
+    return null;
 }
 
 function cd_meal_flag($event_id, $attendee_id, array $meal, $seq) {
@@ -437,13 +488,6 @@ function cd_meal_flag($event_id, $attendee_id, array $meal, $seq) {
     if (!cd_is_entitled($meal['rules'], $a['registration_type_id'], $a['role_id'] !== null ? (int) $a['role_id'] : null)) {
         return 'not_entitled';
     }
-    $before = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM " . cd_table('event_log') . "
-         WHERE event_id = %d AND attendee_id = %s AND kind = 'meal_served' AND meal_id = %d AND seq < %d",
-        $event_id,
-        $attendee_id,
-        (int) $meal['id'],
-        $seq
-    ));
-    return (int) $before > 0 ? 'duplicate_meal' : null;
+    // برگردان (meal_undo) تحویل قبلی را خنثی می‌کند.
+    return cd_meal_count($event_id, $attendee_id, (int) $meal['id'], $seq) > 0 ? 'duplicate_meal' : null;
 }

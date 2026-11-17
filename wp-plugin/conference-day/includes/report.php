@@ -14,6 +14,8 @@ const CD_FLAG_LABELS = [
     'bad_registration_type' => 'نوع ثبت‌نام نامعتبر',
     'not_permitted' => 'کار بدون اجازه (سرور نپذیرفت)',
     'not_checked_in' => 'لغو پذیرش برای فرد پذیرش‌نشده (سرور نپذیرفت)',
+    'not_served' => 'برگرداندن وعده‌ای که تحویل نشده بود (سرور نپذیرفت)',
+    'bad_role' => 'نقش نامعتبر در ثبت‌نام در محل (بی‌نقش ثبت شد)',
 ];
 
 const CD_KIND_LABELS = [
@@ -21,16 +23,19 @@ const CD_KIND_LABELS = [
     'checkin_undo' => 'لغو پذیرش',
     'walkin_register' => 'ثبت‌نام در محل',
     'meal_served' => 'تحویل وعده',
+    'meal_undo' => 'برگرداندن وعده',
 ];
 
 /**
  * وضعیت لحظه‌ای هر نفر از روی دفتر رخدادها:
- * [attendee_id => ['checked_in_at' => ?, 'meals' => [meal_id => count]]]
+ * [attendee_id => ['checked_in_at' => ?, 'days' => [day => checked_in_at], 'meals' => [meal_id => count]]]
+ * checked_in_at همان رفتار قبلی است (روزها جدا نیستند)؛ days برای حضور روزانه است.
+ * meal_undo یک تحویل را برمی‌گرداند.
  */
 function cd_attendee_states($event_id) {
     global $wpdb;
     $rows = $wpdb->get_results($wpdb->prepare(
-        "SELECT kind, attendee_id, meal_id, device_time FROM " . cd_table('event_log') . "
+        "SELECT kind, attendee_id, meal_id, day, device_time FROM " . cd_table('event_log') . "
          WHERE event_id = %d AND attendee_id IS NOT NULL ORDER BY seq",
         $event_id
     ), ARRAY_A);
@@ -39,23 +44,53 @@ function cd_attendee_states($event_id) {
     foreach ($rows as $r) {
         $aid = $r['attendee_id'];
         if (!isset($state[$aid])) {
-            $state[$aid] = ['checked_in_at' => null, 'meals' => []];
+            $state[$aid] = ['checked_in_at' => null, 'days' => [], 'meals' => []];
         }
-        if ($r['kind'] === 'checkin' && $state[$aid]['checked_in_at'] === null) {
-            $state[$aid]['checked_in_at'] = $r['device_time'];
-        } elseif ($r['kind'] === 'checkin_undo') {
-            $state[$aid]['checked_in_at'] = null;
+        if ($r['kind'] === 'checkin' || $r['kind'] === 'checkin_undo') {
+            $day = cd_log_day($r);
+            if ($r['kind'] === 'checkin') {
+                if ($state[$aid]['checked_in_at'] === null) {
+                    $state[$aid]['checked_in_at'] = $r['device_time'];
+                }
+                if (empty($state[$aid]['days'][$day])) {
+                    $state[$aid]['days'][$day] = $r['device_time'];
+                }
+            } else {
+                $state[$aid]['checked_in_at'] = null;
+                unset($state[$aid]['days'][$day]);
+            }
         } elseif ($r['kind'] === 'meal_served') {
             $mid = (int) $r['meal_id'];
             $state[$aid]['meals'][$mid] = ($state[$aid]['meals'][$mid] ?? 0) + 1;
+        } elseif ($r['kind'] === 'meal_undo') {
+            $mid = (int) $r['meal_id'];
+            $state[$aid]['meals'][$mid] = max(0, ($state[$aid]['meals'][$mid] ?? 0) - 1);
         }
     }
     return $state;
 }
 
-function cd_build_report(array $event) {
+/** آیا این حالت فرد «پذیرش‌شده» است؟ حضور روزانه: در $day یا (بدون $day) دست‌کم یک روز. */
+function cd_state_checked_in(?array $st, $daily, $day = null) {
+    if ($st === null) {
+        return false;
+    }
+    if (!$daily) {
+        return $st['checked_in_at'] !== null;
+    }
+    return $day !== null ? !empty($st['days'][$day]) : !empty($st['days']);
+}
+
+/**
+ * گزارش رویداد. $day (YYYY-MM-DD) در حضور روزانه یعنی پذیرش همان روز؛ وعده‌ها همیشه کل رویداد.
+ */
+function cd_build_report(array $event, $day = null) {
     global $wpdb;
     $eid = (int) $event['id'];
+    $daily = !empty(cd_event_settings($event)['daily_attendance']);
+    if ($day !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $day)) {
+        $day = null;
+    }
     $config = cd_event_config($eid);
     $attendees = $wpdb->get_results($wpdb->prepare(
         'SELECT id, first_name, last_name, registration_type_id, role_id, source FROM ' . cd_table('attendees') . " WHERE event_id = %d AND status = 'active'",
@@ -71,7 +106,7 @@ function cd_build_report(array $event) {
     }
     foreach ($attendees as $a) {
         $tid = (int) $a['registration_type_id'];
-        $in = isset($states[$a['id']]) && $states[$a['id']]['checked_in_at'] !== null;
+        $in = cd_state_checked_in($states[$a['id']] ?? null, $daily, $day);
         if ($in) {
             $checked_in++;
         }
@@ -85,6 +120,15 @@ function cd_build_report(array $event) {
             }
         }
     }
+
+    // پذیرش به تفکیک روز (برای حضور روزانه و رویداد چندروزه).
+    $by_day = [];
+    foreach ($attendees as $a) {
+        foreach (array_keys($states[$a['id']]['days'] ?? []) as $d) {
+            $by_day[$d] = ($by_day[$d] ?? 0) + 1;
+        }
+    }
+    ksort($by_day);
 
     $meals = [];
     foreach ($config['meals'] as $m) {
@@ -168,6 +212,11 @@ function cd_build_report(array $event) {
             'reserve_cards_free' => $reserve_free,
             'rejected' => $rejected_total,
         ],
+        'daily_attendance' => $daily,
+        'day' => $day,
+        'by_day' => array_map(function ($d, $n) {
+            return ['day' => $d, 'checked_in' => $n];
+        }, array_keys($by_day), array_values($by_day)),
         'by_registration_type' => array_values($by_type),
         'meals' => $meals,
         'flagged' => array_map(function ($f) {

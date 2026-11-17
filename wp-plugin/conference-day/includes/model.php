@@ -167,9 +167,20 @@ function cd_log_out(array $r) {
         'meal_id' => $r['meal_id'] !== null ? (int) $r['meal_id'] : null,
         'payload' => $r['payload'] ? json_decode($r['payload'], true) : null,
         'flag' => $r['flag'],
+        'day' => $r['day'] ?? null,
         'device_time' => cd_iso($r['device_time']),
         'received_at' => cd_iso($r['received_at']),
     ];
+}
+
+/** روز رویداد (تاریخ میلادی به وقت سایت) برای یک زمان UTC. */
+function cd_event_day($utc_datetime) {
+    return get_date_from_gmt($utc_datetime, 'Y-m-d');
+}
+
+/** روز یک ردیف دفتر: ستون day، یا برای داده‌ی قدیمی از زمان دستگاه. */
+function cd_log_day(array $row) {
+    return !empty($row['day']) ? $row['day'] : cd_event_day($row['device_time']);
 }
 
 /** پیکربندی رویداد: نوع‌ها، نقش‌ها، وعده‌ها با قانون‌ها، و برنامه. */
@@ -247,6 +258,8 @@ function cd_default_settings() {
         'qr_redirect_url' => '',
         'contact_fields' => ['name' => true, 'organization' => true, 'email' => false, 'mobile' => false, 'country' => false],
         'show_maker_credit' => true,
+        // حضور روزانه: پذیرش هر روز جدا؛ تکراری فقط در همان روز. خاموش = رفتار قبلی.
+        'daily_attendance' => false,
     ];
 }
 
@@ -282,6 +295,9 @@ function cd_sanitize_settings(array $in, ?array $base = null) {
     }
     if (array_key_exists('show_maker_credit', $in)) {
         $s['show_maker_credit'] = (bool) $in['show_maker_credit'];
+    }
+    if (array_key_exists('daily_attendance', $in)) {
+        $s['daily_attendance'] = (bool) $in['daily_attendance'];
     }
     return $s;
 }

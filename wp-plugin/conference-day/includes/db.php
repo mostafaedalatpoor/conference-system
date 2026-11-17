@@ -179,6 +179,7 @@ function cd_install_tables() {
   meal_id bigint(20) unsigned NULL,
   payload longtext NULL,
   flag varchar(32) NULL,
+  day date NULL,
   device_time datetime NOT NULL,
   received_at datetime NOT NULL,
   PRIMARY KEY  (seq),
