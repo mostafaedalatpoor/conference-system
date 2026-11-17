@@ -247,6 +247,25 @@ add_action('rest_api_init', function () {
         },
     ]);
 
+    // خروجی فهرست حضور با فیلتر (who، type، role، day)؛ اپ مدیریت از آن اکسل، CSV و PDF می‌سازد.
+    register_rest_route(CD_NS, "/admin/events/$code/export", [
+        'methods' => 'GET',
+        'permission_callback' => $admin,
+        'callback' => function (WP_REST_Request $request) {
+            $event = cd_event_from_request($request);
+            if (is_wp_error($event)) {
+                return $event;
+            }
+            return cd_export_rows($event, [
+                'who' => (string) ($request->get_param('who') ?? 'all'),
+                'type' => (string) ($request->get_param('type') ?? ''),
+                'role' => (string) ($request->get_param('role') ?? ''),
+                'day' => $request->get_param('day'),
+                'include_inactive' => (bool) $request->get_param('include_inactive'),
+            ]);
+        },
+    ]);
+
     $aid = '(?P<attendee>[0-9a-fA-F-]{36})';
 
     // تاریخچه‌ی یک نفر (PersonTimeline) برای تب «افراد» اپ مدیریت.

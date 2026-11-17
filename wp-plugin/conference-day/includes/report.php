@@ -242,59 +242,207 @@ function cd_build_report(array $event, $day = null) {
                 'revoked' => (bool) $d['revoked'],
             ];
         }, $devices),
+        'hourly' => cd_report_hourly($eid, $day ?? cd_event_day(cd_now())),
+        'hourly_day' => $day ?? cd_event_day(cd_now()),
+        'staff_activity' => cd_report_staff($eid),
         'generated_at' => gmdate('c'),
     ];
 }
 
-/** خروجی CSV: هر نفر با زمان پذیرش و وعده‌های گرفته‌شده. */
-function cd_export_csv(array $event) {
+/**
+ * ردیف‌های خروجی افراد (فهرست حضور) با فیلتر. پایه‌ی خروجی اپ مدیریت و CSV پیشخوان.
+ * $f: who = all|checked_in|absent|walkin|flagged، type و role (کد)، day (حضور روزانه)، include_inactive.
+ * «اولین پذیرش» و «آخرین پذیرش» از دفتر رخدادهاست (لغوشده‌ها هم حساب‌اند)؛ «پذیرش توسط» نیروی آخرین پذیرش.
+ */
+function cd_export_rows(array $event, array $f = []) {
     global $wpdb;
     $eid = (int) $event['id'];
     $config = cd_event_config($eid);
-    $types = [];
+    $daily = !empty(cd_event_settings($event)['daily_attendance']);
+    $day = isset($f['day']) && is_string($f['day']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['day']) ? $f['day'] : null;
+    $types = $roles = $type_code = $role_code = [];
     foreach ($config['registration_types'] as $t) {
         $types[$t['id']] = $t['name'];
+        $type_code[$t['id']] = $t['code'];
     }
-    $roles = [];
     foreach ($config['roles'] as $r) {
         $roles[$r['id']] = $r['name'];
+        $role_code[$r['id']] = $r['code'];
     }
+    $status_sql = !empty($f['include_inactive']) ? "a.status <> 'deleted'" : "a.status = 'active'";
     $attendees = $wpdb->get_results($wpdb->prepare(
         'SELECT a.*, c.serial FROM ' . cd_table('attendees') . ' a
-         LEFT JOIN ' . cd_table('cards') . ' c ON c.attendee_id = a.id
-         WHERE a.event_id = %d AND a.status = \'active\' ORDER BY a.last_name, a.first_name',
+         LEFT JOIN ' . cd_table('cards') . " c ON c.attendee_id = a.id AND c.revoked_at IS NULL
+         WHERE a.event_id = %d AND $status_sql ORDER BY a.last_name, a.first_name",
         $eid
     ), ARRAY_A);
     $states = cd_attendee_states($eid);
 
+    $checkins = $wpdb->get_results($wpdb->prepare(
+        "SELECT l.attendee_id, l.day, l.device_time, s.name AS staff_name FROM " . cd_table('event_log') . " l
+         LEFT JOIN " . cd_table('staff') . " s ON s.id = l.staff_id
+         WHERE l.event_id = %d AND l.kind = 'checkin' ORDER BY l.seq",
+        $eid
+    ), ARRAY_A);
+    $first = $last = $by = [];
+    foreach ($checkins as $c) {
+        if ($day !== null && $daily && cd_log_day($c) !== $day) {
+            continue;
+        }
+        $aid = $c['attendee_id'];
+        $first[$aid] = $first[$aid] ?? $c['device_time'];
+        $last[$aid] = $c['device_time'];
+        $by[$aid] = $c['staff_name'] ?? 'اپ مدیریت';
+    }
+    $flagged = array_flip(array_merge(
+        $wpdb->get_col($wpdb->prepare('SELECT DISTINCT attendee_id FROM ' . cd_table('event_log') . ' WHERE event_id = %d AND flag IS NOT NULL AND attendee_id IS NOT NULL', $eid)),
+        $wpdb->get_col($wpdb->prepare('SELECT DISTINCT attendee_id FROM ' . cd_table('rejected_events') . ' WHERE event_id = %d AND attendee_id IS NOT NULL', $eid))
+    ));
+
+    $who = isset($f['who']) ? (string) $f['who'] : 'all';
+    $out = [];
+    foreach ($attendees as $a) {
+        $st = $states[$a['id']] ?? null;
+        $in = cd_state_checked_in($st, $daily, $day);
+        if (($who === 'checked_in' && !$in) || ($who === 'absent' && $in) || ($who === 'walkin' && $a['source'] !== 'walkin')
+            || ($who === 'flagged' && !isset($flagged[$a['id']]))) {
+            continue;
+        }
+        $tc = $type_code[(int) $a['registration_type_id']] ?? '';
+        $rc = $a['role_id'] !== null ? ($role_code[(int) $a['role_id']] ?? '') : '';
+        if ((!empty($f['type']) && $f['type'] !== $tc) || (!empty($f['role']) && $f['role'] !== $rc)) {
+            continue;
+        }
+        $meals = [];
+        foreach ($config['meals'] as $m) {
+            $meals[$m['code']] = (int) ($st['meals'][$m['id']] ?? 0);
+        }
+        $out[] = [
+            'id' => $a['id'],
+            'title' => $a['title'],
+            'first_name' => $a['first_name'],
+            'last_name' => $a['last_name'],
+            'mobile' => $a['mobile'],
+            'email' => $a['email'],
+            'organization' => $a['organization'],
+            'country' => $a['country'],
+            'type' => $types[(int) $a['registration_type_id']] ?? '',
+            'role' => $a['role_id'] !== null ? ($roles[(int) $a['role_id']] ?? '') : '',
+            'source' => $a['source'],
+            'status' => $a['status'],
+            'card' => $a['serial'] !== null ? (int) $a['serial'] : null,
+            'checked_in' => $in,
+            'days' => array_keys($st['days'] ?? []),
+            'first_checkin' => isset($first[$a['id']]) ? cd_iso($first[$a['id']]) : null,
+            'last_checkin' => isset($last[$a['id']]) ? cd_iso($last[$a['id']]) : null,
+            'checkin_by' => $by[$a['id']] ?? '',
+            'meals' => $meals,
+            'flagged' => isset($flagged[$a['id']]),
+        ];
+    }
+    return [
+        'meals' => array_map(function ($m) {
+            return ['code' => $m['code'], 'name' => $m['name']];
+        }, $config['meals']),
+        'daily_attendance' => $daily,
+        'rows' => $out,
+    ];
+}
+
+/** سلول CSV/اکسل امن: متنی که با = + - @ (یا تب و CR) شروع شود با ' شروع می‌شود تا فرمول اجرا نشود. */
+function cd_csv_safe($v) {
+    $v = (string) $v;
+    return $v !== '' && strpos("=+-@\t\r", $v[0]) !== false ? "'" . $v : $v;
+}
+
+/** خروجی CSV پیشخوان: هر نفر با اولین و آخرین پذیرش، پذیرش‌کننده و وعده‌ها. */
+function cd_export_csv(array $event) {
+    $data = cd_export_rows($event);
+    $time = function ($iso) {
+        return $iso ? get_date_from_gmt(gmdate('Y-m-d H:i:s', strtotime($iso)), 'Y-m-d H:i') : '';
+    };
     $out = fopen('php://temp', 'r+');
     fwrite($out, "\xEF\xBB\xBF"); // BOM تا اکسل فارسی را درست باز کند
-    $header = ['نام', 'نام خانوادگی', 'موبایل', 'ایمیل', 'سازمان', 'نوع ثبت‌نام', 'نقش', 'منبع', 'شماره کارت', 'زمان پذیرش'];
-    foreach ($config['meals'] as $m) {
+    $header = ['نام', 'نام خانوادگی', 'موبایل', 'ایمیل', 'سازمان', 'نوع ثبت‌نام', 'نقش', 'منبع', 'شماره کارت', 'اولین پذیرش', 'آخرین پذیرش', 'پذیرش توسط'];
+    foreach ($data['meals'] as $m) {
         $header[] = $m['name'];
     }
-    fputcsv($out, $header);
-    foreach ($attendees as $a) {
-        $st = $states[$a['id']] ?? ['checked_in_at' => null, 'meals' => []];
+    fputcsv($out, array_map('cd_csv_safe', $header));
+    foreach ($data['rows'] as $r) {
         $row = [
-            $a['first_name'],
-            $a['last_name'],
-            $a['mobile'],
-            $a['email'],
-            $a['organization'],
-            $types[(int) $a['registration_type_id']] ?? '',
-            $a['role_id'] !== null ? ($roles[(int) $a['role_id']] ?? '') : '',
-            $a['source'] === 'walkin' ? 'ثبت در محل' : 'اکسل',
-            $a['serial'] !== null ? (string) $a['serial'] : '',
-            $st['checked_in_at'] ? get_date_from_gmt($st['checked_in_at'], 'Y-m-d H:i') : '',
+            $r['first_name'],
+            $r['last_name'],
+            $r['mobile'],
+            $r['email'],
+            $r['organization'],
+            $r['type'],
+            $r['role'],
+            $r['source'] === 'walkin' ? 'ثبت در محل' : ($r['source'] === 'manual' ? 'دستی' : 'اکسل'),
+            $r['card'] !== null ? (string) $r['card'] : '',
+            $time($r['first_checkin']),
+            $time($r['last_checkin']),
+            $r['checkin_by'],
         ];
-        foreach ($config['meals'] as $m) {
-            $row[] = (string) ($st['meals'][$m['id']] ?? 0);
+        foreach ($data['meals'] as $m) {
+            $row[] = (string) $r['meals'][$m['code']];
         }
-        fputcsv($out, $row);
+        fputcsv($out, array_map('cd_csv_safe', $row));
     }
     rewind($out);
     $csv = stream_get_contents($out);
     fclose($out);
     return $csv;
+}
+
+
+/** «ورود ساعت‌به‌ساعت»: پذیرش‌های یک روز (وقت سایت) به تفکیک ساعت، از اولین تا آخرین ساعت دارای ورود. */
+function cd_report_hourly($event_id, $day) {
+    global $wpdb;
+    $rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT l.day, l.device_time FROM " . cd_table('event_log') . " l
+         JOIN " . cd_table('attendees') . " a ON a.id = l.attendee_id AND a.status = 'active'
+         WHERE l.event_id = %d AND l.kind = 'checkin'",
+        $event_id
+    ), ARRAY_A);
+    $hours = [];
+    foreach ($rows as $r) {
+        if (cd_log_day($r) !== $day) {
+            continue;
+        }
+        $h = (int) get_date_from_gmt($r['device_time'], 'G');
+        $hours[$h] = ($hours[$h] ?? 0) + 1;
+    }
+    if (!$hours) {
+        return [];
+    }
+    $out = [];
+    for ($h = min(array_keys($hours)); $h <= max(array_keys($hours)); $h++) {
+        $out[] = ['hour' => $h, 'count' => $hours[$h] ?? 0];
+    }
+    return $out;
+}
+
+/** «نیروها»: شمار پذیرش و تحویل هر نیرو و آخرین فعالیت (کار ثبت‌شده یا همگام‌سازی گوشی). */
+function cd_report_staff($event_id) {
+    global $wpdb;
+    $rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT s.id, s.name, s.active,
+                (SELECT COUNT(*) FROM " . cd_table('event_log') . " l WHERE l.staff_id = s.id AND l.kind = 'checkin') AS checkins,
+                (SELECT COUNT(*) FROM " . cd_table('event_log') . " l WHERE l.staff_id = s.id AND l.kind = 'meal_served')
+                 - (SELECT COUNT(*) FROM " . cd_table('event_log') . " l WHERE l.staff_id = s.id AND l.kind = 'meal_undo') AS meals,
+                GREATEST(COALESCE((SELECT MAX(l.received_at) FROM " . cd_table('event_log') . " l WHERE l.staff_id = s.id), '1970-01-01'),
+                         COALESCE((SELECT MAX(d.last_sync_at) FROM " . cd_table('devices') . " d WHERE d.staff_id = s.id), '1970-01-01')) AS last_at
+         FROM " . cd_table('staff') . " s WHERE s.event_id = %d ORDER BY s.id",
+        $event_id
+    ), ARRAY_A);
+    return array_map(function ($r) {
+        return [
+            'id' => (int) $r['id'],
+            'name' => $r['name'],
+            'active' => (bool) $r['active'],
+            'checkins' => (int) $r['checkins'],
+            'meals' => max(0, (int) $r['meals']),
+            'last_at' => $r['last_at'] > '1970-01-01 00:00:00' ? cd_iso($r['last_at']) : null,
+        ];
+    }, $rows);
 }
