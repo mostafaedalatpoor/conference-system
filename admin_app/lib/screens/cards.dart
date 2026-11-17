@@ -210,22 +210,61 @@ class _CardsScreenState extends State<CardsScreen> {
       ];
     });
     if (built == null || !mounted) return;
-    final saved = built.length == 1 ? await _saveBytes(s, built.single.$1, built.single.$2) : await _saveMany(s, built);
+    final bool saved;
+    if (built.length == 1) {
+      saved = await _saveBytes(s, built.single.$1, built.single.$2);
+    } else if (isMobilePlatform) {
+      // روی گوشی انتخاب پوشه به فایل‌نوشتن مستقیم راه نمی‌دهد؛ هر فایل جدا ذخیره می‌شود.
+      var all = true;
+      for (final (name, bytes) in built) {
+        if (!mounted || !await _saveBytes(s, name, bytes)) {
+          all = false;
+          break;
+        }
+      }
+      saved = all;
+    } else {
+      saved = await _saveMany(s, built);
+    }
     if (!saved || draft || !mounted || (s.event?.locked ?? true)) return;
     final name = (_savedPath ?? built.first.$1).split(Platform.pathSeparator).last;
-    final lock = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: Text('فایل ذخیره شد: $name'),
-        content: const Text('به چاپخانه می‌دهید؟ با «بله»، آدرس سایت روی QR قفل می‌شود.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('فعلاً نه')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('بله، قفل کن')),
-        ],
-      ),
-    );
+    final lock = isMobilePlatform ? await _askLockSheet(name) : await _askLockDialog(name);
     if (lock == true) await s.setLocked(true);
   }
+
+  Future<bool?> _askLockDialog(String name) => showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text('فایل ذخیره شد: $name'),
+          content: const Text('به چاپخانه می‌دهید؟ با «بله»، آدرس سایت روی QR قفل می‌شود.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('فعلاً نه')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('بله، قفل کن')),
+          ],
+        ),
+      );
+
+  /// روی گوشی همان پرسش به شکل برگه‌ی پایین صفحه (طراحی 16-CardCheck).
+  Future<bool?> _askLockSheet(String name) => showModalBottomSheet<bool>(
+        context: context,
+        showDragHandle: true,
+        builder: (c) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space5),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text('فایل ذخیره شد: $name', style: Theme.of(c).textTheme.titleMedium),
+              const SizedBox(height: DaftarSize.space2),
+              const Hint('به چاپخانه می‌دهید؟ با «بله»، آدرس سایت روی QR قفل می‌شود.'),
+              const SizedBox(height: DaftarSize.space4),
+              Row(children: [
+                Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(c, false), child: const Text('فعلاً نه'))),
+                const SizedBox(width: DaftarSize.space3),
+                Expanded(flex: 2, child: FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('بله، قفل کن'))),
+              ]),
+            ]),
+          ),
+        ),
+      );
 
   /// PDF فقط کارت‌های رزرو آزاد: سبک، روی موبایل هم شدنی.
   Future<void> _generateReserves(AdminState s) async {
@@ -478,6 +517,8 @@ class _CardsScreenState extends State<CardsScreen> {
     final g = CardPageGeometry(trimW: set.widthMm, trimH: set.heightMm, bleed: set.bleedMm, cropMarks: set.cropMarks);
     final files = _filePerTemplate && set.separate ? _plan(s, draft: false).length : 1;
     final host = Uri.tryParse(s.event?.baseUrl ?? '')?.host ?? '';
+    final noArtwork = set.activeTemplates.every((x) =>
+        (x.frontImage.isEmpty || !File(x.frontImage).existsSync()) && (x.backImage.isEmpty || !File(x.backImage).existsSync()));
 
     Widget onWindows(String label, String reason) => Opacity(
           opacity: .7,
@@ -640,23 +681,27 @@ class _CardsScreenState extends State<CardsScreen> {
             onSelectionChanged: (v) => setState(() => _filePerTemplate = v.first),
           ),
         ),
+      if (mobile && noArtwork)
+        const Padding(
+          padding: EdgeInsets.only(bottom: DaftarSize.space3),
+          child: Notice(
+            tone: NoticeTone.wait,
+            text: 'طرح روی و پشت روی این گوشی انتخاب نشده؛ کارت‌ها روی زمینه‌ی سفید (فقط نام و QR) ساخته می‌شوند. '
+                'برای کارت با طرح، PDF را در اپ ویندوز بسازید. ساخت همه‌ی کارت‌ها روی گوشی ممکن است کمی طول بکشد.',
+          ),
+        ),
       Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        if (mobile)
-          onWindows('PDF همه‌ی کارت‌ها برای چاپخانه',
-              '${faDigits((people.length + free) * 2)} صفحه با طرح؛ برای گوشی سنگین است.')
-        else ...[
-          OutlinedButton(
-            onPressed: s.busy || people.isEmpty || hasErrors ? null : () => _generateCards(s, draft: true),
-            child: const Text('ساخت پیش‌نویس (بدون قفل)'),
-          ),
-          FilledButton.icon(
-            icon: Icon(locked ? Icons.picture_as_pdf_rounded : Icons.lock_rounded),
-            onPressed: s.busy || people.isEmpty || hasErrors ? null : () => _generateCards(s, draft: false),
-            label: Text(hasErrors
-                ? errorLabel
-                : '${locked ? 'ساخت PDF کارت‌ها' : 'ساخت و قفل…'} (${faDigits(people.length)} نفر + ${faDigits(free)} رزرو)'),
-          ),
-        ],
+        OutlinedButton(
+          onPressed: s.busy || people.isEmpty || hasErrors ? null : () => _generateCards(s, draft: true),
+          child: const Text('ساخت پیش‌نویس (بدون قفل)'),
+        ),
+        FilledButton.icon(
+          icon: Icon(locked ? Icons.picture_as_pdf_rounded : Icons.lock_rounded),
+          onPressed: s.busy || people.isEmpty || hasErrors ? null : () => _generateCards(s, draft: false),
+          label: Text(hasErrors
+              ? errorLabel
+              : '${locked ? 'ساخت PDF کارت‌ها' : 'ساخت و قفل…'} (${faDigits(people.length)} نفر + ${faDigits(free)} رزرو)'),
+        ),
         OutlinedButton.icon(
           icon: const Icon(Icons.style_rounded),
           onPressed: s.busy || free == 0 || hasErrors ? null : () => _generateReserves(s),
