@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import 'api.dart';
+import 'card_logic.dart';
 import 'excel_import.dart';
 import 'normalize.dart';
 
@@ -176,56 +177,6 @@ class ReserveCard {
   ReserveCard(this.token, this.serial, this.used);
 }
 
-/// تنظیمات قالب کارت. مختصات به درصد از عرض/ارتفاع کارت.
-class CardTemplate {
-  String frontImage = '';
-  String backImage = '';
-  double widthMm = 85;
-  double heightMm = 55;
-  double nameX = 50;
-  double nameY = 70;
-  double nameSize = 16;
-  String nameColor = '10141A';
-  bool showRole = true;
-  double qrX = 50;
-  double qrY = 45;
-  double qrSizeMm = 30;
-  bool showSerial = true;
-
-  Map<String, dynamic> toJson() => {
-        'front_image': frontImage,
-        'back_image': backImage,
-        'width_mm': widthMm,
-        'height_mm': heightMm,
-        'name_x': nameX,
-        'name_y': nameY,
-        'name_size': nameSize,
-        'name_color': nameColor,
-        'show_role': showRole,
-        'qr_x': qrX,
-        'qr_y': qrY,
-        'qr_size_mm': qrSizeMm,
-        'show_serial': showSerial,
-      };
-
-  void load(Map<String, dynamic> j) {
-    double d(String k, double def) => (j[k] as num?)?.toDouble() ?? def;
-    frontImage = (j['front_image'] ?? '').toString();
-    backImage = (j['back_image'] ?? '').toString();
-    widthMm = d('width_mm', widthMm);
-    heightMm = d('height_mm', heightMm);
-    nameX = d('name_x', nameX);
-    nameY = d('name_y', nameY);
-    nameSize = d('name_size', nameSize);
-    nameColor = (j['name_color'] ?? nameColor).toString();
-    showRole = j['show_role'] != false;
-    qrX = d('qr_x', qrX);
-    qrY = d('qr_y', qrY);
-    qrSizeMm = d('qr_size_mm', qrSizeMm);
-    showSerial = j['show_serial'] != false;
-  }
-}
-
 class ImportResult {
   final List<Person> people;
   final List<String> problems;
@@ -307,7 +258,11 @@ class AdminState extends ChangeNotifier {
   List<ReserveCard> reserveCards = [];
   Map<String, dynamic>? report;
 
-  final CardTemplate template = CardTemplate();
+  /// قالب‌های کارت رویداد (نسخه‌ی ۲)؛ مسیر تصویرهای طرح فقط روی همین رایانه.
+  final CardTemplateSet cards = CardTemplateSet();
+
+  /// با هر بار خواندن قالب‌ها از سرور یا فایل بالا می‌رود تا فیلدهای صفحه‌ی کارت تازه شوند.
+  int cardsRev = 0;
   EventSettings settings = EventSettings();
   Map<String, dynamic> _settingsByEvent = {};
 
@@ -333,7 +288,8 @@ class AdminState extends ChangeNotifier {
         server = (j['server'] ?? server).toString();
         apiKey = (j['api_key'] ?? '').toString();
         eventCode = j['event_code']?.toString();
-        template.load(((j['template'] as Map?) ?? {}).cast<String, dynamic>());
+        cards.load(((j['template'] as Map?) ?? {}).cast<String, dynamic>());
+        cardsRev++;
         final staffByEvent = ((j['staff'] as Map?) ?? {}).cast<String, dynamic>();
         if (eventCode != null && staffByEvent[eventCode] is List) {
           staff = (staffByEvent[eventCode] as List).map((e) => StaffDef.fromJson((e as Map).cast<String, dynamic>())).toList();
@@ -359,7 +315,7 @@ class AdminState extends ChangeNotifier {
       'server': server,
       'api_key': apiKey,
       'event_code': eventCode,
-      'template': template.toJson(),
+      'template': cards.toJson(images: true),
       'staff': _staffByEvent,
       'settings': _settingsByEvent,
     }));
@@ -517,11 +473,14 @@ class AdminState extends ChangeNotifier {
     for (final s in saved) {
       if (!staff.any((x) => x.name == s.name)) staff.add(s);
     }
-    // قالب کارت از سرور، اگر آنجا ذخیره شده؛ مسیر تصویرهای طرح همان محلی می‌ماند.
+    // قالب‌های کارت از سرور، اگر آنجا ذخیره شده؛ مسیر تصویرهای طرح همان محلی می‌ماند.
+    // قالب تکی قدیمی (بدون templates) قالب «پیش‌فرض» می‌شود.
     final serverTemplate = s['card_template'];
     if (serverTemplate is Map) {
-      final local = template.toJson();
-      template.load({...local, ...serverTemplate.cast<String, dynamic>()});
+      final images = cards.images();
+      cards.load(serverTemplate.cast<String, dynamic>());
+      cards.restoreImages(images);
+      cardsRev++;
     }
     // تنظیم‌های رویداد: اگر سرور دارد از سرور، وگرنه نسخه‌ی محلی همین رویداد.
     settings = EventSettings();
@@ -688,14 +647,20 @@ class AdminState extends ChangeNotifier {
         await _loadEvent(eventCode!);
       });
 
-  /// قالب کارت روی سرور تا اپ ویندوز و موبایل یک قالب ببینند (مسیر تصویرهای طرح محلی می‌ماند).
+  /// قالب‌های کارت روی سرور تا اپ ویندوز و موبایل یک قالب ببینند (مسیر تصویرهای طرح محلی می‌ماند).
   Future<void> saveTemplate() => run('قالب کارت ذخیره شد.', () async {
         await save();
-        final j = template.toJson()
-          ..remove('front_image')
-          ..remove('back_image');
-        await api.post('/admin/events/$eventCode/card-template', {'template': j});
+        final r = await api.post('/admin/events/$eventCode/card-template', {'template': cards.toJson()});
+        // افزونه‌ی قدیمی فقط قالب تکی را نگه می‌دارد؛ بی‌صدا گم شدن قالب‌های جدا را خبر بده.
+        final saved = r is Map ? r['template'] : null;
+        if (cards.templates.length > 1 && saved is Map && saved['templates'] == null) {
+          throw ApiException('old_plugin',
+              'افزونه‌ی وردپرس قدیمی است و فقط قالب پیش‌فرض را نگه داشت؛ برای قالب‌های جدا افزونه را به‌روز کنید.', 200);
+        }
       });
+
+  /// قالب کارت یک نفر (قاعده‌ی نقش، بعد نوع، وگرنه پیش‌فرض).
+  CardTemplate templateOf(Person p) => templateFor(cards, typeCode: p.typeCode, roleCode: p.roleCode);
 
   /// باطل‌کردن دسترسی یک دستگاه نیرو.
   Future<void> revokeDevice(int id) => run('دستگاه باطل شد.', () async {
