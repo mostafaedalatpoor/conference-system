@@ -22,6 +22,10 @@ class PdfFonts {
   }
 }
 
+/// کتابخانه‌ی pdf نیم‌فاصله (U+200C) را با یک علامت دیدنی می‌کشد («صفحه‌ی» با علامت اضافه).
+/// جایش فاصله‌ی مویی (U+200A) می‌آید: حرف قبل همان شکل پایانی را می‌گیرد و فاصله تقریباً دیده نمی‌شود.
+String pdfText(String s) => s.replaceAll('\u200C', '\u200A');
+
 /// رنگ متن کارت چاپی (ink سامانه‌ی طراحی).
 const _cardInk = PdfColor.fromInt(0xFF10141A);
 
@@ -107,8 +111,7 @@ Future<Uint8List> buildCardsPdf({
         opacity: 0.35,
         child: pw.Watermark(
           angle: 0.5,
-          // نیم‌فاصله در PDF درست نقش نمی‌بندد، پس اینجا فاصله‌ی معمولی.
-          child: pw.Text('پیش نویس · برای چاپ نیست',
+          child: pw.Text(pdfText('پیش‌نویس · برای چاپ نیست'),
               textDirection: pw.TextDirection.rtl,
               style: pw.TextStyle(font: fonts.extraBold, color: PdfColors.red)),
         ),
@@ -147,13 +150,13 @@ Future<Uint8List> buildCardsPdf({
           t.nameY,
           t.nameSize * 2.6 + (subtitle != null ? t.nameSize : 0),
           pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
-            pw.Text(name,
+            pw.Text(pdfText(name),
                 textDirection: pw.TextDirection.rtl,
                 textAlign: pw.TextAlign.center,
                 maxLines: 2,
                 style: pw.TextStyle(font: fonts.extraBold, fontSize: t.nameSize, color: color)),
             if (subtitle != null && subtitle.isNotEmpty)
-              pw.Text(subtitle,
+              pw.Text(pdfText(subtitle),
                   textDirection: pw.TextDirection.rtl,
                   textAlign: pw.TextAlign.center,
                   style: pw.TextStyle(font: fonts.semiBold, fontSize: t.nameSize * 9 / 16, color: color)),
@@ -201,7 +204,7 @@ Future<Uint8List> buildCardsPdf({
         top: cy + size / 2 + quiet + (t.showSerial ? 10 : 0),
         child: pw.SizedBox(
           width: size * 2,
-          child: pw.Text(hint,
+          child: pw.Text(pdfText(hint),
               textDirection: pw.TextDirection.rtl,
               textAlign: pw.TextAlign.center,
               style: pw.TextStyle(font: fonts.regular, fontSize: 7, color: _cardInk)),
@@ -238,7 +241,7 @@ Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts f
 
   pw.Widget cell(String text, {bool bold = false, pw.TextAlign align = pw.TextAlign.right}) => pw.Padding(
         padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-        child: pw.Text(text,
+        child: pw.Text(pdfText(text),
             textDirection: rtl,
             textAlign: align,
             style: pw.TextStyle(font: bold ? fonts.bold : fonts.regular, fontSize: 9)),
@@ -263,7 +266,7 @@ Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts f
 
   pw.Widget title(String text) => pw.Padding(
         padding: const pw.EdgeInsets.only(bottom: 8),
-        child: pw.Text(text, textDirection: rtl, style: pw.TextStyle(font: fonts.bold, fontSize: 14)),
+        child: pw.Text(pdfText(text), textDirection: rtl, style: pw.TextStyle(font: fonts.bold, fontSize: 14)),
       );
 
   final theme = pw.PageTheme(pageFormat: PdfPageFormat.a4, margin: const pw.EdgeInsets.all(28), textDirection: rtl);
@@ -272,7 +275,7 @@ Future<Uint8List> buildPaperListsPdf({required AdminState s, required PdfFonts f
   pw.Widget footer(pw.Context c) => pw.Padding(
         padding: const pw.EdgeInsets.only(top: 8),
         child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-          pw.Text('صفحه‌ی ${faDigits(c.pageNumber)} از ${faDigits(c.pagesCount)}',
+          pw.Text(pdfText('صفحه‌ی ${faDigits(c.pageNumber)} از ${faDigits(c.pagesCount)}'),
               textDirection: rtl, style: pw.TextStyle(font: fonts.regular, fontSize: 8, color: PdfColors.grey700)),
           pw.Text('$productName · $makerWebsite',
               textDirection: rtl, style: pw.TextStyle(font: fonts.regular, fontSize: 8, color: PdfColors.grey700)),

@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../card_logic.dart';
 import '../cards_pdf.dart';
@@ -58,9 +59,20 @@ class _CardsScreenState extends State<CardsScreen> {
 
   Future<void> _pickImage(AdminState s, CardTemplate t, bool front) async {
     final r = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['png', 'jpg', 'jpeg']);
-    final path = r?.files.single.path;
+    var path = r?.files.single.path;
     if (path == null) return;
-    setState(() => front ? t.frontImage = path : t.backImage = path);
+    if (isMobilePlatform) {
+      // انتخاب‌گر اندروید فایل را در حافظه‌ی موقت می‌گذارد که سیستم پاکش می‌کند؛ یک نسخه پیش برنامه می‌ماند.
+      // نام تازه با زمان، تا پیش‌نمایش و بررسی پیش از چاپ تصویر کهنه را از حافظه نخوانند.
+      final dir = Directory('${(await getApplicationSupportDirectory()).path}${Platform.pathSeparator}card_images');
+      await dir.create(recursive: true);
+      final ext = path.split('.').last.toLowerCase();
+      final copy = '${dir.path}${Platform.pathSeparator}${t.id}-${front ? 'front' : 'back'}-${DateTime.now().millisecondsSinceEpoch}.$ext';
+      await File(path).copy(copy);
+      path = copy;
+    }
+    final picked = path;
+    setState(() => front ? t.frontImage = picked : t.backImage = picked);
     await s.save();
   }
 
@@ -520,17 +532,6 @@ class _CardsScreenState extends State<CardsScreen> {
     final noArtwork = set.activeTemplates.every((x) =>
         (x.frontImage.isEmpty || !File(x.frontImage).existsSync()) && (x.backImage.isEmpty || !File(x.backImage).existsSync()));
 
-    Widget onWindows(String label, String reason) => Opacity(
-          opacity: .7,
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            OutlinedButton.icon(onPressed: null, icon: const Icon(Icons.desktop_windows_rounded), label: Text(label)),
-            const SizedBox(width: DaftarSize.space2),
-            const DaftarTag('روی ویندوز', kind: TagKind.outline),
-            const SizedBox(width: DaftarSize.space2),
-            Flexible(child: Hint(reason)),
-          ]),
-        );
-
     final errorLabel = '${faDigits(errorCount)} فیلد خطا دارد';
     final bleedHint = set.bleedMm > 0
         ? 'طرح‌ها PNG یا JPG، با حاشیه‌ی اضافه‌ی ${fmtMm(set.bleedMm)} میلی‌متر از هر طرف و ۳۰۰ DPI باشند '
@@ -593,21 +594,18 @@ class _CardsScreenState extends State<CardsScreen> {
       ),
       ..._templateSection(s, t),
       SectionTitle(set.separate ? 'چیدمان قالب «${t.name}»' : 'قالب کارت'),
-      if (mobile)
-        onWindows('انتخاب طرح روی و پشت', 'تصویر طرح و ویرایش کامل با موس روی اپ ویندوز است.')
-      else
-        Wrap(spacing: 12, runSpacing: 8, children: [
-          OutlinedButton.icon(
-            icon: const Icon(Icons.image_rounded),
-            label: Text(t.frontImage.isEmpty ? 'طرح روی کارت' : 'روی: ${t.frontImage.split(Platform.pathSeparator).last}'),
-            onPressed: () => _pickImage(s, t, true),
-          ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.image_rounded),
-            label: Text(t.backImage.isEmpty ? 'طرح پشت کارت' : 'پشت: ${t.backImage.split(Platform.pathSeparator).last}'),
-            onPressed: () => _pickImage(s, t, false),
-          ),
-        ]),
+      Wrap(spacing: 12, runSpacing: 8, children: [
+        OutlinedButton.icon(
+          icon: const Icon(Icons.image_rounded),
+          label: Text(t.frontImage.isEmpty ? 'طرح روی کارت' : 'روی: ${isMobilePlatform ? 'انتخاب شد' : t.frontImage.split(Platform.pathSeparator).last}'),
+          onPressed: () => _pickImage(s, t, true),
+        ),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.image_rounded),
+          label: Text(t.backImage.isEmpty ? 'طرح پشت کارت' : 'پشت: ${isMobilePlatform ? 'انتخاب شد' : t.backImage.split(Platform.pathSeparator).last}'),
+          onPressed: () => _pickImage(s, t, false),
+        ),
+      ]),
       const SizedBox(height: 8),
       Hint(bleedHint),
       const SizedBox(height: 12),
@@ -687,7 +685,7 @@ class _CardsScreenState extends State<CardsScreen> {
           child: Notice(
             tone: NoticeTone.wait,
             text: 'طرح روی و پشت روی این گوشی انتخاب نشده؛ کارت‌ها روی زمینه‌ی سفید (فقط نام و QR) ساخته می‌شوند. '
-                'برای کارت با طرح، PDF را در اپ ویندوز بسازید. ساخت همه‌ی کارت‌ها روی گوشی ممکن است کمی طول بکشد.',
+                'طرح را از «قالب کارت» انتخاب کنید (تصویر طرح هر دستگاه جداست). ساخت همه‌ی کارت‌ها روی گوشی ممکن است کمی طول بکشد.',
           ),
         ),
       Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
