@@ -174,7 +174,7 @@ class _StatusScreenState extends State<StatusScreen> {
                   Expanded(
                     child: Text(
                       [
-                        '${r['reason'] ?? 'دلیل نامشخص'}',
+                        rejectReasonLabel('${r['reason'] ?? ''}'),
                         if (r['at'] != null && DateTime.tryParse('${r['at']}') != null)
                           'ساعت ${hm(DateTime.parse('${r['at']}'))}',
                       ].join(' · '),
@@ -202,3 +202,13 @@ class _StatusScreenState extends State<StatusScreen> {
     );
   }
 }
+
+/// متن دلیل ردشدن یک کار توسط سرور، برای نیرو (طراحی ۱۹-وضعیت).
+String rejectReasonLabel(String reason) => switch (reason) {
+      'not_permitted' => 'این حساب اجازه‌ی این کار را ندارد. با مدیر صحبت کنید.',
+      'not_checked_in' => 'لغو پذیرش برای کسی که پذیرش نشده بود. لازم نیست کاری بکنید.',
+      'event_archived' => 'رویداد بایگانی شده و کار تازه نمی‌پذیرد. با مدیر صحبت کنید.',
+      'unknown_card' => 'کارت در این رویداد شناخته نشد.',
+      '' => 'دلیل نامشخص',
+      _ => reason,
+    };

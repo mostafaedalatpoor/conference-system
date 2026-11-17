@@ -140,7 +140,9 @@ class _ReportScreenState extends State<ReportScreen> {
         for (final f in r['flagged'] as List)
           ListTile(
             dense: true,
-            leading: Icon(Icons.warning_rounded, color: x.wait),
+            leading: f['rejected'] == true
+                ? Icon(Icons.gpp_bad_rounded, color: x.stop)
+                : Icon(Icons.warning_rounded, color: x.wait),
             title: Text('${f['flag_label']} — ${(f['name'] as String?)?.isNotEmpty == true ? f['name'] : 'بدون نام'}'),
             subtitle: Text('ساعت ${_time(f['device_time'] as String?)}${f['staff'] != null ? '، ${f['staff']}' : ''}'),
           ),

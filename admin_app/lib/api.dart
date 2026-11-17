@@ -43,6 +43,13 @@ class AdminApi {
     return _decode(r);
   }
 
+  Future<dynamic> delete(String path, [Object? body]) async {
+    final r = await http
+        .delete(_uri(path), headers: _headers, body: body == null ? null : jsonEncode(body))
+        .timeout(const Duration(seconds: 90));
+    return _decode(r);
+  }
+
   dynamic _decode(http.Response r) {
     dynamic j;
     try {

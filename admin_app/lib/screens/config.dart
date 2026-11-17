@@ -2,7 +2,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../excel_import.dart';
+import '../api.dart';
 import '../main.dart';
+import '../normalize.dart';
 import '../theme/daftar.dart';
 import '../theme/widgets.dart';
 import '../state.dart';
@@ -78,9 +80,9 @@ class _ConfigScreenState extends State<ConfigScreen> {
         ),
       _EventSettingsEditor(s: s),
       const SectionTitle('انواع ثبت‌نام'),
-      _CodeNameList(items: s.types, onChanged: s.notify, addLabel: 'نوع جدید'),
+      _CodeNameList(items: s.types, onChanged: s.notify, addLabel: 'نوع جدید', kind: 'registration-types'),
       const SectionTitle('نقش‌ها'),
-      _CodeNameList(items: s.roles, onChanged: s.notify, addLabel: 'نقش جدید'),
+      _CodeNameList(items: s.roles, onChanged: s.notify, addLabel: 'نقش جدید', kind: 'roles'),
       const SectionTitle('وعده‌های پذیرایی و اینکه به چه کسانی می‌رسد'),
       for (final m in s.meals) _MealEditor(key: ObjectKey(m), meal: m),
       Align(
@@ -124,14 +126,84 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 }
 
+/// حذف نوع یا نقشی که روی سرور است. اگر افرادی دارد، سرور 409 می‌دهد و مدیر مقصد انتقال را انتخاب می‌کند.
+Future<void> _deleteServerItem(BuildContext context, AdminState s, String kind, CodeName it) async {
+  final isRole = kind == 'roles';
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: Text('حذف «${it.name}»؟'),
+      content: Text(isRole ? 'این نقش از رویداد حذف می‌شود.' : 'این نوع از رویداد حذف می‌شود.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
+        FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('حذف')),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  try {
+    await s.run('«${it.name}» حذف شد.', () async {
+      try {
+        await s.deleteConfigItem(kind, it.code);
+      } on ApiException catch (e) {
+        if (e.code != 'cd_in_use' || !context.mounted) rethrow;
+        final d = ((e.data as Map?) ?? {}).cast<String, dynamic>();
+        final n = ((d['attendees'] as int?) ?? 0) + ((d['deleted_attendees'] as int?) ?? 0);
+        final others = (isRole ? s.roles : s.types).where((x) => x.code != it.code && (isRole ? s.serverRoleCodes : s.serverTypeCodes).contains(x.code)).toList();
+        String? target = others.isEmpty ? null : others.first.code;
+        final move = await showDialog<String>(
+          context: context,
+          builder: (c) => StatefulBuilder(
+            builder: (c, setState) => AlertDialog(
+              title: Text('«${it.name}» ${faDigits(n)} نفر دارد'),
+              content: SizedBox(
+                width: 420,
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  const Text('به‌جای حذف، این افراد را به مورد دیگری منتقل کنید.'),
+                  const SizedBox(height: DaftarSize.space3),
+                  if (others.isNotEmpty)
+                    DropdownButtonFormField<String>(
+                      value: target,
+                      decoration: const InputDecoration(labelText: 'انتقال به'),
+                      items: [for (final o in others) DropdownMenuItem(value: o.code, child: Text(o.name))],
+                      onChanged: (v) => setState(() => target = v),
+                    )
+                  else if (!isRole)
+                    const Notice(tone: NoticeTone.wait, text: 'نوع دیگری روی سرور نیست؛ اول یک نوع دیگر بسازید و ذخیره کنید.'),
+                ]),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(c), child: const Text('نه، برگرد')),
+                if (isRole)
+                  TextButton(onPressed: () => Navigator.pop(c, ''), child: const Text('بی‌نقش کن و حذف')),
+                if (target != null)
+                  FilledButton(onPressed: () => Navigator.pop(c, target), child: const Text('انتقال و حذف')),
+              ],
+            ),
+          ),
+        );
+        if (move == null) {
+          throw ApiException('cancel', 'حذف انجام نشد.', 0);
+        }
+        await s.deleteConfigItem(kind, it.code, moveTo: move.isEmpty ? null : move, clear: move.isEmpty);
+      }
+    });
+  } catch (_) {}
+}
+
 class _CodeNameList extends StatelessWidget {
   final List<CodeName> items;
   final VoidCallback onChanged;
   final String addLabel;
-  const _CodeNameList({required this.items, required this.onChanged, required this.addLabel});
+
+  /// مسیر API حذف (registration-types یا roles).
+  final String kind;
+  const _CodeNameList({required this.items, required this.onChanged, required this.addLabel, required this.kind});
 
   @override
   Widget build(BuildContext context) {
+    final s = StateScope.of(context);
+    final onServer = kind == 'roles' ? s.serverRoleCodes : s.serverTypeCodes;
     return Column(children: [
       for (final it in items)
         Padding(
@@ -140,8 +212,10 @@ class _CodeNameList extends StatelessWidget {
           child: Row(children: [
             SizedBox(
               width: 180,
+              // کد موردی که روی سرور است عوض نمی‌شود (تغییرش مورد تازه می‌ساخت).
               child: TextFormField(
                 initialValue: it.code,
+                enabled: !onServer.contains(it.code),
                 decoration: const InputDecoration(labelText: 'کد لاتین', isDense: true),
                 textDirection: TextDirection.ltr,
                 onChanged: (v) => it.code = v.trim(),
@@ -157,11 +231,17 @@ class _CodeNameList extends StatelessWidget {
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline_rounded),
-              tooltip: 'حذف از این فرم (روی سرور حذف نمی‌شود)',
-              onPressed: () {
-                items.remove(it);
-                onChanged();
-              },
+              tooltip: onServer.contains(it.code) ? 'حذف از رویداد' : 'برداشتن از فرم',
+              onPressed: s.busy
+                  ? null
+                  : () {
+                      if (onServer.contains(it.code)) {
+                        _deleteServerItem(context, s, kind, it);
+                      } else {
+                        items.remove(it);
+                        onChanged();
+                      }
+                    },
             ),
           ]),
         ),
@@ -198,6 +278,7 @@ class _MealEditor extends StatelessWidget {
               width: 140,
               child: TextFormField(
                 initialValue: meal.code,
+                enabled: !s.serverMealCodes.contains(meal.code),
                 decoration: const InputDecoration(labelText: 'کد', isDense: true),
                 textDirection: TextDirection.ltr,
                 onChanged: (v) => meal.code = v.trim(),
@@ -224,14 +305,36 @@ class _MealEditor extends StatelessWidget {
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline_rounded),
-              onPressed: () {
-                s.meals.remove(meal);
-                s.notify();
-              },
+              tooltip: s.serverMealCodes.contains(meal.code) ? 'حذف از رویداد' : 'برداشتن از فرم',
+              onPressed: s.busy
+                  ? null
+                  : () {
+                      if (s.serverMealCodes.contains(meal.code)) {
+                        _deleteMeal(context, s, meal);
+                      } else {
+                        s.meals.remove(meal);
+                        s.notify();
+                      }
+                    },
             ),
             ];
             return Wrap(spacing: 0, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: children);
           }),
+          if (!meal.active)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Notice(
+                tone: NoticeTone.neutral,
+                text: 'غیرفعال: در گوشی نیروها دیده نمی‌شود؛ تحویل‌های قبلی در گزارش می‌ماند.',
+                action: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(
+                    onPressed: s.busy ? null : () => s.setMealActive(meal.code, true),
+                    child: const Text('فعال کردن دوباره'),
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(height: 8),
           Wrap(spacing: 6, runSpacing: 6, children: [
             const Text('حق دارند:  '),
@@ -259,6 +362,46 @@ class _MealEditor extends StatelessWidget {
       ),
     );
   }
+}
+
+/// وعده‌ای که تحویل ثبت‌شده دارد حذف نمی‌شود؛ به‌جایش غیرفعال می‌شود.
+Future<void> _deleteMeal(BuildContext context, AdminState s, MealDef meal) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: Text('حذف «${meal.name}»؟'),
+      content: const Text('این وعده و قاعده‌ی «حق دارند» آن حذف می‌شود.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
+        FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('حذف')),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  int? served;
+  await s.run('«${meal.name}» حذف شد.', () async {
+    try {
+      await s.deleteConfigItem('meals', meal.code);
+    } on ApiException catch (e) {
+      if (e.code != 'cd_in_use') rethrow;
+      served = ((e.data as Map?)?['served'] as int?) ?? 0;
+    }
+  });
+  if (served == null || !context.mounted) return;
+  s.message = null;
+  s.notify();
+  final deactivate = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: Text('«${meal.name}» ${faDigits(served!)} تحویل ثبت‌شده دارد'),
+      content: const Text('به‌جای حذف، غیرفعالش کنید: در گوشی نیروها دیده نمی‌شود و تحویل‌های قبلی در گزارش می‌ماند.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
+        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('غیرفعال کن')),
+      ],
+    ),
+  );
+  if (deactivate == true) await s.setMealActive(meal.code, false);
 }
 
 const sessionKinds = {

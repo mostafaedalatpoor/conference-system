@@ -22,7 +22,10 @@ class EventInfo {
   final String? endDate;
   final String baseUrl;
   final bool locked;
-  EventInfo(this.code, this.name, this.startDate, this.endDate, this.baseUrl, this.locked);
+
+  /// بایگانی‌شده: از فهرست کنار رفته و فقط خواندنی است.
+  final bool archived;
+  EventInfo(this.code, this.name, this.startDate, this.endDate, this.baseUrl, this.locked, [this.archived = false]);
 
   factory EventInfo.fromJson(Map<String, dynamic> j) => EventInfo(
         j['code'].toString(),
@@ -31,6 +34,7 @@ class EventInfo {
         j['end_date']?.toString(),
         (j['base_url'] ?? '').toString(),
         j['base_url_locked'] == true,
+        j['archived'] == true,
       );
 }
 
@@ -48,10 +52,19 @@ class MealDef {
   String day;
   Set<String> types;
   Set<String> roles;
-  MealDef(this.code, this.name, this.day, this.types, this.roles);
 
-  Map<String, dynamic> toJson() =>
-      {'code': code, 'name': name, 'day': day, 'registration_types': types.toList(), 'roles': roles.toList()};
+  /// وعده‌ی غیرفعال در گوشی نیروها دیده نمی‌شود ولی تحویل‌های قبلی‌اش در گزارش می‌ماند.
+  bool active;
+  MealDef(this.code, this.name, this.day, this.types, this.roles, {this.active = true});
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'name': name,
+        'day': day,
+        'registration_types': types.toList(),
+        'roles': roles.toList(),
+        'active': active,
+      };
 
   factory MealDef.fromJson(Map<String, dynamic> j) => MealDef(
         j['code'].toString(),
@@ -84,24 +97,85 @@ class SessionDef {
       );
 }
 
+/// یک نیرو، همان‌طور که روی سرور است. اجازه‌ها و فعال‌بودن فقط از سرور خوانده می‌شود، نه فایل محلی.
 class StaffDef {
+  /// شناسه‌ی سرور؛ null یعنی نیروی تازه‌ای که هنوز ذخیره نشده.
+  int? id;
   String name;
   String newPin; // فقط تا ارسال بعدی در حافظه می‌ماند و ذخیره نمی‌شود
   bool canCheckin;
   bool canServe;
   bool isAdmin;
   bool hasPin;
-  StaffDef(this.name, {this.newPin = '', this.canCheckin = true, this.canServe = true, this.isAdmin = false, this.hasPin = false});
+  bool active;
 
-  Map<String, dynamic> toJson() =>
-      {'name': name, 'can_checkin': canCheckin, 'can_serve': canServe, 'is_admin': isAdmin, 'has_pin': hasPin};
+  /// زمان و فاعل آخرین ذخیره روی سرور؛ updatedAt برای تشخیص تعارض فرستاده می‌شود.
+  String? updatedAt;
+  String updatedBy;
+  StaffDef(
+    this.name, {
+    this.id,
+    this.newPin = '',
+    this.canCheckin = true,
+    this.canServe = true,
+    this.isAdmin = false,
+    this.hasPin = false,
+    this.active = true,
+    this.updatedAt,
+    this.updatedBy = '',
+  });
+
+  /// ردیف ارسال به سرور (ذخیره‌ی جزئی).
+  Map<String, dynamic> toUpload() => {
+        if (id != null) 'id': id,
+        'name': name,
+        if (newPin.isNotEmpty) 'pin': latinDigits(newPin),
+        'can_checkin': canCheckin,
+        'can_serve': canServe,
+        'is_admin': isAdmin,
+        'active': active,
+        if (id != null) 'updated_at': updatedAt,
+      };
 
   factory StaffDef.fromJson(Map<String, dynamic> j) => StaffDef(
         j['name'].toString(),
+        id: j['id'] as int?,
         canCheckin: j['can_checkin'] != false,
         canServe: j['can_serve'] != false,
         isAdmin: j['is_admin'] == true,
         hasPin: j['has_pin'] == true,
+        active: j['active'] != false,
+        updatedAt: j['updated_at']?.toString(),
+        updatedBy: (j['updated_by'] ?? '').toString(),
+      );
+}
+
+/// آیا فرد با این تاریخچه (خروجی timeline سرور) الان پذیرش‌شده است؟ آخرین پذیرش یا لغو، به ترتیب seq.
+bool isCheckedInFromTimeline(List<Map<String, dynamic>> events) {
+  final l = [...events]..sort((a, b) => ((a['seq'] as int?) ?? 0).compareTo((b['seq'] as int?) ?? 0));
+  var inNow = false;
+  for (final e in l) {
+    if (e['kind'] == 'checkin') inNow = true;
+    if (e['kind'] == 'checkin_undo') inNow = false;
+  }
+  return inNow;
+}
+
+/// یک فایل اکسلِ واردشده («ورودی‌های قبلی»).
+class ImportBatch {
+  final String id;
+  final String fileName;
+  final String? createdAt;
+  final int people;
+  final int withActivity;
+  ImportBatch(this.id, this.fileName, this.createdAt, this.people, this.withActivity);
+
+  factory ImportBatch.fromJson(Map<String, dynamic> j) => ImportBatch(
+        j['id'].toString(),
+        (j['file_name'] ?? '').toString(),
+        j['created_at']?.toString(),
+        (j['people'] as int?) ?? 0,
+        (j['with_activity'] as int?) ?? 0,
       );
 }
 
@@ -128,6 +202,10 @@ class Person {
   /// لینک شخصی (صفحه‌ی شخصی) برای دکمه‌ی صفحه‌ی عمومی.
   String website;
 
+  /// active یا inactive (حذف‌شده‌ها از سرور نمی‌آیند).
+  String status;
+  String importBatch;
+
   Person({
     required this.id,
     this.title = '',
@@ -145,7 +223,11 @@ class Person {
     this.serial,
     this.shareContact,
     this.website = '',
+    this.status = 'active',
+    this.importBatch = '',
   });
+
+  bool get isActive => status == 'active';
 
   String get fullName => '$firstName $lastName'.trim();
   String get displayName => '$title $firstName $lastName'.trim();
@@ -295,7 +377,14 @@ class AdminState extends ChangeNotifier {
   String? eventCode;
 
   List<EventInfo> events = [];
+  List<EventInfo> archivedEvents = [];
   EventInfo? event;
+
+  /// کدهایی که روی سرور هستند؛ حذف این‌ها از راه API است، بقیه فقط از فرم.
+  Set<String> serverTypeCodes = {};
+  Set<String> serverRoleCodes = {};
+  Set<String> serverMealCodes = {};
+  List<ImportBatch> imports = [];
 
   List<CodeName> types = [];
   List<CodeName> roles = [];
@@ -334,11 +423,7 @@ class AdminState extends ChangeNotifier {
         apiKey = (j['api_key'] ?? '').toString();
         eventCode = j['event_code']?.toString();
         template.load(((j['template'] as Map?) ?? {}).cast<String, dynamic>());
-        final staffByEvent = ((j['staff'] as Map?) ?? {}).cast<String, dynamic>();
-        if (eventCode != null && staffByEvent[eventCode] is List) {
-          staff = (staffByEvent[eventCode] as List).map((e) => StaffDef.fromJson((e as Map).cast<String, dynamic>())).toList();
-        }
-        _staffByEvent = staffByEvent;
+        // نیروها فقط از سرور خوانده می‌شوند (فایل محلی قدیمی نادیده گرفته می‌شود).
         _settingsByEvent = ((j['settings'] as Map?) ?? {}).cast<String, dynamic>();
         if (eventCode != null && _settingsByEvent[eventCode] is Map) {
           settings.load((_settingsByEvent[eventCode] as Map).cast<String, dynamic>());
@@ -348,10 +433,7 @@ class AdminState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Map<String, dynamic> _staffByEvent = {};
-
   Future<void> save() async {
-    if (eventCode != null) _staffByEvent[eventCode!] = staff.map((s) => s.toJson()).toList();
     if (eventCode != null) _settingsByEvent[eventCode!] = settings.toJson();
     final f = await _file();
     await f.parent.create(recursive: true);
@@ -360,7 +442,6 @@ class AdminState extends ChangeNotifier {
       'api_key': apiKey,
       'event_code': eventCode,
       'template': template.toJson(),
-      'staff': _staffByEvent,
       'settings': _settingsByEvent,
     }));
   }
@@ -373,7 +454,8 @@ class AdminState extends ChangeNotifier {
     notifyListeners();
     try {
       final r = await fn();
-      message = okMessage.isEmpty ? null : okMessage;
+      // پیام خالی یعنی پیامی که خود کار گذاشته (مثلاً شمار حذف‌شده‌ها) بماند.
+      if (okMessage.isNotEmpty) message = okMessage;
       messageIsError = false;
       return r;
     } catch (e) {
@@ -400,8 +482,11 @@ class AdminState extends ChangeNotifier {
       });
 
   Future<void> _loadEvents() async {
-    final list = await api.get('/admin/events') as List;
-    events = list.map((e) => EventInfo.fromJson((e as Map).cast<String, dynamic>())).toList();
+    final list = await api.get('/admin/events?include_archived=1') as List;
+    final all = list.map((e) => EventInfo.fromJson((e as Map).cast<String, dynamic>())).toList();
+    // افزونه‌ی قدیمی include_archived را نمی‌شناسد و archived نمی‌فرستد؛ همه فعال حساب می‌شوند.
+    events = all.where((e) => !e.archived).toList();
+    archivedEvents = all.where((e) => e.archived).toList();
   }
 
   Future<void> selectEvent(String code) => run('', () async {
@@ -409,15 +494,19 @@ class AdminState extends ChangeNotifier {
         await save();
       });
 
+  /// ساخت ([create] = true) یا ویرایش رویداد. کد رویداد بعد از ساخت عوض نمی‌شود؛
+  /// ویرایش هیچ‌وقت رویداد تازه نمی‌سازد (mode در افزونه).
   Future<void> saveEvent({
     required String code,
     required String name,
     required String startDate,
     required String endDate,
     required String baseUrl,
+    bool create = false,
   }) =>
-      run('رویداد ذخیره شد.', () async {
+      run(create ? 'رویداد ساخته شد.' : 'رویداد ذخیره شد.', () async {
         await api.post('/admin/events', {
+          'mode': create ? 'create' : 'update',
           'code': code.trim(),
           'name': name.trim(),
           'start_date': startDate.trim(),
@@ -429,13 +518,38 @@ class AdminState extends ChangeNotifier {
         await save();
       });
 
+  /// پیامد حذف رویداد: شمار افراد، پذیرش، تحویل و نیروها.
+  Future<Map<String, dynamic>> eventImpact() async =>
+      ((await api.get('/admin/events/$eventCode/impact')) as Map).cast<String, dynamic>();
+
+  /// بایگانی یا برگرداندن رویداد فعلی.
+  Future<void> archiveEvent(bool archived) =>
+      run(archived ? 'رویداد بایگانی شد.' : 'رویداد از بایگانی برگشت.', () async {
+        await api.post('/admin/events/$eventCode/archive', {'archived': archived});
+        await _loadEvents();
+        await _loadEvent(eventCode!);
+      });
+
+  /// حذف واقعی رویداد؛ سرور فقط وقتی کاری ثبت نشده قبول می‌کند. خطای 409 (کار ثبت‌شده) به بالا می‌رود.
+  Future<void> deleteEvent(String confirmCode) async {
+    await api.delete('/admin/events/$eventCode', {'confirm': confirmCode});
+    event = null;
+    eventCode = null;
+    staff = [];
+    people = {};
+    await _loadEvents();
+    await save();
+    message = 'رویداد حذف شد.';
+    messageIsError = false;
+    notifyListeners();
+  }
+
   Future<void> reload() => run('', () async {
         if (eventCode != null) await _loadEvent(eventCode!);
       });
 
   /// همه‌چیز رویداد از سرور: پیکربندی، شرکت‌کننده‌ها و کارت‌ها.
   Future<void> _loadEvent(String code) async {
-    final prevStaff = eventCode == code ? staff : null;
     eventCode = code;
     final s = (await api.get('/admin/events/$code/snapshot') as Map).cast<String, dynamic>();
     event = EventInfo.fromJson((s['event'] as Map).cast<String, dynamic>());
@@ -468,6 +582,12 @@ class AdminState extends ChangeNotifier {
           (((m['rules'] as Map?)?['role_ids'] as List?) ?? []).map((id) => roleById[id as int]).whereType<String>().toSet(),
         ),
     ];
+    for (var i = 0; i < meals.length; i++) {
+      meals[i].active = list('meals')[i]['active'] != false;
+    }
+    serverTypeCodes = types.map((t) => t.code).toSet();
+    serverRoleCodes = roles.map((t) => t.code).toSet();
+    serverMealCodes = meals.map((t) => t.code).toSet();
     sessions = list('sessions').map(SessionDef.fromJson).toList();
 
     final cardByAttendee = <String, Map<String, dynamic>>{};
@@ -502,21 +622,13 @@ class AdminState extends ChangeNotifier {
         serial: card?['serial'] as int?,
         shareContact: a['share_contact'] as bool?,
         website: (a['website'] ?? '').toString(),
+        status: (a['status'] ?? 'active').toString(),
+        importBatch: (a['import_batch'] ?? '').toString(),
       );
     }
 
-    // نیروها: نام‌ها از سرور، تنظیمات از ذخیره‌ی محلی همین رویداد.
-    final saved = prevStaff ??
-        ((_staffByEvent[code] as List?) ?? [])
-            .map((e) => StaffDef.fromJson((e as Map).cast<String, dynamic>()))
-            .toList();
-    final byName = {for (final s in saved) s.name: s};
-    staff = [
-      for (final st in list('staff')) byName[st['name'].toString()] ?? StaffDef(st['name'].toString(), hasPin: true),
-    ];
-    for (final s in saved) {
-      if (!staff.any((x) => x.name == s.name)) staff.add(s);
-    }
+    // نیروها فقط از سرور: فعال/غیرفعال، اجازه‌ها و داشتن PIN. نیروی غیرفعال دوباره اضافه یا فعال نمی‌شود.
+    staff = list('staff').map(StaffDef.fromJson).toList();
     // قالب کارت از سرور، اگر آنجا ذخیره شده؛ مسیر تصویرهای طرح همان محلی می‌ماند.
     final serverTemplate = s['card_template'];
     if (serverTemplate is Map) {
@@ -530,6 +642,7 @@ class AdminState extends ChangeNotifier {
     final remote = (s['settings'] as Map?) ?? ((s['event'] as Map?)?['settings'] as Map?);
     if (remote != null) settings.load(remote.cast<String, dynamic>());
     report = null;
+    await _loadImportsQuiet();
   }
 
   // ---------------------------------------------------------------- پیکربندی
@@ -551,25 +664,35 @@ class AdminState extends ChangeNotifier {
         if (errors.isNotEmpty) throw ApiException('partial', 'بعضی ردیف‌ها ذخیره نشدند: ${jsonEncode(errors)}', 200);
       });
 
-  Future<void> pushStaff() => run('نیروها روی سرور ذخیره شدند.', () async {
+  /// ذخیره‌ی نیروها (فقط ردیف‌های همین فهرست؛ partial). اگر کسی دیگر بعد از آخرین خواندن ذخیره کرده باشد،
+  /// چیزی ذخیره نمی‌شود و ردیف‌های فعلی سرور برمی‌گردد (تعارض). [force] یعنی «تغییر من را بگذار».
+  Future<List<StaffDef>?> pushStaff({bool force = false}) async {
+    List<StaffDef>? conflicts;
+    await run('نیروها روی سرور ذخیره شدند.', () async {
+      try {
         final r = await api.post('/admin/events/$eventCode/staff', {
-          'staff': [
-            for (final s in staff)
-              {
-                'name': s.name,
-                if (s.newPin.isNotEmpty) 'pin': latinDigits(s.newPin),
-                'can_checkin': s.canCheckin,
-                'can_serve': s.canServe,
-                'is_admin': s.isAdmin,
-              },
-          ],
+          'partial': true,
+          if (force) 'force': true,
+          'staff': [for (final s in staff) s.toUpload()],
         }) as List;
-        for (final s in staff) {
-          s.newPin = '';
-          final row = r.cast<Map>().firstWhere((x) => x['name'] == s.name, orElse: () => {});
-          s.hasPin = row['has_pin'] == true;
-        }
-        await save();
+        staff = r.map((e) => StaffDef.fromJson((e as Map).cast<String, dynamic>())).toList();
+      } on ApiException catch (e) {
+        if (e.code != 'cd_staff_conflict') rethrow;
+        final list = ((e.data as Map?)?['conflicts'] as List?) ?? const [];
+        conflicts = list.map((x) => StaffDef.fromJson((x as Map).cast<String, dynamic>())).toList();
+      }
+    });
+    if (conflicts != null) {
+      message = null;
+      notifyListeners();
+    }
+    return conflicts;
+  }
+
+  /// «تغییر او را ببین»: فهرست نیروها از سرور، تغییرهای ذخیره‌نشده‌ی این دستگاه دور ریخته می‌شود.
+  Future<void> reloadStaff() => run('', () async {
+        final r = await api.get('/admin/events/$eventCode/staff') as List;
+        staff = r.map((e) => StaffDef.fromJson((e as Map).cast<String, dynamic>())).toList();
       });
 
   // ---------------------------------------------------------------- ورود اکسل
@@ -662,18 +785,110 @@ class AdminState extends ChangeNotifier {
     return ImportResult(out.values.toList(), problems, updated, created);
   }
 
-  Future<void> uploadPeople(List<Person> list) => run('${faDigits(list.length)} نفر روی سرور ذخیره شدند.', () async {
-        final errors = <dynamic>[];
+  /// ارسال افراد. [fileName] اگر باشد، همه‌ی این ارسال یک «ورودی» است تا بعداً یکجا حذف شود.
+  Future<void> uploadPeople(List<Person> list, {String? fileName}) =>
+      run('${faDigits(list.length)} نفر روی سرور ذخیره شدند.', () async {
+        final errors = <Map>[];
+        final batchId = fileName == null ? null : _uuid.v4();
         for (var i = 0; i < list.length; i += 200) {
           final batch = list.sublist(i, min(i + 200, list.length));
           final r = (await api.post('/admin/events/$eventCode/attendees', {
             'attendees': batch.map((p) => p.toUpload()).toList(),
+            if (batchId != null) 'batch': {'id': batchId, 'file_name': fileName},
           }) as Map)
               .cast<String, dynamic>();
-          errors.addAll((r['errors'] as List?) ?? []);
+          errors.addAll(((r['errors'] as List?) ?? []).cast<Map>());
         }
         await _loadEvent(eventCode!);
-        if (errors.isNotEmpty) throw ApiException('partial', 'بعضی ردیف‌ها ذخیره نشدند: ${jsonEncode(errors)}', 200);
+        await _loadImportsQuiet();
+        if (errors.isNotEmpty) {
+          final deleted = errors.where((e) => e['reason'] == 'deleted_person').length;
+          final other = errors.where((e) => e['reason'] != 'deleted_person').toList();
+          throw ApiException(
+            'partial',
+            [
+              if (deleted > 0) '${faDigits(deleted)} نفر قبلاً از رویداد حذف شده‌اند و دوباره وارد نشدند.',
+              if (other.isNotEmpty) 'بعضی ردیف‌ها ذخیره نشدند: ${jsonEncode(other)}',
+            ].join(' '),
+            200,
+          );
+        }
+      });
+
+  // ---------------------------------------------------------------- ورودی‌ها و وضعیت افراد
+
+  Future<void> _loadImportsQuiet() async {
+    try {
+      final r = await api.get('/admin/events/$eventCode/imports') as List;
+      imports = r.map((e) => ImportBatch.fromJson((e as Map).cast<String, dynamic>())).toList();
+    } catch (_) {
+      imports = []; // افزونه‌ی قدیمی این مسیر را ندارد.
+    }
+  }
+
+  Future<void> loadImports() => run('', _loadImportsQuiet);
+
+  Future<void> deleteImport(ImportBatch b) => run('', () async {
+        final r = (await api.delete('/admin/events/$eventCode/imports/${b.id}') as Map).cast<String, dynamic>();
+        await _loadEvent(eventCode!);
+        await _loadImportsQuiet();
+        final kept = (r['kept'] as int?) ?? 0;
+        message = '${faDigits((r['deleted'] as int?) ?? 0)} نفر حذف شد.'
+            '${kept > 0 ? ' ${faDigits(kept)} نفر چون پذیرش یا وعده دارند ماندند.' : ''}';
+      });
+
+  /// غیرفعال یا فعال‌کردن یک نفر. غیرفعال در گوشی نیروها و گزارش دیده نمی‌شود.
+  Future<void> setPersonStatus(String id, String status) =>
+      run(status == 'active' ? 'دوباره فعال شد.' : 'غیرفعال شد.', () async {
+        await api.post('/admin/events/$eventCode/attendees/status', {
+          'ids': [id],
+          'status': status,
+        });
+        await _loadEvent(eventCode!);
+      });
+
+  /// حذف یک نفر (حذف نرم). اگر پذیرش یا وعده دارد و [force] نیست، شمار آن‌ها برمی‌گردد و چیزی حذف نمی‌شود.
+  Future<Map<String, dynamic>?> deletePerson(String id, {bool force = false}) async {
+    Map<String, dynamic>? activity;
+    await run('از رویداد حذف شد.', () async {
+      try {
+        await api.delete('/admin/events/$eventCode/attendees/$id${force ? '?force=1' : ''}');
+        await _loadEvent(eventCode!);
+      } on ApiException catch (e) {
+        if (e.code != 'cd_person_has_activity') rethrow;
+        activity = (((e.data as Map?)?['activity'] as Map?) ?? {}).cast<String, dynamic>();
+      }
+    });
+    if (activity != null) {
+      message = null;
+      notifyListeners();
+    }
+    return activity;
+  }
+
+  /// حذف نوع، نقش یا وعده‌ای که روی سرور است. [kind]: registration-types، roles، meals.
+  /// اگر استفاده شده، ApiException با کد cd_in_use و شمار وابسته‌ها پرتاب می‌شود.
+  Future<void> deleteConfigItem(String kind, String code, {String? moveTo, bool clear = false}) async {
+    final q = [
+      if (moveTo != null) 'move_to=${Uri.encodeQueryComponent(moveTo)}',
+      if (clear) 'clear=1',
+    ].join('&');
+    await api.delete('/admin/events/$eventCode/$kind/$code${q.isEmpty ? '' : '?$q'}');
+    await _loadEvent(eventCode!);
+    notifyListeners();
+  }
+
+  Future<void> setMealActive(String code, bool active) =>
+      run(active ? 'وعده دوباره فعال شد.' : 'وعده غیرفعال شد.', () async {
+        await api.post('/admin/events/$eventCode/meals/$code/active', {'active': active});
+        await _loadEvent(eventCode!);
+      });
+
+  /// حذف کارت‌های رزروی که به کسی وصل نشده‌اند و در دفتر رخدادها هم نیامده‌اند.
+  Future<void> deleteFreeReserves() => run('', () async {
+        final r = (await api.delete('/admin/events/$eventCode/reserve-cards') as Map).cast<String, dynamic>();
+        await _loadEvent(eventCode!);
+        message = '${faDigits((r['deleted'] as int?) ?? 0)} کارت رزرو آزاد حذف شد.';
       });
 
   // ---------------------------------------------------------------- کارت رزرو و قفل
@@ -703,9 +918,10 @@ class AdminState extends ChangeNotifier {
         report = (await api.get('/admin/events/$eventCode/report') as Map).cast<String, dynamic>();
       });
 
-  /// لغو پذیرش یک نفر از اپ مدیریت (در دفتر رخدادها ثبت می‌شود).
-  Future<void> undoCheckin(String attendeeId) => run('پذیرش لغو شد.', () async {
-        await api.post('/admin/events/$eventCode/attendees/$attendeeId/checkin-undo', {});
+  /// لغو پذیرش یک نفر از اپ مدیریت (در دفتر رخدادها با دلیل و فاعل ثبت می‌شود).
+  /// سرور فقط برای فرد پذیرش‌شده قبول می‌کند.
+  Future<void> undoCheckin(String attendeeId, {String reason = ''}) => run('پذیرش لغو شد.', () async {
+        await api.post('/admin/events/$eventCode/attendees/$attendeeId/checkin-undo', {'reason': reason});
       });
 
   Future<void> setLocked(bool locked) => run(locked ? 'آدرس پایه قفل شد.' : 'قفل آدرس پایه برداشته شد.', () async {
@@ -759,7 +975,7 @@ class AdminState extends ChangeNotifier {
 
   /// کارت‌ها به ترتیب الفبایی نام خانوادگی، همان ترتیبی که روز پذیرش دنبالشان می‌گردند.
   List<Person> get sortedPeople {
-    final l = people.values.where((p) => p.token != null && p.source != 'walkin').toList();
+    final l = people.values.where((p) => p.token != null && p.source != 'walkin' && p.isActive).toList();
     l.sort((a, b) {
       final c = normalizeText(a.lastName).compareTo(normalizeText(b.lastName));
       return c != 0 ? c : normalizeText(a.firstName).compareTo(normalizeText(b.firstName));

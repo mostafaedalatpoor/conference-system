@@ -52,11 +52,33 @@ class _ImportScreenState extends State<ImportScreen> {
     setState(() => _preview = s.buildImport(_table!, _mapping, _typeCode!));
   }
 
+  /// حذف یک ورودی اکسل: افرادش حذف می‌شوند، جز آن‌هایی که پذیرش یا وعده دارند.
+  Future<void> _deleteImport(AdminState s, ImportBatch b) async {
+    final del = b.people - b.withActivity;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('حذف ورودی «${b.fileName}»؟'),
+        content: Text('${faDigits(del)} نفر حذف می‌شود.'
+            '${b.withActivity > 0 ? ' ${faDigits(b.withActivity)} نفر چون پذیرش یا وعده دارند می‌مانند.' : ''}'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
+          FilledButton(
+            style: daftarDangerStyle(c),
+            onPressed: del > 0 ? () => Navigator.pop(c, true) : null,
+            child: Text('حذف ${faDigits(del)} نفر'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await s.deleteImport(b);
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
     final byType = <String, int>{};
-    for (final p in s.people.values) {
+    for (final p in s.people.values.where((p) => p.isActive)) {
       byType[p.typeCode] = (byType[p.typeCode] ?? 0) + 1;
     }
 
@@ -65,6 +87,29 @@ class _ImportScreenState extends State<ImportScreen> {
       Text(s.people.isEmpty
           ? 'هنوز کسی وارد نشده.'
           : [for (final e in byType.entries) '${s.typeName(e.key)}: ${faDigits(e.value)}'].join('   ·   ')),
+      if (s.imports.isNotEmpty) ...[
+        const SectionTitle('ورودی‌های قبلی'),
+        for (final b in s.imports)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(children: [
+              Icon(Icons.description_rounded, size: 20, color: DaftarColors.of(context).inkMuted),
+              const SizedBox(width: DaftarSize.space2),
+              Expanded(
+                child: Text([
+                  b.fileName.isEmpty ? 'بدون نام' : b.fileName,
+                  '${faDigits(b.people)} نفر',
+                  if (DateTime.tryParse(b.createdAt ?? '') != null) hm(DateTime.parse(b.createdAt!)),
+                ].join(' · ')),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: DaftarColors.of(context).stop),
+                onPressed: s.busy || b.people == 0 ? null : () => _deleteImport(s, b),
+                child: const Text('حذف این ورودی…'),
+              ),
+            ]),
+          ),
+      ],
       const SectionTitle('ورود از اکسل'),
       const Hint(
         'هر فایل یک نوع ثبت‌نام دارد (مثلاً خروجی سایت ثبت‌نام = ارائه‌دهنده، فرم شنونده‌ها = شرکت‌کننده). '
@@ -212,7 +257,7 @@ class _ImportScreenState extends State<ImportScreen> {
             onPressed: s.busy || _preview!.people.isEmpty
                 ? null
                 : () async {
-                    await s.uploadPeople(_preview!.people);
+                    await s.uploadPeople(_preview!.people, fileName: _fileName);
                     if (mounted && !s.messageIsError) setState(() => _preview = null);
                   },
             label: Text('ارسال ${faDigits(_preview!.people.length)} نفر به سرور'),

@@ -30,7 +30,13 @@ class _PeopleScreenState extends State<PeopleScreen> {
     final words = q.split(' ');
     final digits = normalizeMobile(_q.text);
     final out = <Person>[];
-    for (final p in s.sortedPeople) {
+    // همه‌ی افراد، با ثبت‌نام در محل و غیرفعال‌ها (sortedPeople فقط کارت‌دارهای فعال اکسل است).
+    final all = s.people.values.toList()
+      ..sort((a, b) {
+        final c = normalizeText(a.lastName).compareTo(normalizeText(b.lastName));
+        return c != 0 ? c : normalizeText(a.firstName).compareTo(normalizeText(b.firstName));
+      });
+    for (final p in all) {
       final key = normalizeText('${p.firstName} ${p.lastName} ${p.mobile} ${p.email} ${p.organization} ${p.serial ?? ''}');
       if (words.every(key.contains) || (digits.length >= 4 && normalizeMobile(p.mobile).contains(digits))) out.add(p);
       if (out.length >= 60) break;
@@ -65,7 +71,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
             ? SingleChildScrollView(
                 child: EmptyState(
                   icon: Icons.people_alt_rounded,
-                  title: '${faDigits(s.people.length)} نفر در لیست',
+                  title: '${faDigits(s.people.values.where((p) => p.isActive).length)} نفر در لیست',
                   hint: 'نام کسی را بنویسید تا ببینید چه گرفته و کی پذیرش شده.',
                 ),
               )
@@ -96,6 +102,8 @@ class _PeopleScreenState extends State<PeopleScreen> {
                                   ),
                                 ]),
                               ),
+                              if (!p.isActive) const DaftarTag('غیرفعال', kind: TagKind.outline),
+                              const SizedBox(width: DaftarSize.space2),
                               if (p.serial != null && s.settings.usesCards)
                                 Text('کارت ${faDigits(p.serial!)}',
                                     style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
@@ -138,19 +146,96 @@ class _PersonPageState extends State<PersonPage> {
   String _label(Map<String, dynamic> e) {
     final kind = '${e['kind'] ?? ''}';
     final meal = '${e['meal_name'] ?? ''}'.trim();
+    final reason = '${e['reason'] ?? ''}'.trim();
     return switch (kind) {
       'checkin' => 'پذیرش شد',
-      'checkin_undo' => 'پذیرش لغو شد',
+      'checkin_undo' => reason.isEmpty ? 'پذیرش لغو شد' : 'پذیرش لغو شد · دلیل: $reason',
       'meal_served' => meal.isEmpty ? 'وعده تحویل شد' : '$meal تحویل شد',
       'walkin_register' => 'ثبت‌نام در محل',
       _ => '${e['label'] ?? kind}',
     };
   }
 
+  Future<void> _undo(AdminState s, Person p) async {
+    const reasons = ['اشتباه زدم', 'انصراف داد', 'ثبت تکراری', 'دیگر'];
+    var reason = reasons.first;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setState) => AlertDialog(
+          title: Text('لغو پذیرش ${p.displayName}؟'),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('ثبت وعده‌های او می‌ماند. می‌توانید دوباره پذیرش کنید.'),
+            const SizedBox(height: DaftarSize.space3),
+            const Text('دلیل لغو'),
+            const SizedBox(height: DaftarSize.space2),
+            Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+              for (final r in reasons)
+                ChoiceChip(label: Text(r), selected: reason == r, onSelected: (_) => setState(() => reason = r)),
+            ]),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
+            FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('لغو پذیرش')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    await s.undoCheckin(p.id, reason: reason);
+    if (mounted) setState(_load);
+  }
+
+  /// حذف از رویداد. اگر پذیرش یا وعده دارد، می‌پرسد «فقط غیرفعال کن» یا «حذف کن» (حالت ۱۰ طراحی).
+  Future<void> _delete(AdminState s, Person p) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('حذف ${p.displayName} از رویداد؟'),
+        content: const Text('از فهرست افراد، گوشی نیروها و گزارش کنار می‌رود.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
+          FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, true), child: const Text('حذف کن')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final activity = await s.deletePerson(p.id);
+    if (!mounted) return;
+    if (activity == null) {
+      if (!s.messageIsError) Navigator.of(context).pop();
+      return;
+    }
+    final checkins = (activity['checkins'] as int?) ?? 0;
+    final meals = (activity['meals'] as int?) ?? 0;
+    final what = [
+      if (checkins > 0) 'پذیرش',
+      if (meals > 0) '${faDigits(meals)} وعده‌ی',
+    ].join(' و ');
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('حذف ${p.displayName} از رویداد؟'),
+        content: Text('$what او از گزارش حذف می‌شود.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('نه، برگرد')),
+          OutlinedButton(onPressed: () => Navigator.pop(c, 'inactive'), child: const Text('فقط غیرفعال کن')),
+          FilledButton(style: daftarDangerStyle(c), onPressed: () => Navigator.pop(c, 'delete'), child: const Text('حذف کن')),
+        ],
+      ),
+    );
+    if (choice == 'inactive') {
+      await s.setPersonStatus(p.id, 'inactive');
+    } else if (choice == 'delete') {
+      await s.deletePerson(p.id, force: true);
+      if (mounted && !s.messageIsError) Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = StateScope.of(context);
-    final p = widget.person;
+    final p = s.people[widget.person.id] ?? widget.person;
     final x = DaftarColors.of(context);
     final theme = Theme.of(context);
     final details = <(String, String, bool)>[
@@ -177,7 +262,23 @@ class _PersonPageState extends State<PersonPage> {
           Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
             for (final t in [s.typeName(p.typeCode), s.roleName(p.roleCode)].where((e) => e.isNotEmpty)) DaftarTag(t),
             if (p.source == 'walkin') const DaftarTag('ثبت‌نام در محل', kind: TagKind.outline),
+            if (!p.isActive) const DaftarTag('غیرفعال', kind: TagKind.outline),
           ]),
+          if (!p.isActive)
+            Padding(
+              padding: const EdgeInsets.only(top: DaftarSize.space3),
+              child: Notice(
+                tone: NoticeTone.neutral,
+                text: 'غیرفعال: در گوشی نیروها و گزارش دیده نمی‌شود. تاریخچه‌اش می‌ماند.',
+                action: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(
+                    onPressed: s.busy ? null : () => s.setPersonStatus(p.id, 'active'),
+                    child: const Text('فعال کردن دوباره'),
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(height: DaftarSize.space3),
           for (final d in details)
             Padding(
@@ -227,6 +328,8 @@ class _PersonPageState extends State<PersonPage> {
                               if (e['flag_label'] != null) '${e['flag_label']}',
                               if ('${e['device_label'] ?? ''}'.isNotEmpty) '${e['device_label']}',
                               if ('${e['staff'] ?? ''}'.isNotEmpty) '${e['staff']}',
+                              if (e['kind'] == 'checkin_undo' && '${e['actor'] ?? ''}'.isNotEmpty && e['actor'] != e['staff'])
+                                '${e['actor']}',
                             ].join('، '),
                             style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted),
                           ),
@@ -241,32 +344,41 @@ class _PersonPageState extends State<PersonPage> {
             },
           ),
           const SizedBox(height: DaftarSize.space5),
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(DaftarSize.tapMin)),
-            onPressed: s.busy
-                ? null
-                : () async {
-                    final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (c) => AlertDialog(
-                        title: const Text('لغو پذیرش'),
-                        content: Text('پذیرش ${p.fullName} لغو شود؟ در گزارش ثبت می‌شود و گوشی‌ها با همگام‌سازی بعدی می‌بینند.'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('انصراف')),
-                          FilledButton(
-                            style: daftarDangerStyle(c),
-                            onPressed: () => Navigator.pop(c, true),
-                            child: const Text('لغو پذیرش'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (ok == true) {
-                      await s.undoCheckin(p.id);
-                      if (mounted) setState(_load);
-                    }
-                  },
-            child: const Text('لغو پذیرش'),
+          // لغو پذیرش فقط برای کسی که الان پذیرش‌شده است (سرور هم همین را می‌سنجد).
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _timeline,
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done || snap.hasError) return const SizedBox.shrink();
+              if (!isCheckedInFromTimeline(snap.data!)) {
+                return Notice(tone: NoticeTone.neutral, text: '${p.displayName} هنوز پذیرش نشده.');
+              }
+              return OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(DaftarSize.tapMin),
+                  foregroundColor: x.stop,
+                  side: BorderSide(color: x.stop, width: 1.5),
+                ),
+                onPressed: s.busy ? null : () => _undo(s, p),
+                child: const Text('لغو پذیرش…'),
+              );
+            },
+          ),
+          const SizedBox(height: DaftarSize.space3),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(DaftarSize.tapMin),
+              foregroundColor: x.stop,
+              side: BorderSide(color: x.stop, width: 1.5),
+            ),
+            icon: const Icon(Icons.delete_rounded),
+            onPressed: s.busy ? null : () => _delete(s, p),
+            label: const Text('حذف از رویداد…'),
+          ),
+          const SizedBox(height: DaftarSize.space1),
+          Text(
+            'اگر پذیرش یا وعده دارد، می‌توانید به‌جای حذف غیرفعالش کنید.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted),
           ),
           if (flagged.isNotEmpty) ...[
             const SectionTitle('موارد مشکوک در گزارش'),

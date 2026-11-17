@@ -82,13 +82,14 @@ List<(int, String, IconData, Widget)> adminSteps(AdminState s) => [
       if (s.types.isEmpty) return ('نوع ثبت‌نامی تعریف نشده', false, true);
       return ('${faDigits(s.types.length)} نوع، ${faDigits(s.meals.length)} وعده', true, false);
     case 2:
-      if (s.staff.isEmpty) return ('نیرویی تعریف نشده', false, true);
-      final noPin = s.staff.where((x) => !x.hasPin && x.newPin.isEmpty).length;
-      if (noPin > 0) return ('${faDigits(s.staff.length)} نیرو، ${faDigits(noPin)} بدون PIN', false, true);
-      return ('${faDigits(s.staff.length)} نیرو', true, false);
+      final active = s.staff.where((x) => x.active).toList();
+      if (active.isEmpty) return ('نیرویی تعریف نشده', false, true);
+      final noPin = active.where((x) => !x.hasPin && x.newPin.isEmpty).length;
+      if (noPin > 0) return ('${faDigits(active.length)} نیرو، ${faDigits(noPin)} بدون PIN', false, true);
+      return ('${faDigits(active.length)} نیرو', true, false);
     case 3:
       if (s.people.isEmpty) return ('هنوز کسی وارد نشده', false, false);
-      return ('${faDigits(s.people.length)} نفر', true, false);
+      return ('${faDigits(s.people.values.where((p) => p.isActive).length)} نفر', true, false);
     case 4:
       final free = s.reserveCards.where((r) => !r.used).length;
       if (s.event?.locked == true) return ('PDF ساخته شد، ${faDigits(free)} رزرو آزاد', true, false);

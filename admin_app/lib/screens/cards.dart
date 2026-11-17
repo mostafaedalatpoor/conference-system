@@ -231,6 +231,32 @@ class _CardsScreenState extends State<CardsScreen> {
                 },
           child: const Text('ساخت کارت رزرو'),
         ),
+        if (free > 0)
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: DaftarColors.of(context).stop),
+            onPressed: s.busy
+                ? null
+                : () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (c) => AlertDialog(
+                        title: const Text('حذف رزروهای آزاد؟'),
+                        content: Text('${faDigits(free)} کارت رزروی که به کسی وصل نشده حذف می‌شود. '
+                            'اگر چاپشان کرده‌اید، دیگر کار نمی‌کنند.'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('نه، برگرد')),
+                          FilledButton(
+                            style: daftarDangerStyle(c),
+                            onPressed: () => Navigator.pop(c, true),
+                            child: const Text('حذف'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (ok == true) await s.deleteFreeReserves();
+                  },
+            child: const Text('حذف رزروهای آزاد…'),
+          ),
       ]),
       const SectionTitle('قالب کارت'),
       if (mobile)
