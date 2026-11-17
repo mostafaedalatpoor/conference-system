@@ -59,7 +59,10 @@ class _ConnectScreenState extends State<ConnectScreen> {
         controller: _key,
         decoration: const InputDecoration(
           labelText: 'کلید API',
-          helperText: 'از پیشخوان وردپرس: رویدادیار ← تنظیمات ← ساخت کلید',
+          helperText: 'از پیشخوان وردپرس: رویدادیار ← تنظیمات ← ساخت کلید. '
+              'کلید را هر وقت لازم شد از پیشخوان وردپرس دوباره ببین و کپی کن. '
+              'برای هر دستگاه کلید جدا بسازید تا اگر گم شد، فقط همان باطل شود.',
+          helperMaxLines: 3,
         ),
         obscureText: true,
         textDirection: TextDirection.ltr,
@@ -72,6 +75,17 @@ class _ConnectScreenState extends State<ConnectScreen> {
           child: const Text('اتصال'),
         ),
       ),
+      if (s.events.isNotEmpty || s.event != null)
+        Padding(
+          padding: const EdgeInsets.only(top: DaftarSize.space3),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: DaftarTag(
+              'دسترسی این کلید: ${s.keyRoleLabel.isNotEmpty ? s.keyRoleLabel : 'مالک'}',
+              kind: TagKind.stamp,
+            ),
+          ),
+        ),
       if (s.events.isNotEmpty) ...[
         const SectionTitle('رویدادهای روی سرور'),
         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -101,7 +115,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
             ),
         ]),
       ],
-      if (s.apiKey.isNotEmpty && s.event != null && !_creating)
+      if (s.apiKey.isNotEmpty && s.event != null && !_creating && !s.limited)
         Padding(
           padding: const EdgeInsets.only(top: DaftarSize.space3),
           child: Align(
@@ -129,13 +143,13 @@ class _ConnectScreenState extends State<ConnectScreen> {
           action: Align(
             alignment: AlignmentDirectional.centerStart,
             child: TextButton(
-              onPressed: s.busy ? null : () => s.archiveEvent(false),
+              onPressed: s.busy || !s.isOwner ? null : () => s.archiveEvent(false),
               child: const Text('برگرداندن از بایگانی'),
             ),
           ),
         ),
       ],
-      if (s.apiKey.isNotEmpty) ...[
+      if (s.apiKey.isNotEmpty && !s.limited) ...[
         SectionTitle(s.event == null || _creating ? 'ساخت رویداد جدید' : 'مشخصات رویداد'),
         Row(children: [
           Expanded(
@@ -215,7 +229,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
               child: Text(s.event!.locked ? 'برداشتن قفل آدرس پایه' : 'قفل آدرس پایه'),
             ),
         ]),
-        if (s.event != null && !_creating) _SensitiveActions(s: s),
+        // حذف و بایگانی رویداد فقط با کلید «مالک».
+        if (s.event != null && !_creating && s.isOwner) _SensitiveActions(s: s),
       ],
     ]);
   }

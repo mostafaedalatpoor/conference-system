@@ -11,6 +11,7 @@ import 'screens/connect.dart';
 import 'screens/import.dart';
 import 'screens/people.dart';
 import 'screens/people_desk.dart';
+import 'screens/people_limited.dart';
 import 'screens/report.dart';
 import 'screens/staff.dart';
 import 'brand.dart';
@@ -178,6 +179,8 @@ class _DeskShellState extends State<DeskShell> {
   void _go(AdminState s, int v) {
     if (s.event == null && v != 0) return;
     if (v == 4 && !s.settings.usesCards) return;
+    // دسترسی محدود: فقط اتصال، امروز و افراد.
+    if (s.limited && !const [0, 5, 6].contains(v)) return;
     setState(() => _i = v);
   }
 
@@ -190,9 +193,10 @@ class _DeskShellState extends State<DeskShell> {
     final steps = adminSteps(s);
     var i = needsEvent ? 0 : _i;
     if (i == 4 && !s.settings.usesCards) i = 0;
+    if (s.limited && !needsEvent && !const [0, 5, 6].contains(i)) i = 5;
     final page = switch (i) {
-      5 => const ReportScreen(),
-      6 => const PeopleDeskScreen(),
+      5 => const ReportScreen(title: 'امروز'),
+      6 => s.limited ? const LimitedPeopleScreen() : const PeopleDeskScreen(),
       _ => steps.firstWhere((e) => e.$1 == i).$4,
     };
 
@@ -259,11 +263,14 @@ class _DeskShellState extends State<DeskShell> {
                                   style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
                           ]),
                         ),
-                        for (var n = 0; n < steps.length; n++) item(steps[n].$1, steps[n].$2, number: n + 1),
+                        if (s.limited)
+                          item(0, 'اتصال و رویداد')
+                        else
+                          for (var n = 0; n < steps.length; n++) item(steps[n].$1, steps[n].$2, number: n + 1),
                         const SizedBox(height: DaftarSize.space2),
                         Divider(color: x.line),
                         const SizedBox(height: DaftarSize.space2),
-                        item(5, 'گزارش زنده'),
+                        item(5, s.limited ? 'امروز' : 'گزارش زنده'),
                         item(6, 'افراد'),
                       ],
                     ),
@@ -285,6 +292,7 @@ class _DeskShellState extends State<DeskShell> {
                 child: Column(
                   children: [
                     const MessageBar(),
+                    if (s.limited && !needsEvent) const LimitedBanner(),
                     Expanded(child: page),
                   ],
                 ),
@@ -315,6 +323,45 @@ class _MobileShellState extends State<MobileShell> {
       return Scaffold(
         appBar: AppBar(title: const Text(appName)),
         body: const Column(children: [MessageBar(), Expanded(child: ConnectScreen())]),
+      );
+    }
+    if (s.limited) {
+      // دسترسی محدود (۱۸-States حالت ۱۵): فقط «امروز» و «افراد».
+      final i = _i > 1 ? 0 : _i;
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(i == 0 ? s.event!.name : 'افراد', overflow: TextOverflow.ellipsis),
+          actions: [
+            IconButton(
+              tooltip: 'اتصال و رویداد',
+              icon: const Icon(Icons.link_rounded),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(title: const Text('اتصال و رویداد')),
+                  body: const Column(children: [MessageBar(), Expanded(child: ConnectScreen())]),
+                ),
+              )),
+            ),
+          ],
+        ),
+        body: Column(children: [
+          const MessageBar(),
+          const LimitedBanner(),
+          Expanded(
+            child: KeyedSubtree(
+              key: ValueKey(i),
+              child: i == 0 ? const ReportScreen(autoRefresh: true, title: 'امروز') : const LimitedPeopleScreen(),
+            ),
+          ),
+        ]),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: i,
+          onDestinationSelected: (v) => setState(() => _i = v),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.insights_rounded), label: 'امروز'),
+            NavigationDestination(icon: Icon(Icons.people_alt_rounded), label: 'افراد'),
+          ],
+        ),
       );
     }
     const titles = ['امروز', 'افراد', 'نیروها', 'آماده‌سازی'];

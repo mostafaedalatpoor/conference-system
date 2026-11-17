@@ -154,6 +154,7 @@ function cd_build_report(array $event, $day = null) {
         ));
         $meals[] = [
             'id' => $m['id'],
+            'code' => $m['code'],
             'name' => $m['name'],
             'day' => $m['day'],
             'active' => $m['active'],

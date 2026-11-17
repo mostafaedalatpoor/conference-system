@@ -376,6 +376,16 @@ class EventSettings {
 class AdminState extends ChangeNotifier {
   String server = 'https://newvisionteam.ir';
   String apiKey = '';
+
+  /// نقش کلید از /admin/ping: owner، manager یا report. افزونه‌ی قدیمی نقش نمی‌فرستد = owner.
+  String keyRole = 'owner';
+  String keyRoleLabel = '';
+
+  /// «دسترسی محدود»: کلید فقط گزارش؛ ناوبری فقط «امروز» و «افراد»، بدون تغییر.
+  bool get limited => keyRole == 'report';
+
+  /// حذف و بایگانی رویداد فقط برای مالک.
+  bool get isOwner => keyRole == 'owner';
   String? eventCode;
 
   List<EventInfo> events = [];
@@ -430,6 +440,8 @@ class AdminState extends ChangeNotifier {
         final j = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
         server = (j['server'] ?? server).toString();
         apiKey = (j['api_key'] ?? '').toString();
+        keyRole = (j['key_role'] ?? 'owner').toString();
+        keyRoleLabel = (j['key_role_label'] ?? '').toString();
         eventCode = j['event_code']?.toString();
         cards.load(((j['template'] as Map?) ?? {}).cast<String, dynamic>());
         cardsRev++;
@@ -450,6 +462,8 @@ class AdminState extends ChangeNotifier {
     await f.writeAsString(jsonEncode({
       'server': server,
       'api_key': apiKey,
+      'key_role': keyRole,
+      'key_role_label': keyRoleLabel,
       'event_code': eventCode,
       'template': cards.toJson(images: true),
       'settings': _settingsByEvent,
@@ -485,7 +499,9 @@ class AdminState extends ChangeNotifier {
   Future<void> connect(String server, String key) => run('اتصال برقرار شد.', () async {
         this.server = server.trim();
         apiKey = key.trim();
-        await api.get('/admin/ping');
+        final ping = ((await api.get('/admin/ping')) as Map).cast<String, dynamic>();
+        keyRole = const ['owner', 'manager', 'report'].contains(ping['role']) ? ping['role'] as String : 'owner';
+        keyRoleLabel = (ping['role_label'] ?? '').toString();
         await _loadEvents();
         await save();
         if (eventCode != null && events.any((e) => e.code == eventCode)) await _loadEvent(eventCode!);
@@ -561,6 +577,17 @@ class AdminState extends ChangeNotifier {
   /// همه‌چیز رویداد از سرور: پیکربندی، شرکت‌کننده‌ها و کارت‌ها.
   Future<void> _loadEvent(String code) async {
     eventCode = code;
+    if (limited) {
+      // کلید «فقط گزارش» snapshot را نمی‌بیند؛ رویداد از فهرست رویدادها، بقیه از گزارش و خروجی.
+      event = [...events, ...archivedEvents].where((e) => e.code == code).firstOrNull;
+      types = [];
+      roles = [];
+      meals = [];
+      staff = [];
+      people = {};
+      report = null;
+      return;
+    }
     final s = (await api.get('/admin/events/$code/snapshot') as Map).cast<String, dynamic>();
     event = EventInfo.fromJson((s['event'] as Map).cast<String, dynamic>());
 

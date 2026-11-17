@@ -159,7 +159,8 @@ class _ReportScreenState extends State<ReportScreen> {
               DataCell(Text(faDigits(m['not_entitled']))),
               DataCell(TextButton(
                 onPressed: () {
-                  final code = s.meals.where((x) => x.id == m['id']).map((x) => x.code).firstOrNull;
+                  // افزونه‌ی تازه کد وعده را در گزارش می‌فرستد (حالت دسترسی محدود وعده‌ها را ندارد).
+                  final code = (m['code'] as String?) ?? s.meals.where((x) => x.id == m['id']).map((x) => x.code).firstOrNull;
                   if (code == null) return;
                   Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => MealPeoplePage(code: code, name: '${m['name']}'),
@@ -581,9 +582,11 @@ class _ExportCards extends StatelessWidget {
       card(Icons.flag_rounded, 'موارد نیازمند بررسی', 'پرچم‌ها و کارهایی که سرور نپذیرفت.', [
         ('اکسل', () => _table(context, 'flagged', 'موارد نیازمند بررسی', _flagged(), ExportFormat.xlsx)),
       ]),
+      if (!s.limited)
       card(Icons.history_rounded, 'تاریخچه‌ی رویدادها', 'همه‌ی ثبت‌ها و لغوها به‌ترتیب زمان.', [
         ('اکسل', () => _history(context)),
       ]),
+      if (!s.limited)
       card(Icons.backup_rounded, 'پشتیبان کامل رویداد', 'یک فایل از همه‌ی داده‌ها برای نگهداری پس از رویداد.', [
         ('ساخت پشتیبان', () => _backup(context)),
       ]),
