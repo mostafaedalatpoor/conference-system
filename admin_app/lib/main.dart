@@ -10,6 +10,7 @@ import 'screens/config.dart';
 import 'screens/connect.dart';
 import 'screens/import.dart';
 import 'screens/people.dart';
+import 'screens/people_desk.dart';
 import 'screens/report.dart';
 import 'screens/staff.dart';
 import 'brand.dart';
@@ -94,6 +95,8 @@ List<(int, String, IconData, Widget)> adminSteps(AdminState s) => [
       final free = s.reserveCards.where((r) => !r.used).length;
       if (s.event?.locked == true) return ('PDF ساخته شد، ${faDigits(free)} رزرو آزاد', true, false);
       return (s.reserveCards.isEmpty ? 'کارت رزرو ساخته نشده' : '${faDigits(free)} کارت رزرو آزاد', false, false);
+    case 6:
+      return ('${faDigits(s.people.values.where((p) => p.isActive).length)} نفر · جستجو، ویرایش، کار گروهی', false, false);
     default:
       return ('شمارش زنده‌ی روز اجرا', false, false);
   }
@@ -187,7 +190,11 @@ class _DeskShellState extends State<DeskShell> {
     final steps = adminSteps(s);
     var i = needsEvent ? 0 : _i;
     if (i == 4 && !s.settings.usesCards) i = 0;
-    final page = i == 5 ? const ReportScreen() : steps.firstWhere((e) => e.$1 == i).$4;
+    final page = switch (i) {
+      5 => const ReportScreen(),
+      6 => const PeopleDeskScreen(),
+      _ => steps.firstWhere((e) => e.$1 == i).$4,
+    };
 
     Widget item(int k, String title, {int? number}) {
       final (line, done, attention) = stepStatus(s, k);
@@ -211,7 +218,8 @@ class _DeskShellState extends State<DeskShell> {
 
     return CallbackShortcuts(
       bindings: {
-        for (var k = 0; k < 6; k++)
+        // Ctrl+1 تا Ctrl+5 مراحل، Ctrl+6 گزارش زنده، Ctrl+7 افراد.
+        for (var k = 0; k < 7; k++)
           SingleActivator(LogicalKeyboardKey(0x00000000031 + k), control: true): () => _go(s, k),
       },
       child: Focus(
@@ -256,6 +264,7 @@ class _DeskShellState extends State<DeskShell> {
                         Divider(color: x.line),
                         const SizedBox(height: DaftarSize.space2),
                         item(5, 'گزارش زنده'),
+                        item(6, 'افراد'),
                       ],
                     ),
                   ),

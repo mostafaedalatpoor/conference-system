@@ -131,7 +131,10 @@ class _PeopleScreenState extends State<PeopleScreen> {
 /// مشخصات و تاریخچه‌ی یک نفر (PersonTimeline).
 class PersonPage extends StatefulWidget {
   final Person person;
-  const PersonPage({super.key, required this.person});
+
+  /// در پنل کنار جدول افراد ویندوز: بی دکمه‌ی بازگشت و بی بستن صفحه بعد از حذف.
+  final bool embedded;
+  const PersonPage({super.key, required this.person, this.embedded = false});
 
   @override
   State<PersonPage> createState() => _PersonPageState();
@@ -295,7 +298,7 @@ class _PersonPageState extends State<PersonPage> {
     final activity = await s.deletePerson(p.id);
     if (!mounted) return;
     if (activity == null) {
-      if (!s.messageIsError) Navigator.of(context).pop();
+      if (!s.messageIsError && !widget.embedded) Navigator.of(context).pop();
       return;
     }
     final checkins = (activity['checkins'] as int?) ?? 0;
@@ -320,7 +323,7 @@ class _PersonPageState extends State<PersonPage> {
       await s.setPersonStatus(p.id, 'inactive');
     } else if (choice == 'delete') {
       await s.deletePerson(p.id, force: true);
-      if (mounted && !s.messageIsError) Navigator.of(context).pop();
+      if (mounted && !s.messageIsError && !widget.embedded) Navigator.of(context).pop();
     }
   }
 
@@ -343,6 +346,7 @@ class _PersonPageState extends State<PersonPage> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !widget.embedded,
         title: Text(p.displayName, overflow: TextOverflow.ellipsis),
         actions: [
           TextButton.icon(

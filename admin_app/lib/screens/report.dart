@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../export.dart';
 import '../main.dart';
+import 'export_dialog.dart';
 import '../normalize.dart';
 import '../theme/daftar.dart';
 import '../theme/widgets.dart';
@@ -71,6 +75,12 @@ class _ReportScreenState extends State<ReportScreen> {
         Switch(value: _auto, onChanged: _setAuto),
         const SizedBox(width: DaftarSize.space2),
         const Text('هر ۳۰ ثانیه'),
+        const SizedBox(width: DaftarSize.space4),
+        OutlinedButton.icon(
+          onPressed: r == null ? null : () => showExportDialog(context),
+          icon: const Icon(Icons.download_rounded),
+          label: const Text('خروجی اکسل…'),
+        ),
         const SizedBox(width: DaftarSize.space4),
         if (_updatedAt != null)
           Text('آخرین به‌روزرسانی ${hm(_updatedAt!)}',
@@ -172,6 +182,31 @@ class _ReportScreenState extends State<ReportScreen> {
             title: Text('${f['flag_label']} — ${(f['name'] as String?)?.isNotEmpty == true ? f['name'] : 'بدون نام'}'),
             subtitle: Text('ساعت ${_time(f['device_time'] as String?)}${f['staff'] != null ? '، ${f['staff']}' : ''}'),
           ),
+        if (((r['hourly'] as List?) ?? const []).isNotEmpty) ...[
+          SectionTitle('ورود ساعت‌به‌ساعت · ${s.dayName('${r['hourly_day']}')}'),
+          _HourlyBars(hours: (r['hourly'] as List).cast<Map>()),
+        ],
+        if (((r['staff_activity'] as List?) ?? const []).isNotEmpty) ...[
+          const SectionTitle('نیروها'),
+          DataTable(columns: const [
+            DataColumn(label: Text('نام')),
+            DataColumn(label: Text('پذیرش'), numeric: true),
+            DataColumn(label: Text('تحویل'), numeric: true),
+            DataColumn(label: Text('آخرین فعالیت')),
+          ], rows: [
+            for (final st in (r['staff_activity'] as List).cast<Map>())
+              DataRow(cells: [
+                DataCell(Text('${st['name']}${st['active'] == false ? ' (غیرفعال)' : ''}')),
+                DataCell(Text(st['checkins'] == 0 ? '—' : faDigits(st['checkins']))),
+                DataCell(Text(st['meals'] == 0 ? '—' : faDigits(st['meals']))),
+                DataCell(Text(DateTime.tryParse('${st['last_at']}') == null
+                    ? '—'
+                    : relativeTime(DateTime.parse('${st['last_at']}')))),
+              ]),
+          ]),
+        ],
+        const SectionTitle('خروجی‌ها'),
+        _ExportCards(report: r),
         const SectionTitle('گوشی‌ها'),
         for (final d in r['devices'] as List) DeviceRow(device: (d as Map).cast<String, dynamic>()),
       ],
@@ -400,5 +435,158 @@ class _MealPeoplePageState extends State<MealPeoplePage> {
         },
       ),
     );
+  }
+}
+
+/// «ورود ساعت‌به‌ساعت»: ستون برای هر ساعت، عدد بالای ستون و ساعت زیرش.
+class _HourlyBars extends StatelessWidget {
+  final List<Map> hours;
+  const _HourlyBars({required this.hours});
+
+  @override
+  Widget build(BuildContext context) {
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    final max = hours.fold<int>(1, (m, h) => (h['count'] as int) > m ? h['count'] as int : m);
+    return SizedBox(
+      height: 150,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        for (final h in hours)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: DaftarSize.space1),
+              child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                Text(faDigits(h['count']), style: theme.textTheme.labelMedium?.copyWith(fontFeatures: tabularFigures)),
+                const SizedBox(height: DaftarSize.space1),
+                Container(
+                  height: (h['count'] as int) == 0 ? 3 : 100 * (h['count'] as int) / max,
+                  decoration: BoxDecoration(
+                    color: (h['count'] as int) == 0 ? x.line : x.stamp,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(DaftarSize.radiusXs)),
+                  ),
+                ),
+                const SizedBox(height: DaftarSize.space1),
+                Text(faDigits('${h['hour']}'.padLeft(2, '0')),
+                    style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted, fontFeatures: tabularFigures)),
+              ]),
+            ),
+          ),
+      ]),
+    );
+  }
+}
+
+const _kinds = {
+  'checkin': 'پذیرش',
+  'checkin_undo': 'لغو پذیرش',
+  'walkin_register': 'ثبت‌نام در محل',
+  'meal_served': 'تحویل وعده',
+  'meal_undo': 'برگرداندن وعده',
+};
+
+/// کارت‌های «گزارش‌ها» (طراحی ۱۰-Reports): فهرست حضور، پذیرایی، موارد بررسی، تاریخچه و پشتیبان کامل.
+class _ExportCards extends StatelessWidget {
+  final Map<String, dynamic> report;
+  const _ExportCards({required this.report});
+
+  Future<void> _table(BuildContext context, String name, String title, List<List<String>> table, ExportFormat f) async {
+    final s = StateScope.read(context);
+    final bytes = await s.run('', () => encodeTable(table, f, title: title));
+    if (bytes != null) await saveExportFile(s, '$name-${s.eventCode}.${f.ext}', f.ext, bytes);
+  }
+
+  List<List<String>> _meals() => [
+        ['وعده', 'روز', 'حق دارند', 'تحویل‌شده', 'تکراری', 'بدون حق'],
+        for (final m in (report['meals'] as List).cast<Map>())
+          ['${m['name']}', '${m['day'] ?? ''}', '${m['entitled']}', '${m['served']}', '${m['duplicates']}', '${m['not_entitled']}'],
+      ];
+
+  List<List<String>> _flagged() => [
+        ['زمان', 'کار', 'فرد', 'مشکل', 'نیرو', 'رد شد'],
+        for (final f in (report['flagged'] as List).cast<Map>())
+          [
+            exportTime(f['device_time']?.toString(), jalali: true),
+            _kinds[f['kind']] ?? '${f['kind']}',
+            '${f['name'] ?? ''}',
+            '${f['flag_label']}',
+            '${f['staff'] ?? ''}',
+            f['rejected'] == true ? 'بله' : '',
+          ],
+      ];
+
+  /// تاریخچه‌ی همه‌ی رخدادها از دفتر، با نام فرد، نیرو و وعده.
+  Future<void> _history(BuildContext context) async {
+    final s = StateScope.read(context);
+    final snap = await s.run('', s.fullSnapshot);
+    if (snap == null || !context.mounted) return;
+    final people = {for (final a in (snap['attendees'] as List).cast<Map>()) '${a['id']}': '${a['first_name']} ${a['last_name']}'};
+    final staff = {for (final x in (snap['staff'] as List).cast<Map>()) x['id']: '${x['name']}'};
+    final meals = {for (final m in (snap['meals'] as List).cast<Map>()) m['id']: '${m['name']}'};
+    final table = [
+      ['ردیف', 'زمان', 'کار', 'فرد', 'وعده', 'نیرو', 'پرچم', 'دلیل'],
+      for (final e in (snap['log'] as List).cast<Map>())
+        [
+          '${e['seq']}',
+          exportTime(e['device_time']?.toString(), jalali: true),
+          _kinds[e['kind']] ?? '${e['kind']}',
+          people[e['attendee_id']] ?? '',
+          meals[e['meal_id']] ?? '',
+          staff[e['staff_id']] ?? (e['staff_id'] == null ? 'اپ مدیریت' : ''),
+          '${e['flag'] ?? ''}',
+          '${(e['payload'] as Map?)?['reason'] ?? ''}',
+        ],
+    ];
+    if (context.mounted) await _table(context, 'history', 'تاریخچه‌ی رویدادها', table, ExportFormat.xlsx);
+  }
+
+  Future<void> _backup(BuildContext context) async {
+    final s = StateScope.read(context);
+    final snap = await s.run('', s.fullSnapshot);
+    if (snap == null) return;
+    final bytes = Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent(' ').convert(snap)));
+    await saveExportFile(s, 'backup-${s.eventCode}-${DateTime.now().toIso8601String().substring(0, 10)}.json', 'json', bytes);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = StateScope.of(context);
+    final busy = s.busy;
+    Widget card(IconData icon, String title, String text, List<(String, VoidCallback)> actions) => SizedBox(
+          width: 320,
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(DaftarSize.space4),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(icon, color: DaftarColors.of(context).stamp),
+                const SizedBox(height: DaftarSize.space2),
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DaftarColors.of(context).inkMuted)),
+                const SizedBox(height: DaftarSize.space3),
+                Wrap(spacing: DaftarSize.space2, runSpacing: DaftarSize.space2, children: [
+                  for (final (label, onTap) in actions) OutlinedButton(onPressed: busy ? null : onTap, child: Text(label)),
+                ]),
+              ]),
+            ),
+          ),
+        );
+    return Wrap(spacing: DaftarSize.space3, runSpacing: DaftarSize.space3, children: [
+      card(Icons.groups_rounded, 'فهرست حضور', 'افراد با اولین و آخرین پذیرش و پذیرش‌کننده.', [
+        ('اکسل', () => showExportDialog(context)),
+        ('PDF', () => showExportDialog(context, format: ExportFormat.pdf)),
+      ]),
+      card(Icons.restaurant_rounded, 'گزارش پذیرایی', 'تعداد هر وعده، تکراری‌ها و بدون حق.', [
+        ('اکسل', () => _table(context, 'meals', 'گزارش پذیرایی', _meals(), ExportFormat.xlsx)),
+        ('PDF', () => _table(context, 'meals', 'گزارش پذیرایی', _meals(), ExportFormat.pdf)),
+      ]),
+      card(Icons.flag_rounded, 'موارد نیازمند بررسی', 'پرچم‌ها و کارهایی که سرور نپذیرفت.', [
+        ('اکسل', () => _table(context, 'flagged', 'موارد نیازمند بررسی', _flagged(), ExportFormat.xlsx)),
+      ]),
+      card(Icons.history_rounded, 'تاریخچه‌ی رویدادها', 'همه‌ی ثبت‌ها و لغوها به‌ترتیب زمان.', [
+        ('اکسل', () => _history(context)),
+      ]),
+      card(Icons.backup_rounded, 'پشتیبان کامل رویداد', 'یک فایل از همه‌ی داده‌ها برای نگهداری پس از رویداد.', [
+        ('ساخت پشتیبان', () => _backup(context)),
+      ]),
+    ]);
   }
 }

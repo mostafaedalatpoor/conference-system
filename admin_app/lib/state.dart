@@ -1125,6 +1125,45 @@ class AdminState extends ChangeNotifier {
     return loadReport();
   }
 
+  /// کل داده‌ی رویداد از سرور (برای «پشتیبان کامل» و «تاریخچه‌ی رویدادها»).
+  Future<Map<String, dynamic>> fullSnapshot() async =>
+      (await api.get('/admin/events/$eventCode/snapshot') as Map).cast<String, dynamic>();
+
+  /// ردیف‌های فهرست حضور با فیلتر (خروجی و تب افراد ویندوز).
+  Future<Map<String, dynamic>> exportRows({
+    String who = 'all',
+    String? type,
+    String? role,
+    String? day,
+    bool includeInactive = false,
+  }) async {
+    final q = {
+      'who': who,
+      if (type != null) 'type': type,
+      if (role != null) 'role': role,
+      if (day != null) 'day': day,
+      if (includeInactive) 'include_inactive': '1',
+    };
+    final r = await api.get('/admin/events/$eventCode/export?${Uri(queryParameters: q).query}');
+    return (r as Map).cast<String, dynamic>();
+  }
+
+  /// غیرفعال، فعال یا حذف چند نفر با هم. خروجی: شمار تغییرکرده و کسانی که چون کار ثبت‌شده دارند ماندند.
+  Future<(int, int)?> setPeopleStatusBulk(List<String> ids, String status, {bool force = false}) async {
+    (int, int)? out;
+    await run('', () async {
+      final r = (await api.post('/admin/events/$eventCode/attendees/status', {
+        'ids': ids,
+        'status': status,
+        if (force) 'force': true,
+      }) as Map)
+          .cast<String, dynamic>();
+      await _loadEvent(eventCode!);
+      out = ((r['changed'] as int?) ?? 0, ((r['kept'] as List?) ?? const []).length);
+    });
+    return out;
+  }
+
   /// «دیدن فهرست» یک وعده: افراد دارای حق و هر کس تحویل گرفته.
   Future<List<Map<String, dynamic>>> mealPeople(String mealCode) async {
     final r = (await api.get('/admin/events/$eventCode/meals/$mealCode/people') as Map).cast<String, dynamic>();
