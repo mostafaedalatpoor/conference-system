@@ -8,8 +8,25 @@ if (!defined('ABSPATH')) {
  * X-Conf-Device را با توکنی که ورود برگردانده می‌فرستد.
  */
 
-const CD_LOGIN_MAX_FAILS = 10;
+// قفل تلاش ناموفق (آ-۳): به‌ازای (IP، کد رویداد)، ۳۰ تلاش در ۱۰ دقیقه از اولین تلاش ناموفق.
+// سالن همایش معمولاً یک IP بیرونی دارد؛ شمارنده‌ی جدا برای هر رویداد و آستانه‌ی بالاتر
+// جلوی بسته‌شدن ورود همه‌ی نیروها با چند اشتباه را می‌گیرد، و حدس PIN همچنان کند می‌ماند.
+const CD_LOGIN_MAX_FAILS = 30;
 const CD_LOGIN_WINDOW = 600; // ثانیه
+
+/** کلید شمارنده‌ی تلاش ناموفق برای این IP و این کد رویداد. */
+function cd_login_fail_key($event_code) {
+    return 'cd_login_fail_' . md5(cd_client_ip() . '|' . strtolower(trim((string) $event_code)));
+}
+
+/** وضعیت شمارنده: [شمار، زمان پایان پنجره]. */
+function cd_login_fails($key) {
+    $v = get_transient($key);
+    if (!is_array($v) || (int) ($v['until'] ?? 0) <= time()) {
+        return [0, 0];
+    }
+    return [(int) $v['n'], (int) $v['until']];
+}
 
 /** گوشی فعلی، بعد از عبور از permission_callback. */
 function cd_current_device($set = null) {
@@ -78,10 +95,17 @@ function cd_device_me(array $device) {
 
 function cd_rest_device_login(WP_REST_Request $request) {
     global $wpdb;
-    $ip_key = 'cd_login_fail_' . md5(cd_client_ip());
-    $fails = (int) get_transient($ip_key);
+    $ip_key = cd_login_fail_key($request->get_param('event_code'));
+    [$fails, $until] = cd_login_fails($ip_key);
     if ($fails >= CD_LOGIN_MAX_FAILS) {
-        return cd_error('cd_login_locked', 'تلاش ناموفق زیاد بود. ۱۰ دقیقه بعد دوباره امتحان کنید.', 429);
+        $left = max(60, $until - time());
+        $minutes = (int) ceil($left / 60);
+        return cd_error(
+            'cd_login_locked',
+            'تلاش ناموفق زیاد بود. ' . cd_fa_digits((string) $minutes) . ' دقیقه دیگر دوباره امتحان کنید.',
+            429,
+            ['retry_after' => $left]
+        );
     }
 
     $event = cd_get_event_by_code((string) $request->get_param('event_code'));
@@ -107,7 +131,8 @@ function cd_rest_device_login(WP_REST_Request $request) {
     }
 
     if (!$staff) {
-        set_transient($ip_key, $fails + 1, CD_LOGIN_WINDOW);
+        $until = $fails === 0 ? time() + CD_LOGIN_WINDOW : $until;
+        set_transient($ip_key, ['n' => $fails + 1, 'until' => $until], max(1, $until - time()));
         return cd_error('cd_login_failed', 'کد رویداد یا PIN اشتباه است.', 401);
     }
 
