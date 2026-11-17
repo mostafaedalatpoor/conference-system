@@ -4,6 +4,7 @@ import '../main.dart';
 import '../normalize.dart';
 import '../state.dart';
 import '../theme/daftar.dart';
+import '../theme/jalali_picker.dart';
 import '../theme/widgets.dart';
 
 class ConnectScreen extends StatefulWidget {
@@ -18,8 +19,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
   final _key = TextEditingController();
   final _code = TextEditingController();
   final _name = TextEditingController();
-  final _start = TextEditingController();
-  final _end = TextEditingController();
+  // تاریخ‌ها ISO میلادی؛ فقط انتخاب‌گر شمسی است.
+  String _start = '';
+  String _end = '';
   final _base = TextEditingController();
   String? _filledFor;
 
@@ -40,8 +42,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
     _filledFor = e.code;
     _code.text = e.code;
     _name.text = e.name;
-    _start.text = e.startDate ?? '';
-    _end.text = e.endDate ?? '';
+    _start = e.startDate ?? '';
+    _end = e.endDate ?? '';
     _base.text = e.baseUrl;
   }
 
@@ -110,9 +112,11 @@ class _ConnectScreenState extends State<ConnectScreen> {
               onPressed: () => setState(() {
                 _creating = true;
                 _filledFor = null;
-                for (final c in [_code, _name, _start, _end, _base]) {
+                for (final c in [_code, _name, _base]) {
                   c.clear();
                 }
+                _start = '';
+                _end = '';
               }),
             ),
           ),
@@ -151,23 +155,15 @@ class _ConnectScreenState extends State<ConnectScreen> {
           Expanded(flex: 2, child: TextField(controller: _name, decoration: const InputDecoration(labelText: 'نام رویداد'))),
         ]),
         const SizedBox(height: 8),
-        Row(children: [
-          Expanded(
-            child: TextField(
-              controller: _start,
-              decoration: const InputDecoration(labelText: 'تاریخ شروع (میلادی، 2026-11-11)'),
-              textDirection: TextDirection.ltr,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: _end,
-              decoration: const InputDecoration(labelText: 'تاریخ پایان (میلادی)'),
-              textDirection: TextDirection.ltr,
-            ),
-          ),
-        ]),
+        JalaliRangePicker(
+          key: ValueKey(_filledFor),
+          start: _start,
+          end: _end,
+          onChanged: (a, b) => setState(() {
+            _start = a;
+            _end = b;
+          }),
+        ),
         const SizedBox(height: 8),
         TextField(
           controller: _base,
@@ -190,8 +186,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
                     await s.saveEvent(
                       code: create ? _code.text : s.event!.code,
                       name: _name.text,
-                      startDate: _start.text,
-                      endDate: _end.text,
+                      startDate: _start,
+                      endDate: _end,
                       baseUrl: _base.text,
                       create: create,
                     );

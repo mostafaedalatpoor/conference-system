@@ -337,8 +337,16 @@ add_action('rest_api_init', function () {
     ]);
 });
 
+/**
+ * تاریخ میلادی YYYY-MM-DD که واقعاً هست. ذخیره همیشه میلادی است و اپ‌ها تقویم شمسی را خودشان تبدیل می‌کنند؛
+ * سال بیرون از ۱۹۰۰ تا ۲۱۹۹ (مثل 1405-08-20 که شمسی تایپ شده) و روز ناموجود (2026-02-30) رد می‌شود.
+ */
 function cd_valid_date($s) {
-    return is_string($s) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $s) === 1;
+    if (!is_string($s) || preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $s, $m) !== 1) {
+        return false;
+    }
+    $y = (int) $m[1];
+    return $y >= 1900 && $y <= 2199 && checkdate((int) $m[2], (int) $m[3], $y);
 }
 
 function cd_rest_upsert_event(WP_REST_Request $request) {
@@ -356,7 +364,7 @@ function cd_rest_upsert_event(WP_REST_Request $request) {
         return cd_error('cd_bad_name', 'نام رویداد لازم است.');
     }
     if (($start !== null && $start !== '' && !cd_valid_date($start)) || ($end !== null && $end !== '' && !cd_valid_date($end))) {
-        return cd_error('cd_bad_date', 'تاریخ باید به شکل YYYY-MM-DD (میلادی) باشد.');
+        return cd_error('cd_bad_date', 'تاریخ باید میلادی و به شکل YYYY-MM-DD باشد (مثلاً 2026-11-11)؛ تاریخ شمسی را اپ مدیریت خودش تبدیل می‌کند.');
     }
     $base = $base === '' ? untrailingslashit(home_url()) : untrailingslashit(esc_url_raw($base));
     if (strpos($base, 'https://') !== 0 && strpos($base, 'http://') !== 0) {
