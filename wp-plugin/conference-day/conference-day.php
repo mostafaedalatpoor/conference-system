@@ -30,12 +30,17 @@ require_once CD_DIR . 'includes/report.php';
 require_once CD_DIR . 'includes/rest-admin.php';
 require_once CD_DIR . 'includes/rest-device.php';
 require_once CD_DIR . 'includes/public-page.php';
+require_once CD_DIR . 'includes/ui.php';
+require_once CD_DIR . 'includes/web-dashboard.php';
 require_once CD_DIR . 'includes/admin-ui.php';
 
 register_activation_hook(__FILE__, function () {
     cd_install_tables();
     cd_add_rewrite();
+    cd_web_add_rewrite();
     flush_rewrite_rules();
+    // بعد از فعال‌سازی صفحه‌ی «شروع» یک بار باز می‌شود.
+    set_transient('cd_activation_redirect', 1, 60);
 });
 
 register_deactivation_hook(__FILE__, function () {
