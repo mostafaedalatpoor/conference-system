@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../main.dart';
 import '../normalize.dart';
@@ -21,11 +22,22 @@ class StaffScreen extends StatefulWidget {
 class _StaffScreenState extends State<StaffScreen> {
   int _rev = 0; // برای بازسازی فیلدها بعد از ساخت PIN خودکار
 
+  /// نیروهایی که پین‌شان دیده می‌شود (آیکن چشم).
+  final Set<int> _shown = {};
+
   /// ذخیره؛ اگر کسی دیگر در این فاصله ذخیره کرده باشد، پنجره‌ی تعارض (حالت ۱۱ طراحی).
   Future<void> _save(AdminState s, {bool force = false}) async {
+    // نیروهای تازه‌ای که پین گرفته‌اند، برای برگه‌ی «نیروی تازه ساخته شد».
+    final fresh = [for (final st in s.staff) if (st.id == null && st.newPin.isNotEmpty) st.name];
     final conflicts = await s.pushStaff(force: force);
     if (!mounted) return;
     setState(() => _rev++);
+    if (conflicts == null && !s.messageIsError) {
+      for (final name in fresh) {
+        final st = s.staff.where((x) => x.name == name).firstOrNull;
+        if (st?.pin != null && mounted) await _showCreated(st!);
+      }
+    }
     if (conflicts == null) return;
     final who = conflicts.map((c) => c.updatedBy).where((e) => e.isNotEmpty).toSet().join('، ');
     final at = conflicts.map((c) => DateTime.tryParse(c.updatedAt ?? '')).whereType<DateTime>().fold<DateTime?>(
@@ -53,20 +65,149 @@ class _StaffScreenState extends State<StaffScreen> {
     }
   }
 
-  void _randomPins(AdminState s) {
+  /// پین تصادفی ۴ رقمی که با پین‌های دیده‌شده‌ی دیگر یکی نیست (سرور هم تکراری را رد می‌کند).
+  String _randomPin(AdminState s) {
     final r = Random.secure();
-    final used = <String>{};
+    final used = {for (final st in s.staff) ...[if (st.pin != null) st.pin!, if (st.newPin.isNotEmpty) st.newPin]};
+    String pin;
+    do {
+      pin = (1000 + r.nextInt(9000)).toString();
+    } while (used.contains(pin));
+    return pin;
+  }
+
+  void _randomPins(AdminState s) {
     for (final st in s.staff) {
       if (!st.active || st.hasPin || st.newPin.isNotEmpty) continue;
-      String pin;
-      do {
-        pin = (100000 + r.nextInt(900000)).toString();
-      } while (used.contains(pin));
-      used.add(pin);
-      st.newPin = pin;
+      st.newPin = _randomPin(s);
     }
     setState(() => _rev++);
     s.notify();
+  }
+
+  Future<void> _copy(String pin) async {
+    await Clipboard.setData(ClipboardData(text: pin));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('پین کپی شد.')));
+  }
+
+  /// برگه‌ی «نیروی تازه ساخته شد» (۱۱-StaffPin): نام، پین درشت با چشم و کپی، «بستن».
+  Future<void> _showCreated(StaffDef st) {
+    var visible = true;
+    final roles = [if (st.canCheckin) 'پذیرش', if (st.canServe) 'پذیرایی', if (st.isAdmin) 'مدیر'].join('، ');
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setSheet) {
+          final x = DaftarColors.of(c);
+          final theme = Theme.of(c);
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(DaftarSize.space4, 0, DaftarSize.space4, DaftarSize.space5),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Text('نیروی تازه ساخته شد', style: theme.textTheme.titleLarge),
+                const SizedBox(height: DaftarSize.space3),
+                Container(
+                  padding: const EdgeInsets.all(DaftarSize.space3),
+                  decoration: BoxDecoration(color: x.sunken, borderRadius: BorderRadius.circular(DaftarSize.radiusMd)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('نیرو', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+                    Text([st.name, if (roles.isNotEmpty) roles].join(' · '), style: theme.textTheme.titleMedium),
+                  ]),
+                ),
+                const SizedBox(height: DaftarSize.space3),
+                Container(
+                  padding: const EdgeInsets.all(DaftarSize.space4),
+                  decoration: BoxDecoration(color: x.stampSoft, borderRadius: BorderRadius.circular(DaftarSize.radiusLg)),
+                  child: Column(children: [
+                    Text(
+                      visible ? faDigits(st.pin!) : '•' * st.pin!.length,
+                      textDirection: TextDirection.ltr,
+                      style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 10, fontFeatures: tabularFigures),
+                    ),
+                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      IconButton(
+                        tooltip: visible ? 'پنهان کردن' : 'نشان دادن',
+                        onPressed: () => setSheet(() => visible = !visible),
+                        icon: Icon(visible ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+                      ),
+                      IconButton(tooltip: 'کپی پین', onPressed: () => _copy(st.pin!), icon: const Icon(Icons.content_copy_rounded)),
+                    ]),
+                  ]),
+                ),
+                const SizedBox(height: DaftarSize.space4),
+                FilledButton(
+                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(DaftarSize.tapLg)),
+                  onPressed: () => Navigator.pop(c),
+                  child: const Text('بستن'),
+                ),
+              ]),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// خانه‌ی پین در ردیف نیرو (۱۱-StaffPin و ۰۴-Phones): پوشیده با چشم و کپی، «پین قدیمی ثبت‌شده نیست · بساز»،
+  /// یا فیلد پین تازه وقتی مدیر «پین تازه» یا «بساز» زده.
+  Widget _pinCell(AdminState s, StaffDef st) {
+    final x = DaftarColors.of(context);
+    final theme = Theme.of(context);
+    if (st.newPin.isNotEmpty || (st.id == null)) {
+      return TextFormField(
+        initialValue: st.newPin,
+        enabled: st.active,
+        decoration: InputDecoration(
+          labelText: 'پین (خودکار یا دلخواه ۴ رقمی)',
+          isDense: true,
+          suffixIcon: IconButton(
+            tooltip: 'پین تصادفی',
+            icon: const Icon(Icons.casino_rounded, size: 18),
+            onPressed: () => setState(() {
+              st.newPin = _randomPin(s);
+              _rev++;
+            }),
+          ),
+        ),
+        keyboardType: TextInputType.number,
+        textDirection: TextDirection.ltr,
+        onChanged: (v) => st.newPin = v.trim(),
+      );
+    }
+    final make = TextButton(
+      onPressed: st.active
+          ? () => setState(() {
+                st.newPin = _randomPin(s);
+                _rev++;
+              })
+          : null,
+      child: Text(st.pin != null ? 'پین تازه' : 'بساز'),
+    );
+    if (st.pin == null) {
+      return Row(mainAxisSize: MainAxisSize.min, children: [
+        Flexible(
+          child: Text(st.pinLegacy ? 'پین قدیمی ثبت‌شده نیست ·' : 'پین ندارد ·',
+              style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+        ),
+        make,
+      ]);
+    }
+    final shown = _shown.contains(st.id);
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Text('پین', style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+      const SizedBox(width: DaftarSize.space2),
+      Text(shown ? faDigits(st.pin!) : '•' * st.pin!.length,
+          textDirection: TextDirection.ltr,
+          style: theme.textTheme.titleMedium?.copyWith(letterSpacing: 3, fontFeatures: tabularFigures)),
+      IconButton(
+        tooltip: shown ? 'پنهان کردن' : 'نشان دادن',
+        icon: Icon(shown ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 20),
+        onPressed: () => setState(() => shown ? _shown.remove(st.id) : _shown.add(st.id!)),
+      ),
+      IconButton(tooltip: 'کپی پین', icon: const Icon(Icons.content_copy_rounded, size: 20), onPressed: () => _copy(st.pin!)),
+      if (st.active) make,
+    ]);
   }
 
   @override
@@ -75,8 +216,8 @@ class _StaffScreenState extends State<StaffScreen> {
     final anyNewPin = s.staff.any((x) => x.newPin.isNotEmpty);
     return PageBody(title: 'نیروها', children: [
       const Hint(
-        'هر نیرو با کد رویداد و PIN خودش وارد اپ گوشی می‌شود. PIN بعد از ذخیره فقط به‌صورت رمزشده روی سرور می‌ماند؛ '
-        'اگر فراموش شد، PIN تازه بدهید. نیروی غیرفعال‌شده وارد نمی‌شود و گوشی‌هایش باطل می‌شوند؛ '
+        'هر نیرو با کد رویداد و پین خودش وارد اپ گوشی می‌شود. پین هر نیرو اینجا با آیکن چشم دیده و با کپی کپی می‌شود؛ '
+        'اگر لازم شد «پین تازه» بدهید. نیروی غیرفعال‌شده وارد نمی‌شود و گوشی‌هایش باطل می‌شوند؛ '
         'فقط با «فعال کردن دوباره» برمی‌گردد. اجازه‌ها روی سرور سنجیده می‌شوند.',
       ),
       if (_lastSaved(s) != null)
@@ -100,17 +241,7 @@ class _StaffScreenState extends State<StaffScreen> {
               ),
               onChanged: (v) => st.name = v.trim(),
             );
-            final pin = TextFormField(
-              initialValue: st.newPin,
-              enabled: st.active,
-              decoration: InputDecoration(
-                labelText: st.hasPin ? 'PIN جدید (خالی = بدون تغییر)' : 'PIN (۴ تا ۸ رقم)',
-                isDense: true,
-              ),
-              keyboardType: TextInputType.number,
-              textDirection: TextDirection.ltr,
-              onChanged: (v) => st.newPin = v.trim(),
-            );
+            final pin = _pinCell(s, st);
             final flags = Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
               _Flag('پذیرش', st.canCheckin, st.active ? (v) => setState(() => st.canCheckin = v) : null),
               _Flag('پذیرایی', st.canServe, st.active ? (v) => setState(() => st.canServe = v) : null),
@@ -139,7 +270,7 @@ class _StaffScreenState extends State<StaffScreen> {
               return Row(children: [
                 Expanded(child: name),
                 const SizedBox(width: 8),
-                SizedBox(width: 150, child: pin),
+                SizedBox(width: 300, child: Align(alignment: AlignmentDirectional.centerStart, child: pin)),
                 const SizedBox(width: 8),
                 flags,
                 delete,
@@ -152,7 +283,7 @@ class _StaffScreenState extends State<StaffScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   Row(children: [Expanded(child: name), delete]),
                   const SizedBox(height: DaftarSize.space2),
-                  pin,
+                  Align(alignment: AlignmentDirectional.centerStart, child: pin),
                   flags,
                 ]),
               ),
@@ -170,17 +301,14 @@ class _StaffScreenState extends State<StaffScreen> {
         ),
         TextButton.icon(
           icon: const Icon(Icons.casino_rounded),
-          label: const Text('PIN تصادفی برای کسانی که ندارند'),
+          label: const Text('پین تصادفی برای کسانی که ندارند'),
           onPressed: () => _randomPins(s),
         ),
       ]),
       if (anyNewPin)
         const Padding(
           padding: EdgeInsets.only(top: 8),
-          child: Notice(
-            tone: NoticeTone.wait,
-            text: 'PINها را قبل از ذخیره یادداشت کنید و به هر نیرو بدهید؛ بعد از ذخیره دیگر نمایش داده نمی‌شوند.',
-          ),
+          child: Hint('پین‌های تازه با «ذخیره روی سرور» ثبت می‌شوند و بعد هم همین‌جا دیده می‌شوند.'),
         ),
       const SizedBox(height: 16),
       Align(

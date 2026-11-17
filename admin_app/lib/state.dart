@@ -113,6 +113,10 @@ class StaffDef {
   bool hasPin;
   bool active;
 
+  /// پین فعلی از سرور (آ-۱)؛ null برای نیروی بی‌پین یا قدیمی که هنوز وارد نشده (pinLegacy).
+  String? pin;
+  bool pinLegacy;
+
   /// زمان و فاعل آخرین ذخیره روی سرور؛ updatedAt برای تشخیص تعارض فرستاده می‌شود.
   String? updatedAt;
   String updatedBy;
@@ -127,6 +131,8 @@ class StaffDef {
     this.active = true,
     this.updatedAt,
     this.updatedBy = '',
+    this.pin,
+    this.pinLegacy = false,
   });
 
   /// ردیف ارسال به سرور (ذخیره‌ی جزئی).
@@ -151,6 +157,8 @@ class StaffDef {
         active: j['active'] != false,
         updatedAt: j['updated_at']?.toString(),
         updatedBy: (j['updated_by'] ?? '').toString(),
+        pin: j['pin']?.toString(),
+        pinLegacy: j['pin_legacy'] == true,
       );
 }
 
@@ -684,6 +692,7 @@ class AdminState extends ChangeNotifier {
 
     // نیروها فقط از سرور: فعال/غیرفعال، اجازه‌ها و داشتن PIN. نیروی غیرفعال دوباره اضافه یا فعال نمی‌شود.
     staff = list('staff').map(StaffDef.fromJson).toList();
+    await _loadStaffPins();
     // قالب‌های کارت از سرور، اگر آنجا ذخیره شده؛ مسیر تصویرهای طرح همان محلی می‌ماند.
     // قالب تکی قدیمی (بدون templates) قالب «پیش‌فرض» می‌شود.
     final serverTemplate = s['card_template'];
@@ -734,6 +743,7 @@ class AdminState extends ChangeNotifier {
           'staff': [for (final s in staff) s.toUpload()],
         }) as List;
         staff = r.map((e) => StaffDef.fromJson((e as Map).cast<String, dynamic>())).toList();
+        await _loadStaffPins();
       } on ApiException catch (e) {
         if (e.code != 'cd_staff_conflict') rethrow;
         final list = ((e.data as Map?)?['conflicts'] as List?) ?? const [];
@@ -745,6 +755,20 @@ class AdminState extends ChangeNotifier {
       notifyListeners();
     }
     return conflicts;
+  }
+
+  /// پین نیروها از GET staff (افزونه‌ی ۰٫۶ به بعد، کلید مالک یا مدیر). خطا یعنی پین نمایش داده نمی‌شود.
+  Future<void> _loadStaffPins() async {
+    try {
+      final r = await api.get('/admin/events/$eventCode/staff') as List;
+      final byId = {for (final x in r.cast<Map>()) x['id']: x};
+      for (final st in staff) {
+        final x = byId[st.id];
+        if (x == null) continue;
+        st.pin = x['pin']?.toString();
+        st.pinLegacy = x['pin_legacy'] == true;
+      }
+    } catch (_) {}
   }
 
   /// «تغییر او را ببین»: فهرست نیروها از سرور، تغییرهای ذخیره‌نشده‌ی این دستگاه دور ریخته می‌شود.

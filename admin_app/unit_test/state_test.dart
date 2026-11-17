@@ -123,4 +123,16 @@ void main() {
 
     test('todayIso', () => expect(todayIso(DateTime(2026, 1, 5)), '2026-01-05'));
   });
+
+  test('StaffDef reads pin and pin_legacy (A-1); old plugin without them → null / false', () {
+    final a = StaffDef.fromJson({'id': 1, 'name': 'س', 'has_pin': true, 'pin': '4817'});
+    expect(a.pin, '4817');
+    expect(a.pinLegacy, isFalse);
+    final b = StaffDef.fromJson({'id': 2, 'name': 'م', 'has_pin': true, 'pin': null, 'pin_legacy': true});
+    expect(b.pin, isNull);
+    expect(b.pinLegacy, isTrue);
+    expect(StaffDef.fromJson({'name': 'x'}).pin, isNull);
+    // پین موجود هرگز دوباره فرستاده نمی‌شود؛ فقط پین تازه.
+    expect(a.toUpload().containsKey('pin'), isFalse);
+  });
 }
