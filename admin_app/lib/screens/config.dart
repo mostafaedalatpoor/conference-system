@@ -2,8 +2,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../excel_import.dart';
+import '../jalali.dart';
 import '../main.dart';
+import '../normalize.dart';
 import '../theme/daftar.dart';
+import '../theme/jalali_picker.dart';
 import '../theme/widgets.dart';
 import '../state.dart';
 
@@ -47,13 +50,18 @@ class _ConfigScreenState extends State<ConfigScreen> {
       final tables = await readTables(f.name, f.bytes!);
       if (tables.isEmpty) return;
       final t = tables.first;
-      // ستون‌ها به این ترتیب: روز (میلادی)، شروع، پایان، عنوان، سالن، نوع
+      // ستون‌ها به این ترتیب: روز (شمسی یا میلادی)، شروع، پایان، عنوان، سالن، نوع. روز به ISO میلادی تبدیل می‌شود.
       s.sessions = [
         for (final row in t.rows)
           if (row.length >= 4 && row[0].trim().isNotEmpty && row[3].trim().isNotEmpty)
-            SessionDef(row[0].trim(), row[1].trim(), row[2].trim(), row[3].trim(), row.length > 4 ? row[4].trim() : '',
-                row.length > 5 ? row[5].trim() : ''),
+            SessionDef(parseDateInput(row[0]) ?? row[0].trim(), row[1].trim(), row[2].trim(), row[3].trim(),
+                row.length > 4 ? row[4].trim() : '', row.length > 5 ? row[5].trim() : ''),
       ];
+      final bad = s.sessions.where((x) => parseIsoDate(x.day) == null).length;
+      if (bad > 0) {
+        s.message = 'روز ${faDigits(bad)} جلسه خوانا نبود؛ روزش را از تقویم انتخاب کنید.';
+        s.messageIsError = true;
+      }
       s.notify();
     } catch (e) {
       s.message = 'خواندن فایل برنامه ناموفق بود: $e';
@@ -205,7 +213,7 @@ class _MealEditor extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             SizedBox(
-              width: narrow ? c.maxWidth - 140 - 12 - 4 : c.maxWidth - 140 - 150 - 24 - 64,
+              width: narrow ? c.maxWidth - 140 - 12 - 4 : c.maxWidth - 140 - 180 - 24 - 64,
               child: TextFormField(
                 initialValue: meal.name,
                 decoration: const InputDecoration(labelText: 'نام وعده', isDense: true),
@@ -214,12 +222,20 @@ class _MealEditor extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             SizedBox(
-              width: 150,
-              child: TextFormField(
-                initialValue: meal.day,
-                decoration: const InputDecoration(labelText: 'روز (میلادی)', isDense: true),
-                textDirection: TextDirection.ltr,
-                onChanged: (v) => meal.day = v.trim(),
+              width: 180,
+              child: JalaliDateField(
+                label: 'روز',
+                value: meal.day,
+                dense: true,
+                clearable: true,
+                emptyText: 'همه‌ی روزها',
+                dialogTitle: 'روز وعده',
+                rangeStart: parseIsoDate(s.event?.startDate),
+                rangeEnd: parseIsoDate(s.event?.endDate),
+                onChanged: (v) {
+                  meal.day = v;
+                  s.notify();
+                },
               ),
             ),
             IconButton(
@@ -287,6 +303,22 @@ class _SessionRow extends StatelessWidget {
       return w == null ? Expanded(child: field) : SizedBox(width: w, child: field);
     }
 
+    Widget day(double w) => SizedBox(
+          width: w,
+          child: JalaliDateField(
+            label: 'روز',
+            value: session.day,
+            dense: true,
+            dialogTitle: 'روز جلسه',
+            rangeStart: parseIsoDate(s.event?.startDate),
+            rangeEnd: parseIsoDate(s.event?.endDate),
+            onChanged: (v) {
+              session.day = v;
+              s.notify();
+            },
+          ),
+        );
+
     if (MediaQuery.sizeOf(context).width < 720) {
       // گوشی: عنوان یک خط کامل، بقیه زیرش.
       Widget g(String label, String init, void Function(String) on, double w, {bool ltr = false}) => SizedBox(
@@ -315,7 +347,7 @@ class _SessionRow extends StatelessWidget {
             ]),
             const SizedBox(height: 8),
             Wrap(spacing: 8, runSpacing: 8, children: [
-              g('روز', session.day, (v) => session.day = v, 120, ltr: true),
+              day(180),
               g('شروع', session.start, (v) => session.start = v, 80, ltr: true),
               g('پایان', session.end, (v) => session.end = v, 80, ltr: true),
               g('سالن', session.hall, (v) => session.hall = v, 140),
@@ -328,7 +360,7 @@ class _SessionRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(children: [
-        f('روز', session.day, (v) => session.day = v, w: 110, ltr: true),
+        day(180),
         const SizedBox(width: 6),
         f('شروع', session.start, (v) => session.start = v, w: 70, ltr: true),
         const SizedBox(width: 6),
