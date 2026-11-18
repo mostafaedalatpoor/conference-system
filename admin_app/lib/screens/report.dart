@@ -167,11 +167,26 @@ class _ReportScreenState extends State<ReportScreen> {
         ]),
         Text('حق دارند: فقط افراد فعال؛ غیرفعال‌ها شمرده نمی‌شوند.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: x.inkMuted)),
-        const SectionTitle('موارد مشکوک'),
-        if ((r['flagged'] as List).isEmpty) const Hint('موردی نیست.'),
-        for (final f in r['flagged'] as List)
+        // موارد مشکوک با «بستن» تکی و «بستن همه» (روی همین دستگاه؛ در خروجی و گزارش می‌مانند).
+        Builder(builder: (context) {
+          final hidden = s.dismissedAlerts;
+          final shown = [for (final f in r['flagged'] as List) if (!hidden.contains('flag:${f['seq']}')) f];
+          final hiddenFlags = (r['flagged'] as List).length - shown.length;
+          return Row(children: [
+            const Expanded(child: SectionTitle('موارد مشکوک')),
+            if (hiddenFlags > 0) TextButton(onPressed: s.restoreAlerts, child: Text('نمایش بسته‌ها (${faDigits(hiddenFlags)})')),
+            if (shown.isNotEmpty) TextButton(onPressed: () => s.dismissAlerts([for (final f in shown) 'flag:${f['seq']}']), child: const Text('بستن همه')),
+          ]);
+        }),
+        if ((r['flagged'] as List).where((f) => !s.dismissedAlerts.contains('flag:${f['seq']}')).isEmpty) const Hint('موردی نیست.'),
+        for (final f in (r['flagged'] as List).where((f) => !s.dismissedAlerts.contains('flag:${f['seq']}')))
           ListTile(
             dense: true,
+            trailing: IconButton(
+              tooltip: 'بستن این هشدار',
+              onPressed: () => s.dismissAlerts(['flag:${f['seq']}']),
+              icon: const Icon(Icons.close_rounded, size: 18),
+            ),
             leading: f['rejected'] == true
                 ? Icon(Icons.gpp_bad_rounded, color: x.stop)
                 : Icon(Icons.warning_rounded, color: x.wait),

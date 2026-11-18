@@ -100,7 +100,13 @@ class _TodayTabState extends State<TodayTab> {
                     text: 'به سرور نرسیدیم؛ داده‌ی ساعت ${faDigits(hm(_at ?? DateTime.now()))} نشان داده می‌شود.',
                   ),
                 ),
-              _AttentionCard(items: items),
+              _AttentionCard(
+                items: items,
+                hiddenCount: s.dismissedAlerts.length,
+                onDismiss: (k) => s.dismissAlerts([k]),
+                onDismissAll: () => s.dismissAlerts([for (final i in items) if (i.key != null) i.key!]),
+                onRestore: s.restoreAlerts,
+              ),
               const SizedBox(height: 14),
               _Stats(totals: totals),
               const SizedBox(height: 14),
@@ -139,9 +145,11 @@ class _TodayTabState extends State<TodayTab> {
     final out = <_Item>[];
     if (s.regWaiting > 0) {
       out.add(_Item(Icons.pending_actions_rounded, c.waitSoft, c.wait, '${faDigits(s.regWaiting)} ثبت‌نام منتظر تصمیم شما', 'تأیید یا بررسی پرداخت',
-          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegListPage(filter: 'attention')))));
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegListPage(filter: 'attention'))), 'reg:${s.regWaiting}'));
     }
-    for (final f in s.flaggedList.where((f) => f['resolved_at'] == null).take(6)) {
+    final hidden = s.dismissedAlerts;
+    final openFlags = s.flaggedList.where((f) => f['resolved_at'] == null && !hidden.contains('flag:${f['seq']}')).toList();
+    for (final f in openFlags.take(6)) {
       final flag = '${f['flag']}';
       final (IconData icon, bool red) = switch (flag) {
         'meal_override' => (Icons.flag_rounded, true),
@@ -163,9 +171,9 @@ class _TodayTabState extends State<TodayTab> {
         Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => person != null ? PersonPage(person: person) : FlagPage(flag: f),
         ));
-      }));
+      }, 'flag:${f['seq']}'));
     }
-    final open = s.flaggedList.where((f) => f['resolved_at'] == null).length;
+    final open = openFlags.length;
     if (open > 6) {
       out.add(_Item(Icons.more_horiz_rounded, c.chip, c.muted, 'و ${faDigits(open - 6)} مورد مشکوک دیگر', 'همه‌ی موردها',
           () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FlagsPage()))));
@@ -178,18 +186,18 @@ class _TodayTabState extends State<TodayTab> {
       if (mins <= 10) continue;
       out.add(_Item(Icons.phonelink_off_rounded, c.waitSoft, c.wait, '«${d['label']}» بی‌خبر است',
           ['${faDigits(mins)} دقیقه', if ('${d['staff'] ?? ''}'.isNotEmpty) '${d['staff']}', if ((d['pending'] ?? 0) > 0) '${faDigits(d['pending'])} در صف'].join('، '),
-          () => widget.onGo(2)));
+          () => widget.onGo(2), 'dev:${d['id']}:${d['last_sync_at']}'));
     }
     final incomplete = s.people.values.where((p) => p.missingName).length;
     if (incomplete > 0) {
       out.add(_Item(Icons.edit_note_rounded, c.waitSoft, c.wait, '${faDigits(incomplete)} نفر اطلاعات ناقص دارند', 'نام یا نام خانوادگی خالی است',
-          () => widget.onGo(1)));
+          () => widget.onGo(1), 'inc:$incomplete'));
     }
     final free = (r['totals'] as Map)['reserve_cards_free'] as num? ?? 0;
     if (s.settings.usesCards && free < 3) {
-      out.add(_Item(Icons.style_rounded, c.chip, c.muted, 'کارت رزرو رو به اتمام', '${faDigits(free)} کارت آزاد مانده', () => widget.onGo(3)));
+      out.add(_Item(Icons.style_rounded, c.chip, c.muted, 'کارت رزرو رو به اتمام', '${faDigits(free)} کارت آزاد مانده', () => widget.onGo(3), 'res:$free'));
     }
-    return out;
+    return [for (final i in out) if (i.key == null || !hidden.contains(i.key)) i];
   }
 
   List<Widget> _meals(BuildContext context, AdminState s, Map<String, dynamic> r) {
@@ -288,12 +296,17 @@ class _Item {
   final Color bg, fg;
   final String title, sub;
   final VoidCallback onTap;
-  _Item(this.icon, this.bg, this.fg, this.title, this.sub, this.onTap);
+  /// کلید بستن؛ null یعنی بسته نمی‌شود (ردیف «و … مورد دیگر»).
+  final String? key;
+  _Item(this.icon, this.bg, this.fg, this.title, this.sub, this.onTap, [this.key]);
 }
 
 class _AttentionCard extends StatelessWidget {
   final List<_Item> items;
-  const _AttentionCard({required this.items});
+  final int hiddenCount;
+  final ValueChanged<String> onDismiss;
+  final VoidCallback onDismissAll, onRestore;
+  const _AttentionCard({required this.items, required this.hiddenCount, required this.onDismiss, required this.onDismissAll, required this.onRestore});
 
   @override
   Widget build(BuildContext context) {
@@ -308,13 +321,15 @@ class _AttentionCard extends StatelessWidget {
                 Icon(Icons.check_circle_rounded, color: c.go),
                 const SizedBox(width: 10),
                 Expanded(child: Text('همه‌چیز رو به راه است', style: nvText(context, 15, w: FontWeight.w700))),
+                if (hiddenCount > 0) TextButton(onPressed: onRestore, child: const Text('نمایش بسته‌ها')),
               ]),
             )
           : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(2, 8, 2, 4),
                 child: Row(children: [
-                  Expanded(child: Text('نیاز به توجه', style: nvText(context, 15, w: FontWeight.w800))),
+                  Text('نیاز به توجه', style: nvText(context, 15, w: FontWeight.w800)),
+                  const SizedBox(width: 8),
                   Container(
                     constraints: const BoxConstraints(minWidth: 24),
                     height: 24,
@@ -323,6 +338,9 @@ class _AttentionCard extends StatelessWidget {
                     decoration: BoxDecoration(color: c.waitSoft, borderRadius: BorderRadius.circular(12)),
                     child: Text(faDigits(items.length), style: nvText(context, 13, w: FontWeight.w800, color: c.wait)),
                   ),
+                  const Spacer(),
+                  if (hiddenCount > 0) TextButton(onPressed: onRestore, child: const Text('نمایش بسته‌ها')),
+                  if (items.any((i) => i.key != null)) TextButton(onPressed: onDismissAll, child: const Text('بستن همه')),
                 ]),
               ),
               for (var i = 0; i < items.length; i++)
@@ -347,7 +365,15 @@ class _AttentionCard extends StatelessWidget {
                             Text(items[i].sub, maxLines: 2, overflow: TextOverflow.ellipsis, style: nvText(context, 12, color: c.muted)),
                         ]),
                       ),
-                      Icon(Icons.chevron_left_rounded, color: c.muted),
+                      if (items[i].key != null)
+                        IconButton(
+                          tooltip: 'بستن این هشدار',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => onDismiss(items[i].key!),
+                          icon: Icon(Icons.close_rounded, size: 20, color: c.muted),
+                        )
+                      else
+                        Icon(Icons.chevron_left_rounded, color: c.muted),
                     ]),
                   ),
                 ),

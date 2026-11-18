@@ -477,6 +477,9 @@ class AdminState extends ChangeNotifier {
         cardsRev++;
         // نیروها فقط از سرور خوانده می‌شوند (فایل محلی قدیمی نادیده گرفته می‌شود).
         _settingsByEvent = ((j['settings'] as Map?) ?? {}).cast<String, dynamic>();
+        _dismissed = {
+          for (final e in ((j['dismissed_alerts'] as Map?) ?? {}).entries) '${e.key}': {for (final k in (e.value as List? ?? [])) '$k'},
+        };
         if (eventCode != null && _settingsByEvent[eventCode] is Map) {
           settings.load((_settingsByEvent[eventCode] as Map).cast<String, dynamic>());
         }
@@ -497,7 +500,28 @@ class AdminState extends ChangeNotifier {
       'event_code': eventCode,
       'template': cards.toJson(images: true),
       'settings': _settingsByEvent,
+      'dismissed_alerts': {for (final e in _dismissed.entries) e.key: e.value.toList()},
     }));
+  }
+
+  /// هشدارهای بسته‌شده‌ی صفحه‌ی اول، برای هر رویداد جدا و روی همین دستگاه.
+  /// کلید هر هشدار وضعیتش را هم دارد (مثلاً شمار یا زمان)، پس اگر چیز تازه‌ای شد دوباره دیده می‌شود.
+  Map<String, Set<String>> _dismissed = {};
+  Set<String> get dismissedAlerts => _dismissed[eventCode ?? ''] ?? const {};
+
+  void dismissAlerts(Iterable<String> keys) {
+    final set = _dismissed.putIfAbsent(eventCode ?? '', () => {});
+    set.addAll(keys);
+    // فهرست بی‌حد بزرگ نشود.
+    if (set.length > 500) set.removeAll(set.take(set.length - 500).toList());
+    notifyListeners();
+    save().catchError((_) {}); // ذخیره‌ی محلی؛ خطایش هشدار را برنمی‌گرداند
+  }
+
+  void restoreAlerts() {
+    _dismissed.remove(eventCode ?? '');
+    notifyListeners();
+    save().catchError((_) {}); // ذخیره‌ی محلی؛ خطایش هشدار را برنمی‌گرداند
   }
 
   // ---------------------------------------------------------------- کمکی
