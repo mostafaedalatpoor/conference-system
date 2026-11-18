@@ -420,8 +420,106 @@ class AppStore extends ChangeNotifier {
   void undoMeal(Attendee a, Meal m, {String reason = ''}) => _record('meal_undo',
       attendeeId: a.id, mealId: m.id, payload: reason.isEmpty ? null : {'reason': reason});
 
-  void serveMeal(Attendee a, Meal m) =>
-      _record('meal_served', attendeeId: a.id, mealId: m.id, cardToken: cardOf(a.id)?.token);
+  /// [overrideBy]: «تحویل با مجوز شفاهی»؛ نام کسی که اجازه داد. سرور آن را «شامل نیست» علامت می‌زند
+  /// و نام اجازه‌دهنده در گزارش مدیر کنارش می‌آید.
+  void serveMeal(Attendee a, Meal m, {String? overrideBy}) {
+    final by = overrideBy?.trim() ?? '';
+    if (by.isNotEmpty) approvers = [by, ...approvers.where((x) => x != by)].take(6).toList();
+    _record('meal_served', attendeeId: a.id, mealId: m.id, cardToken: cardOf(a.id)?.token,
+        payload: by.isEmpty ? null : {'override_by': by});
+  }
+
+  /// نام‌های اجازه‌دهنده‌ی اخیر برای انتخاب سریع.
+  List<String> approvers = [];
+
+  /// کارهای سرورنپذیرفته را از فهرست «وضعیت» برمی‌دارد.
+  void dismissRejected(Map<String, dynamic> item) {
+    rejected.remove(item);
+    _scheduleSave();
+    notifyListeners();
+  }
+
+  /// کارهای ارسال‌نشده به تفکیک: «۲ پذیرش و ۱ تحویل ناهار».
+  String pendingSummary() {
+    final parts = <String, int>{};
+    for (final e in pending) {
+      final label = switch (e.kind) {
+        'checkin' => 'پذیرش',
+        'checkin_undo' => 'لغو پذیرش',
+        'walkin_register' => 'ثبت‌نام در محل',
+        'meal_served' => 'تحویل ${meals.where((m) => m.id == e.mealId).firstOrNull?.name ?? 'وعده'}',
+        'meal_undo' => 'لغو تحویل',
+        _ => 'کار دیگر',
+      };
+      parts[label] = (parts[label] ?? 0) + 1;
+    }
+    return parts.entries.map((e) => '${faDigits(e.value)} ${e.key}').join(' و ');
+  }
+
+  /// وعده‌ی «الان» امروز: آخرین وعده‌ای که ساعتش رسیده، وگرنه اولین وعده‌ی امروز.
+  Meal? currentMealFor(DateTime now) {
+    final today = isoDay(now);
+    final hm = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final list = meals.where((m) => m.day != null && m.day!.startsWith(today)).toList()
+      ..sort((a, b) => (a.time.isEmpty ? '99' : a.time).compareTo(b.time.isEmpty ? '99' : b.time));
+    if (list.isEmpty) return null;
+    final started = list.where((m) => m.time.isNotEmpty && m.time.compareTo(hm) <= 0).toList();
+    return started.isNotEmpty ? started.last : list.first;
+  }
+
+  /// افراد دیگری که همین ایمیل یا موبایل را دارند (مثلاً ایمیل مشترک شرکت).
+  List<Attendee> sharingContact(Attendee a) {
+    final m = normalizeMobile(a.mobile);
+    final e = a.email.trim().toLowerCase();
+    if (m.isEmpty && e.isEmpty) return const [];
+    return [
+      for (final o in attendees.values)
+        if (o.id != a.id &&
+            ((m.isNotEmpty && normalizeMobile(o.mobile) == m) || (e.isNotEmpty && o.email.trim().toLowerCase() == e)))
+          o,
+    ];
+  }
+
+  /// نیروهایی که روی همین دستگاه وارد شده‌اند؛ برای «این میز امروز».
+  Set<int> deskStaffIds = {};
+
+  /// پذیرش‌های امروزِ این دستگاه و زمان اولینشان.
+  (int, DateTime?) deskCheckinsToday([DateTime? now]) {
+    final today = isoDay((now ?? this.now()).toLocal());
+    var count = 0;
+    DateTime? first;
+    for (final e in [...serverLog, ...pending]) {
+      if (e.kind != 'checkin' || !deskStaffIds.contains(e.staffId) || isoDay(e.deviceTime.toLocal()) != today) continue;
+      count++;
+      if (first == null || e.deviceTime.isBefore(first)) first = e.deviceTime;
+    }
+    return (count, first?.toLocal());
+  }
+
+  /// «تعویض نیرو»: نیروی دیگری با PIN خودش روی همین دستگاه وارد می‌شود؛ لیست و صف ارسال می‌مانند.
+  Future<void> switchStaff(String pin) =>
+      login(server: server!, eventCode: eventCode!, pin: pin, label: deviceLabel);
+
+  /// کارت رزرو از روی شماره («R5001»، «۵۰۰۱») یا لینک اسکن‌شده. خروجی: کارت آزاد، یا پیام خطا.
+  (PassCard?, String?) reserveCardFrom(String input) {
+    final scanned = tokenFromScan(latinizeLayout(input));
+    String? token = scanned;
+    if (token == null) {
+      final cleaned = latinDigits(input.trim()).replaceFirst(RegExp(r'^[Rrر]\s*'), '');
+      final n = int.tryParse(cleaned);
+      if (n == null) return (null, 'شماره‌ی روی کارت را بنویسید، مثلاً ۵۰۰۱.');
+      final match = cards.values.where((c) => c.isReserve && c.serial == n);
+      if (match.isEmpty) return (null, 'کارت رزرو با شماره‌ی ${faDigits(n)} پیدا نشد.');
+      token = match.first.token;
+    }
+    final c = cards[token];
+    if (c == null) return (null, unknownCardMessage(token));
+    if (!c.isReserve) return (null, 'این کارت رزرو نیست؛ مال ${attendeeForToken(token)?.fullName ?? 'شخص دیگری'} است.');
+    if (cardOwner.containsKey(token)) {
+      return (null, 'این کارت رزرو قبلاً به ${attendeeForToken(token)?.fullName ?? 'کسی'} وصل شده.');
+    }
+    return (c, null);
+  }
 
   /// ثبت‌نام در محل: شرکت‌کننده‌ی جدید + وصل‌کردن کارت رزرو + پذیرش.
   Attendee walkin({
@@ -495,6 +593,7 @@ class AppStore extends ChangeNotifier {
     canCheckin = me['can_checkin'] == true;
     canServe = me['can_serve'] == true;
     isAdmin = me['is_admin'] == true;
+    if (staffId != null) deskStaffIds.add(staffId!);
   }
 
   /// گرفتن کل داده‌ی رویداد از سرور. صف ارسال دست نمی‌خورد.

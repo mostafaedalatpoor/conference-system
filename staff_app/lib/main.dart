@@ -1,11 +1,13 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'screens/home.dart';
-import 'screens/setup.dart';
+import 'android/android_app.dart';
+import 'android/nv_theme.dart';
 import 'brand.dart';
 import 'store.dart';
-import 'theme/firouzeh.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,16 +20,24 @@ void main() {
 class StoreScope extends InheritedNotifier<AppStore> {
   const StoreScope({super.key, required AppStore store, required super.child}) : super(notifier: store);
 
-  static AppStore of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<StoreScope>()!.notifier!;
+  static AppStore of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<StoreScope>()!.notifier!;
 
-  static AppStore read(BuildContext context) => context.getInheritedWidgetOfExactType<StoreScope>()!.notifier!;
+  static AppStore read(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<StoreScope>()!.notifier!;
 }
 
+/// اندروید: پوسته‌ی گوشی؛ ویندوز: پوسته‌ی دو ستونه با کلیدهای میان‌بر. هر دو با ظاهر تازه.
+bool get useAndroidDesign => !kIsWeb && Platform.isAndroid;
+
 class StaffApp extends StatelessWidget {
-  const StaffApp({super.key});
+  /// برای تست و پیش‌نمایش؛ پیش‌فرض بر اساس سکو.
+  final bool? android;
+  const StaffApp({super.key, this.android});
 
   @override
   Widget build(BuildContext context) {
+    final isAndroid = android ?? useAndroidDesign;
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,
@@ -38,25 +48,11 @@ class StaffApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: firouzehTheme(Brightness.light),
-      darkTheme: firouzehTheme(Brightness.dark),
+      theme: nvTheme(Brightness.light),
+      darkTheme: nvTheme(Brightness.dark),
       // بزرگ‌نمایی متن سیستم تا ۱٫۳ برابر؛ بالاتر از آن چیدمان صفحه‌ی اسکن و شیت می‌شکند.
       builder: (context, child) => MediaQuery.withClampedTextScaling(maxScaleFactor: 1.3, child: child!),
-      home: const _Root(),
+      home: NvRoot(desk: !isAndroid),
     );
-  }
-}
-
-class _Root extends StatelessWidget {
-  const _Root();
-
-  @override
-  Widget build(BuildContext context) {
-    final store = StoreScope.of(context);
-    if (!store.loaded) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (!store.loggedIn || store.needsLogin) return const SetupScreen();
-    return const HomeScreen();
   }
 }

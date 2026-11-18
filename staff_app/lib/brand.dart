@@ -12,3 +12,7 @@ const makerTeam = 'تیم راهکارهای نرم‌افزاری نگاه جد
 const makerShort = 'ساخته‌ی تیم نگاه جدید';
 const makerLatin = 'by NewVisionteam';
 const makerWebsite = 'newvisionteam.ir';
+
+/// برای «درباره»: فقط نسخه؛ شماره‌ی ساخت به کاربر نشان داده نمی‌شود.
+const appVersionLabel = appVersion;
+const makerEmail = 'info@newvisionteam.ir';
