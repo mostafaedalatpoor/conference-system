@@ -25,6 +25,9 @@ function cd_install_tables() {
     $log = cd_table('event_log');
     $batches = cd_table('import_batches');
     $rejected = cd_table('rejected_events');
+    $reg_pages = cd_table('reg_pages');
+    $regs = cd_table('registrations');
+    $reg_msgs = cd_table('reg_messages');
 
     $sql = [];
 
@@ -115,6 +118,11 @@ function cd_install_tables() {
   source varchar(16) NOT NULL DEFAULT 'import',
   share_contact tinyint(1) NULL,
   website varchar(255) NOT NULL DEFAULT '',
+  extra longtext NULL,
+  extra_meals varchar(1024) NOT NULL DEFAULT '',
+  onsite_due int(11) NOT NULL DEFAULT 0,
+  onsite_note varchar(255) NOT NULL DEFAULT '',
+  reg_code varchar(16) NOT NULL DEFAULT '',
   search_key varchar(512) NOT NULL DEFAULT '',
   status varchar(16) NOT NULL DEFAULT 'active',
   import_batch varchar(36) NOT NULL DEFAULT '',
@@ -221,6 +229,71 @@ function cd_install_tables() {
   received_at datetime NOT NULL,
   PRIMARY KEY  (id),
   UNIQUE KEY uuid (uuid),
+  KEY event_id (event_id)
+) ENGINE=InnoDB $c;";
+
+    // صفحه‌ی ثبت‌نام هر رویداد: یک ردیف، تنظیم‌ها به JSON (cd_sanitize_reg_config).
+    $sql[] = "CREATE TABLE $reg_pages (
+  event_id bigint(20) unsigned NOT NULL,
+  path varchar(191) NOT NULL,
+  status varchar(16) NOT NULL DEFAULT 'draft',
+  config longtext NOT NULL,
+  updated_at datetime NOT NULL,
+  PRIMARY KEY  (event_id),
+  UNIQUE KEY path (path)
+) ENGINE=InnoDB $c;";
+
+    // هر ثبت‌نام از صفحه‌ی عمومی. وضعیت‌ها: cd_reg_statuses(). archived_at: کنار رفته از فهرست اصلی.
+    $sql[] = "CREATE TABLE $regs (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  event_id bigint(20) unsigned NOT NULL,
+  code varchar(16) NOT NULL,
+  submit_id char(36) NOT NULL,
+  status varchar(24) NOT NULL,
+  type_code varchar(64) NOT NULL,
+  first_name varchar(191) NOT NULL DEFAULT '',
+  last_name varchar(191) NOT NULL DEFAULT '',
+  mobile varchar(32) NOT NULL DEFAULT '',
+  email varchar(191) NOT NULL DEFAULT '',
+  organization varchar(191) NOT NULL DEFAULT '',
+  answers longtext NULL,
+  addons longtext NULL,
+  amount_online int(11) NOT NULL DEFAULT 0,
+  amount_onsite int(11) NOT NULL DEFAULT 0,
+  pay_method varchar(16) NOT NULL DEFAULT '',
+  pay_authority varchar(191) NOT NULL DEFAULT '',
+  pay_ref varchar(191) NOT NULL DEFAULT '',
+  pay_tracking varchar(191) NOT NULL DEFAULT '',
+  receipt_file varchar(191) NOT NULL DEFAULT '',
+  reject_reason varchar(500) NOT NULL DEFAULT '',
+  attendee_id char(36) NULL,
+  hold_until datetime NULL,
+  paid_at datetime NULL,
+  archived_at datetime NULL,
+  ip varchar(64) NOT NULL DEFAULT '',
+  created_at datetime NOT NULL,
+  updated_at datetime NOT NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY code (code),
+  UNIQUE KEY submit_id (submit_id),
+  KEY event_status (event_id,status),
+  KEY mobile (mobile)
+) ENGINE=InnoDB $c;";
+
+    // پیام‌های فرستاده‌شده به ثبت‌نام‌کننده‌ها (پیامک یا ایمیل) برای «آخرین ارسال‌ها» و «تلاش دوباره».
+    $sql[] = "CREATE TABLE $reg_msgs (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  event_id bigint(20) unsigned NOT NULL,
+  registration_id bigint(20) unsigned NULL,
+  channel varchar(8) NOT NULL,
+  trigger_key varchar(32) NOT NULL DEFAULT '',
+  recipient varchar(191) NOT NULL DEFAULT '',
+  body text NOT NULL,
+  ok tinyint(1) NOT NULL DEFAULT 0,
+  response varchar(500) NOT NULL DEFAULT '',
+  tries int(11) NOT NULL DEFAULT 1,
+  created_at datetime NOT NULL,
+  PRIMARY KEY  (id),
   KEY event_id (event_id)
 ) ENGINE=InnoDB $c;";
 

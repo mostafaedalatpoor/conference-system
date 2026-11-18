@@ -17,6 +17,8 @@ const CD_FLAG_LABELS = [
     'not_served' => 'برگرداندن وعده‌ای که تحویل نشده بود (سرور نپذیرفت)',
     'card_revoked' => 'کارت باطل‌شده (سرور نپذیرفت)',
     'bad_role' => 'نقش نامعتبر در ثبت‌نام در محل (بی‌نقش ثبت شد)',
+    'duplicate_settle' => 'تسویه‌ی دوباره‌ی پرداخت در محل',
+    'nothing_due' => 'تسویه برای کسی که بدهی در محل ندارد (سرور نپذیرفت)',
 ];
 
 const CD_KIND_LABELS = [
@@ -25,6 +27,7 @@ const CD_KIND_LABELS = [
     'walkin_register' => 'ثبت‌نام در محل',
     'meal_served' => 'تحویل وعده',
     'meal_undo' => 'برگرداندن وعده',
+    'onsite_settled' => 'تسویه در روز اجرا',
 ];
 
 /**
@@ -94,7 +97,7 @@ function cd_build_report(array $event, $day = null) {
     }
     $config = cd_event_config($eid);
     $attendees = $wpdb->get_results($wpdb->prepare(
-        'SELECT id, first_name, last_name, registration_type_id, role_id, source FROM ' . cd_table('attendees') . " WHERE event_id = %d AND status = 'active'",
+        'SELECT id, first_name, last_name, registration_type_id, role_id, source, extra_meals, onsite_due FROM ' . cd_table('attendees') . " WHERE event_id = %d AND status = 'active'",
         $eid
     ), ARRAY_A);
     $states = cd_attendee_states($eid);
@@ -131,6 +134,26 @@ function cd_build_report(array $event, $day = null) {
     }
     ksort($by_day);
 
+    $settled_ids = array_flip($wpdb->get_col($wpdb->prepare(
+        "SELECT DISTINCT attendee_id FROM " . cd_table('event_log') . " WHERE event_id = %d AND kind = 'onsite_settled' AND attendee_id IS NOT NULL",
+        $eid
+    )));
+    $onsite_due_total = 0;
+    $onsite_settled_total = 0;
+    $onsite_open = 0;
+    foreach ($attendees as $a) {
+        $due = (int) ($a['onsite_due'] ?? 0);
+        if ($due < 1) {
+            continue;
+        }
+        $onsite_due_total += $due;
+        if (isset($settled_ids[$a['id']])) {
+            $onsite_settled_total += $due;
+        } else {
+            $onsite_open++;
+        }
+    }
+
     $meals = [];
     foreach ($config['meals'] as $m) {
         $entitled = 0;
@@ -138,7 +161,7 @@ function cd_build_report(array $event, $day = null) {
         $extra = 0;
         foreach ($attendees as $a) {
             $role = $a['role_id'] !== null ? (int) $a['role_id'] : null;
-            if (cd_is_entitled($m['rules'], $a['registration_type_id'], $role)) {
+            if (cd_is_entitled($m['rules'], $a['registration_type_id'], $role, $m['code'], $a['extra_meals'] ?? '')) {
                 $entitled++;
             }
             $count = $states[$a['id']]['meals'][$m['id']] ?? 0;
@@ -213,6 +236,10 @@ function cd_build_report(array $event, $day = null) {
             'walkins' => $walkins,
             'reserve_cards_free' => $reserve_free,
             'rejected' => $rejected_total,
+            // پرداخت در محل (تومان): کل بدهی افراد فعال، و آنچه نیروها «تسویه شد» زده‌اند.
+            'onsite_due' => $onsite_due_total,
+            'onsite_settled' => $onsite_settled_total,
+            'onsite_open' => $onsite_open,
         ],
         'daily_attendance' => $daily,
         'day' => $day,

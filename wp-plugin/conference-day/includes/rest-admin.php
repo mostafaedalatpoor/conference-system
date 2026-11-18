@@ -1554,12 +1554,12 @@ function cd_rest_meal_people(WP_REST_Request $request) {
         $served_at[$r['attendee_id']] = $r['t'];
     }
     $people = $wpdb->get_results($wpdb->prepare(
-        'SELECT id, title, first_name, last_name, organization, registration_type_id, role_id FROM ' . cd_table('attendees') . " WHERE event_id = %d AND status = 'active' ORDER BY last_name, first_name",
+        'SELECT id, title, first_name, last_name, organization, registration_type_id, role_id, extra_meals FROM ' . cd_table('attendees') . " WHERE event_id = %d AND status = 'active' ORDER BY last_name, first_name",
         $eid
     ), ARRAY_A);
     $out = [];
     foreach ($people as $p) {
-        $entitled = cd_is_entitled($meal['rules'], $p['registration_type_id'], $p['role_id'] !== null ? (int) $p['role_id'] : null);
+        $entitled = cd_is_entitled($meal['rules'], $p['registration_type_id'], $p['role_id'] !== null ? (int) $p['role_id'] : null, $meal['code'], $p['extra_meals']);
         $count = $states[$p['id']]['meals'][$meal['id']] ?? 0;
         if (!$entitled && $count < 1) {
             continue;

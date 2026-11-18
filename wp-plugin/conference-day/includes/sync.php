@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served', 'meal_undo'];
+const CD_EVENT_KINDS = ['checkin', 'checkin_undo', 'walkin_register', 'meal_served', 'meal_undo', 'onsite_settled'];
 const CD_PULL_LIMIT = 1000;
 const CD_PUSH_LIMIT = 500;
 
@@ -150,6 +150,9 @@ function cd_staff_may(array $device, $kind, $event_id, $attendee_id) {
             return (bool) (int) $device['can_serve'];
         case 'meal_undo':
             return (int) $device['can_serve'] || (int) $device['is_admin'];
+        case 'onsite_settled':
+            // تسویه‌ی پرداخت در محل: نیروی پذیرش یا مدیر.
+            return (int) $device['can_checkin'] || (int) $device['is_admin'];
         case 'checkin_undo':
             if ((int) $device['is_admin']) {
                 return true;
@@ -292,6 +295,15 @@ function cd_push_events(array $event, array $device, array $items) {
             $deny = 'not_checked_in';
         } elseif ($kind === 'meal_undo' && ($attendee_id === null || cd_meal_count($eid, $attendee_id, $meal_id) < 1)) {
             $deny = 'not_served';
+        } elseif ($kind === 'onsite_settled' && ($attendee_id === null || cd_onsite_due($eid, $attendee_id) < 1)) {
+            $deny = 'nothing_due';
+        }
+        if ($kind === 'onsite_settled' && $deny === null) {
+            // مبلغ از سرور؛ گوشی فقط می‌گوید «گرفته شد». تسویه‌ی دوباره علامت می‌خورد.
+            $payload = [
+                'amount' => cd_onsite_due($eid, $attendee_id),
+                'actor' => $device['staff_name'] ?? '',
+            ];
         }
         if ($deny !== null) {
             cd_store_rejection($eid, $device, $e, $deny, $attendee_id);
@@ -344,6 +356,8 @@ function cd_push_events(array $event, array $device, array $items) {
             $flag = $attendee_id === null ? 'unknown_attendee' : cd_checkin_flag($eid, $attendee_id, $seq, $daily ? $day : null);
         } elseif ($kind === 'meal_served') {
             $flag = $attendee_id === null ? 'unknown_attendee' : cd_meal_flag($eid, $attendee_id, $meals[$meal_id], $seq);
+        } elseif ($kind === 'onsite_settled') {
+            $flag = cd_onsite_settled($eid, $attendee_id, $seq) ? 'duplicate_settle' : null;
         }
 
         if ($flag !== null) {
@@ -391,6 +405,11 @@ function cd_validate_event_item($e, array $meals, $cards_required = true) {
             }
             if (!isset($e['meal_id']) || !isset($meals[(int) $e['meal_id']])) {
                 return 'bad_meal';
+            }
+            break;
+        case 'onsite_settled':
+            if (!$has_att) {
+                return 'missing_target';
             }
             break;
         case 'walkin_register':
@@ -490,16 +509,38 @@ function cd_checkin_flag($event_id, $attendee_id, $seq, $day = null) {
 function cd_meal_flag($event_id, $attendee_id, array $meal, $seq) {
     global $wpdb;
     $a = $wpdb->get_row($wpdb->prepare(
-        'SELECT registration_type_id, role_id FROM ' . cd_table('attendees') . ' WHERE id = %s AND event_id = %d',
+        'SELECT registration_type_id, role_id, extra_meals FROM ' . cd_table('attendees') . ' WHERE id = %s AND event_id = %d',
         $attendee_id,
         $event_id
     ), ARRAY_A);
     if (!$a) {
         return 'unknown_attendee';
     }
-    if (!cd_is_entitled($meal['rules'], $a['registration_type_id'], $a['role_id'] !== null ? (int) $a['role_id'] : null)) {
+    if (!cd_is_entitled($meal['rules'], $a['registration_type_id'], $a['role_id'] !== null ? (int) $a['role_id'] : null, $meal['code'], $a['extra_meals'])) {
         return 'not_entitled';
     }
     // برگردان (meal_undo) تحویل قبلی را خنثی می‌کند.
     return cd_meal_count($event_id, $attendee_id, (int) $meal['id'], $seq) > 0 ? 'duplicate_meal' : null;
+}
+
+/** مبلغ «پرداخت در محل» یک نفر (تومان)، از صفحه‌ی ثبت‌نام. */
+function cd_onsite_due($event_id, $attendee_id) {
+    global $wpdb;
+    return (int) $wpdb->get_var($wpdb->prepare(
+        'SELECT onsite_due FROM ' . cd_table('attendees') . ' WHERE id = %s AND event_id = %d',
+        $attendee_id,
+        $event_id
+    ));
+}
+
+/** آیا تسویه‌ی در محل این نفر قبلاً ثبت شده؟ */
+function cd_onsite_settled($event_id, $attendee_id, $before_seq = null) {
+    global $wpdb;
+    $sql = 'SELECT COUNT(*) FROM ' . cd_table('event_log') . " WHERE event_id = %d AND attendee_id = %s AND kind = 'onsite_settled'";
+    $args = [$event_id, $attendee_id];
+    if ($before_seq !== null) {
+        $sql .= ' AND seq < %d';
+        $args[] = (int) $before_seq;
+    }
+    return (int) $wpdb->get_var($wpdb->prepare($sql, $args)) > 0;
 }

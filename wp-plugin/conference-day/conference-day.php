@@ -17,8 +17,8 @@ if (!defined('ABSPATH')) {
 
 // نام‌های فنی (پوشه‌ی افزونه، مسیر API conf/v1، پیشوند جدول‌ها wp_cd_) عوض نمی‌شوند تا داده و اپ‌های نصب‌شده بمانند.
 define('CD_VERSION', '2.0.0');
-// ۷ (نه ۶): نسخه‌ی ۰٫۴ هم «۶» داشت ولی جدول‌هایش فرق دارد؛ با ۷ ارتقا از ۰٫۴ هم جدول‌ها را به‌روز می‌کند.
-define('CD_DB_VERSION', '7');
+// ۸: ماژول ثبت‌نام (صفحه، ثبت‌نام‌ها، پیام‌ها). ارتقا از ۰٫۲، ۰٫۴ و ۲٫۰ همه جدول‌ها را به‌روز می‌کند.
+define('CD_DB_VERSION', '8');
 define('CD_NS', 'conf/v1');
 define('CD_DIR', plugin_dir_path(__FILE__));
 
@@ -28,6 +28,11 @@ require_once CD_DIR . 'includes/model.php';
 require_once CD_DIR . 'includes/keys.php';
 require_once CD_DIR . 'includes/sync.php';
 require_once CD_DIR . 'includes/report.php';
+require_once CD_DIR . 'includes/registration.php';
+require_once CD_DIR . 'includes/reg-pay.php';
+require_once CD_DIR . 'includes/reg-notify.php';
+require_once CD_DIR . 'includes/reg-public.php';
+require_once CD_DIR . 'includes/reg-admin.php';
 require_once CD_DIR . 'includes/rest-admin.php';
 require_once CD_DIR . 'includes/rest-device.php';
 require_once CD_DIR . 'includes/public-page.php';
@@ -39,6 +44,7 @@ register_activation_hook(__FILE__, function () {
     cd_install_tables();
     cd_add_rewrite();
     cd_web_add_rewrite();
+    cd_reg_add_rewrites();
     flush_rewrite_rules();
     // بعد از فعال‌سازی صفحه‌ی «شروع» یک بار باز می‌شود.
     set_transient('cd_activation_redirect', 1, 60);

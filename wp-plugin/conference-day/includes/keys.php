@@ -204,7 +204,7 @@ function cd_role_allows($role, $method, $route) {
     }
     if ($role === 'report') {
         return $method === 'GET' && (bool) preg_match(
-            '#^/admin/(ping|events|events/[^/]+/(report|export|meals/[^/]+/people|attendees/[^/]+/timeline))$#',
+            '#^/admin/(ping|events|events/[^/]+/(report|export|finance|meals/[^/]+/people|attendees/[^/]+/timeline))$#',
             $path
         );
     }
