@@ -282,6 +282,13 @@ class Person {
   bool get isActive => status == 'active';
 
   String get fullName => '$firstName $lastName'.trim();
+
+  /// نام یا نام خانوادگی خالی (ردیف ناقص اکسل).
+  bool get missingName => firstName.trim().isEmpty || lastName.trim().isEmpty;
+  String get cardFirstName => firstName;
+  String get listName => fullName.isEmpty ? 'بی‌نام' : displayName;
+  String get sortName => lastName.trim().isNotEmpty ? lastName : firstName;
+  String get regCode => '';
   String get displayName => '$title $firstName $lastName'.trim();
 
   Map<String, dynamic> toUpload() => {
@@ -692,6 +699,7 @@ class AdminState extends ChangeNotifier {
 
     // نیروها فقط از سرور: فعال/غیرفعال، اجازه‌ها و داشتن PIN. نیروی غیرفعال دوباره اضافه یا فعال نمی‌شود.
     staff = list('staff').map(StaffDef.fromJson).toList();
+    _applyLog(list('log'));
     await _loadStaffPins();
     // قالب‌های کارت از سرور، اگر آنجا ذخیره شده؛ مسیر تصویرهای طرح همان محلی می‌ماند.
     // قالب تکی قدیمی (بدون templates) قالب «پیش‌فرض» می‌شود.
@@ -1260,6 +1268,60 @@ class AdminState extends ChangeNotifier {
   }
 
   /// کل داده‌ی رویداد از سرور (برای «پشتیبان کامل» و «تاریخچه‌ی رویدادها»).
+  List<Map<String, dynamic>> _reportList(String k) =>
+      ((report?[k] as List?) ?? const []).map((e) => (e as Map).cast<String, dynamic>()).toList();
+
+  /// موردهای مشکوک گزارش (رد شده‌ها هم).
+  List<Map<String, dynamic>> get flaggedList => _reportList('flagged');
+
+  /// گوشی‌های نیروها از گزارش.
+  List<Map<String, dynamic>> get deviceList => _reportList('devices');
+
+  /// وضعیت هر نفر از رخدادها: زمان پذیرش و وعده‌های گرفته‌شده (شناسه‌ی وعده ← زمان).
+  /// در حضور روزانه فقط پذیرش امروز حساب می‌شود. لغو پذیرش و برگردان وعده خنثی می‌کنند.
+  Map<String, DateTime> checkinAt = {};
+  Map<String, Map<int, DateTime>> mealsServed = {};
+
+  /// شناسه‌ی سرور هر وعده (هم‌ترتیب [meals]).
+  List<int> get mealIds => [for (final m in meals) m.id ?? 0];
+
+  /// آخرین پذیرش‌ها، تازه‌ترین اول (شناسه‌ی نفر).
+  List<String> recentCheckins = [];
+
+  void _applyLog(List<Map<String, dynamic>> log) {
+    checkinAt = {};
+    mealsServed = {};
+    final today = todayIso();
+    final order = <String>[];
+    final sorted = [...log]..sort((a, b) => ((a['seq'] as int?) ?? 0).compareTo((b['seq'] as int?) ?? 0));
+    for (final e in sorted) {
+      final aid = e['attendee_id']?.toString();
+      if (aid == null) continue;
+      final at = DateTime.tryParse('${e['device_time']}')?.toLocal() ?? DateTime.now();
+      final day = (e['day'] ?? '').toString();
+      final counts = !settings.dailyAttendance || day.isEmpty || day == today;
+      switch (e['kind']) {
+        case 'checkin':
+        case 'walkin_register':
+          if (!counts) break;
+          checkinAt.putIfAbsent(aid, () => at);
+          order.remove(aid);
+          order.add(aid);
+        case 'checkin_undo':
+          if (!counts) break;
+          checkinAt.remove(aid);
+          order.remove(aid);
+        case 'meal_served':
+          final mid = (e['meal_id'] as num?)?.toInt();
+          if (mid != null) (mealsServed[aid] ??= {}).putIfAbsent(mid, () => at);
+        case 'meal_undo':
+          final mid = (e['meal_id'] as num?)?.toInt();
+          if (mid != null) mealsServed[aid]?.remove(mid);
+      }
+    }
+    recentCheckins = order.reversed.take(30).toList();
+  }
+
   Future<Map<String, dynamic>> fullSnapshot() async =>
       (await api.get('/admin/events/$eventCode/snapshot') as Map).cast<String, dynamic>();
 
