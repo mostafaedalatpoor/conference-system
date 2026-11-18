@@ -256,19 +256,20 @@ function cd_reg_readable($hex, $bg) {
 
 function cd_reg_theme_css(array $theme) {
     $dark = $theme['mode'] === 'dark';
+    // پالت «فیروزه»؛ رنگ برند همان رنگ انتخابی صفحه است.
     $p = $dark
-        ? ['bg' => '#0D1015', 'surface' => '#161A21', 'sunken' => '#0A0C10', 'line' => '#2A313C', 'ink' => '#EDF0F4', 'muted' => '#A0A9B6', 'stop' => '#FF8A80', 'stop_soft' => '#3A1512', 'go' => '#5BD08A', 'go_soft' => '#10301C', 'wait' => '#F5B83D', 'wait_soft' => '#33260A']
-        : ['bg' => '#F4F5F7', 'surface' => '#FFFFFF', 'sunken' => '#E9ECF0', 'line' => '#DCE0E6', 'ink' => '#10141A', 'muted' => '#505966', 'stop' => '#B42318', 'stop_soft' => '#FDE8E6', 'go' => '#127A3B', 'go_soft' => '#E1F5E8', 'wait' => '#8A5300', 'wait_soft' => '#FFF1D1'];
+        ? ['bg' => '#0D1415', 'surface' => '#162022', 'sunken' => '#1E2A2C', 'line' => '#2A3A3C', 'ink' => '#EAF1F1', 'muted' => '#9FB0B1', 'stop' => '#FF8A80', 'stop_soft' => '#3A1513', 'go' => '#5CD68B', 'go_soft' => '#12301F', 'wait' => '#F5B83D', 'wait_soft' => '#33260A', 'wait_ink' => '#F5D79A', 'opt' => '#3A5052']
+        : ['bg' => '#EEF2F2', 'surface' => '#FFFFFF', 'sunken' => '#F2F6F6', 'line' => '#E3EFEF', 'ink' => '#0F1C1D', 'muted' => '#5B6B6C', 'stop' => '#B3261E', 'stop_soft' => '#FDE9E7', 'go' => '#138A43', 'go_soft' => '#E3F5EA', 'wait' => '#8A5300', 'wait_soft' => '#FFF1D1', 'wait_ink' => '#4A3300', 'opt' => '#C9D8D8'];
     $accent = $theme['accent'];
     $vars = [
         '--bg' => $p['bg'], '--surface' => $p['surface'], '--sunken' => $p['sunken'], '--line' => $p['line'],
-        '--ink' => $p['ink'], '--muted' => $p['muted'],
+        '--ink' => $p['ink'], '--muted' => $p['muted'], '--opt' => $p['opt'],
         '--accent' => $accent, '--on-accent' => cd_reg_on_color($accent),
         '--accent-text' => cd_reg_readable($accent, $p['surface']),
-        '--accent-soft' => $accent . ($dark ? '29' : '1A'),
-        '--highlight' => cd_reg_readable($theme['highlight'], $p['bg']),
+        '--accent-soft' => $accent . ($dark ? '29' : '17'),
+        '--highlight' => cd_reg_readable($theme['highlight'], $p['surface']),
         '--stop' => $p['stop'], '--stop-soft' => $p['stop_soft'], '--go' => $p['go'], '--go-soft' => $p['go_soft'],
-        '--wait' => $p['wait'], '--wait-soft' => $p['wait_soft'],
+        '--wait' => $p['wait'], '--wait-soft' => $p['wait_soft'], '--wait-ink' => $p['wait_ink'],
     ];
     $css = ':root{';
     foreach ($vars as $k => $v) {
@@ -333,88 +334,104 @@ function cd_reg_head($title, $css) {
 }
 
 function cd_reg_base_css() {
+    // طراحی «ثبت‌نام آنلاین» (بوم‌های ۰۷ تا ۱۱ صفحه‌ی شخصی): هدر خمیده، کارت‌های شناور، نوار پایین چسبان.
     return <<<'CSS'
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:Vazirmatn,Tahoma,"Segoe UI",sans-serif;line-height:1.8;font-size:15px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Vazirmatn,Tahoma,"Segoe UI",sans-serif;line-height:1.7;font-size:15px}
 a{color:var(--accent-text)}
-.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line);background:var(--surface)}
-.top .brand{display:flex;align-items:center;gap:10px;font-weight:800;min-width:0}
-.top .brand img{width:32px;height:32px;object-fit:contain}
-.top .brand span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.btn-ghost{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border:1.5px solid var(--accent-text);border-radius:10px;color:var(--accent-text);text-decoration:none;font-weight:800;font-size:14px;white-space:nowrap}
-.wrap{max-width:720px;margin:0 auto;padding:0 max(16px,env(safe-area-inset-left,0px)) 40px}
-.hero{padding:28px 0 20px;display:flex;flex-direction:column;gap:12px;text-align:center;align-items:center}
-.hero .sub{font-weight:800;color:var(--muted)}
-.hero h1{margin:0;font-size:clamp(24px,6vw,36px);line-height:1.5;font-weight:800;color:var(--highlight);text-wrap:balance}
-.hero .cover{width:100%;max-height:280px;object-fit:cover;border-radius:14px}
-.meta{display:flex;flex-direction:column;gap:8px;align-self:stretch;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
-.meta div{display:flex;gap:10px;align-items:flex-start}
-.meta svg{flex:none;margin-top:4px}
-.desc{white-space:pre-line;color:var(--ink);text-align:right;align-self:stretch}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px 18px;display:flex;flex-direction:column;gap:26px}
-.steps{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px}
-.steps span{display:block;height:4px;border-radius:4px;background:var(--sunken);margin-bottom:4px}
-.steps .on span{background:var(--accent)}
-.steps .on{font-weight:800}
-h2{margin:0;font-size:17px;font-weight:800;display:flex;align-items:center;gap:8px;color:var(--accent-text)}
-.group{display:flex;flex-direction:column;gap:14px}
-.choice{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);cursor:pointer;text-align:right;width:100%;font:inherit;color:inherit}
-.choice:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
-.choice input{flex:none;width:20px;height:20px;margin-top:4px;accent-color:var(--accent)}
-.choice .body{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
-.choice .t{font-weight:800}
-.choice .d{font-size:13px;color:var(--muted)}
-.choice .p{flex:none;font-weight:800;color:var(--highlight);white-space:nowrap}
-.choice.closed{border-style:dashed;cursor:not-allowed;color:var(--muted);background:var(--sunken)}
-.pill{display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:0 8px;background:var(--sunken);color:var(--muted);margin-inline-start:6px}
+.hero{background:var(--accent);color:var(--on-accent);padding:36px 20px 76px;border-radius:0 0 32px 32px;display:flex;flex-direction:column;gap:6px}
+.hero .in{max-width:640px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:6px}
+.hero .top{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.hero .top img{width:40px;height:40px;object-fit:contain;border-radius:12px;background:#fff}
+.hero .sub{font-size:12px;opacity:.85}
+.hero h1{margin:0;font-size:clamp(22px,6vw,30px);line-height:1.45;font-weight:800;text-wrap:balance}
+.hero .meta{font-size:13px;opacity:.92;line-height:1.6}
+.hero .site{display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:18px;background:rgba(255,255,255,.18);color:inherit;text-decoration:none;font-size:13px;font-weight:700;white-space:nowrap}
+.hero .cover{width:100%;max-height:240px;object-fit:cover;border-radius:18px;margin-top:8px}
+.wrap{max-width:640px;margin:-48px auto 0;padding:0 16px 140px;position:relative}
+.stack{display:flex;flex-direction:column;gap:14px}
+.desc{white-space:pre-line;background:var(--surface);border-radius:22px;padding:16px;font-size:14px}
+.sec{background:var(--surface);border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.float,.stack>.sec:first-child,.stack>.stepper:first-child{box-shadow:0 10px 30px rgba(11,122,123,.14)}
+.stepper{background:var(--surface);border-radius:22px;padding:14px 16px;display:flex;align-items:center;gap:12px}
+.stepper .st{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}
+.stepper .st.on{color:var(--ink);flex-grow:1}.stepper .st.done{color:var(--go);flex-grow:1}
+.stepper .n{width:28px;height:28px;border-radius:14px;background:var(--bg);display:grid;place-items:center;font-size:13px;font-weight:800}
+.stepper .on .n{background:var(--accent);color:var(--on-accent)}.stepper .done .n{background:var(--go);color:#fff}
+.stepper .ln{height:2px;width:40px;background:var(--line)}.stepper .ln.done{background:var(--go)}
+h2{margin:0;font-size:16px;font-weight:800}
+.group{display:flex;flex-direction:column;gap:12px}
+.choice{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:16px;box-shadow:inset 0 0 0 1.5px var(--opt);min-height:56px;background:var(--surface);cursor:pointer;text-align:right;width:100%;font:inherit;color:inherit}
+.choice:has(input:checked){background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+.choice input{flex:none;width:22px;height:22px;margin:0;accent-color:var(--accent)}
+.choice .body{flex:1;display:flex;flex-direction:column;min-width:0}
+.choice .t{font-weight:800;font-size:15px}
+.choice .d{font-size:12px;color:var(--muted)}
+.choice .p{flex:none;font-weight:800;font-size:14px;white-space:nowrap}
+.choice.closed{opacity:.6;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:12px;font-size:11px;font-weight:800;background:var(--bg);color:var(--muted);margin-inline-start:6px}
 .field{display:flex;flex-direction:column;gap:6px}
-.field label{font-weight:800;font-size:14px}
-.field .opt{font-weight:400;color:var(--muted)}
-.field input[type=text],.field input[type=tel],.field input[type=email],.field select,.field input[type=file]{width:100%;min-height:48px;padding:0 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);font:inherit;font-size:16px}
-.field input[type=file]{padding:10px}
-.field input:focus,.field select:focus,.choice:focus-within{outline:2px solid var(--accent);outline-offset:1px}
-.field .help{font-size:13px;color:var(--muted)}
-.field .err{display:none;font-size:13px;color:var(--stop);font-weight:800}
-.field.bad input,.field.bad select{border-color:var(--stop);background:var(--stop-soft)}
-.field.bad label{color:var(--stop)}
-.field.bad .err{display:block}
-.group.bad .err{display:block}
+.field label{font-weight:700;font-size:13px}
+.field .opt{font-weight:500;color:var(--muted)}
+.field input[type=text],.field input[type=tel],.field input[type=email],.field select{width:100%;height:54px;padding:0 16px;border:0;border-radius:16px;background:var(--sunken);color:var(--ink);font:inherit;font-size:15px}
+.field input[type=file]{width:100%;min-height:120px;padding:44px 16px 16px;border:1.5px dashed var(--opt);border-radius:16px;background:var(--sunken);font:inherit;font-size:13px;color:var(--muted)}
+.field input:focus,.field select:focus{outline:2px solid var(--accent);outline-offset:0}
+.choice:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+.field .help,.help{font-size:12px;color:var(--muted);line-height:1.6}
+.field .err,.group .err{display:none;font-size:12px;color:var(--stop);font-weight:700}
+.field.bad input,.field.bad select{box-shadow:inset 0 0 0 2px var(--stop)}
+.field.bad .err,.group.bad .err{display:flex}
 .ltr{direction:ltr;text-align:right}
-.total{border-top:1px dashed var(--line);padding-top:18px;display:flex;flex-direction:column;gap:10px}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:14px}
+.kv>span:first-child{color:var(--muted)}
+.kv.big{font-size:17px;font-weight:800}.kv.big>span:first-child{color:var(--ink)}
+.kv.small,.row.small{font-size:13px}
+.hr{height:1px;background:var(--line)}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:12px 16px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:10px;z-index:5}
+.bar>*{max-width:608px;width:100%;margin:0 auto}
+.bar.two{display:grid;grid-template-columns:1fr 1.8fr;gap:10px}
+.bar.two>*{max-width:none}
+.total{display:flex;flex-direction:column;gap:2px}
 .total .row{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
-.total .sum{font-size:20px;font-weight:800;color:var(--highlight)}
-.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:54px;border:0;border-radius:14px;background:var(--accent);color:var(--on-accent);font:inherit;font-size:17px;font-weight:800;text-decoration:none;cursor:pointer}
+.total .row>span:first-child{font-size:13px;color:var(--muted)}
+.total .sum{font-size:20px;font-weight:800}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:58px;border:0;border-radius:18px;background:var(--accent);color:var(--on-accent);font:inherit;font-size:17px;font-weight:800;text-decoration:none;cursor:pointer}
 .btn[disabled]{opacity:.6;cursor:progress}
-.btn.outline{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
-.alert{display:flex;gap:12px;padding:14px 16px;border-radius:14px;background:var(--stop-soft);color:var(--ink)}
-.alert.wait{background:var(--wait-soft)}.alert.go{background:var(--go-soft)}.alert.info{background:var(--accent-soft)}
+.btn.outline,.btn.soft{background:var(--bg);color:var(--ink);font-size:15px;font-weight:700}
+.alert{display:flex;gap:10px;padding:12px 14px;border-radius:16px;background:var(--stop-soft);color:var(--ink);font-size:13px;line-height:1.65}
+.alert.wait{background:var(--wait-soft);color:var(--wait-ink)}.alert.go{background:var(--go-soft)}.alert.info{background:var(--accent-soft)}
 .alert b{display:block}
 .alert a{color:var(--stop);font-weight:800}
-.state{display:flex;flex-direction:column;gap:14px;align-items:stretch;text-align:center}
-.state .ic{align-self:center;width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center}
-.state h1{margin:0;font-size:22px;font-weight:800}
-.code{border:2px dashed var(--highlight);border-radius:14px;padding:12px;display:flex;flex-direction:column}
-.code b{font-size:26px;letter-spacing:2px;color:var(--highlight);direction:ltr}
-.rows{border:1px solid var(--line);border-radius:14px;padding:0 16px;text-align:right}
-.rows div{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.state{background:var(--surface);border-radius:22px;padding:20px 16px;display:flex;flex-direction:column;gap:12px;align-items:stretch;text-align:center;box-shadow:0 10px 30px rgba(11,122,123,.14)}
+.state .ic{align-self:center;width:64px;height:64px;border-radius:32px;display:grid;place-items:center}
+.state h1{margin:0;font-size:22px;line-height:1.5;font-weight:800}
+.state p{margin:0;color:var(--muted);font-size:14px}
+.code{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px}
+.code span{font-size:12px;color:var(--muted)}
+.code b{font-size:26px;letter-spacing:3px;direction:ltr;font-variant-numeric:tabular-nums}
+.rows{background:var(--sunken);border-radius:16px;padding:4px 14px;text-align:right}
+.rows div{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
 .rows div:last-child{border-bottom:0}
 .rows span:first-child{color:var(--muted);flex:none}
-.bank{display:flex;flex-direction:column;gap:8px;text-align:right;background:var(--sunken);border-radius:14px;padding:14px}
-.bank .num{font-size:20px;font-weight:800;direction:ltr;text-align:right;letter-spacing:1px}
-.copy{border:0;background:none;color:var(--accent-text);font:inherit;font-weight:800;cursor:pointer;padding:4px 0}
-.foot{margin-top:28px;padding:18px max(16px,env(safe-area-inset-left,0px));border-top:2px solid var(--highlight);background:var(--surface);display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:center}
-.foot a{min-height:44px;display:inline-flex;align-items:center;color:var(--ink);text-decoration:none;font-weight:800;font-size:14px}
-.maker{display:block;text-align:center;padding:14px;color:var(--muted);font-size:12px;text-decoration:none}
+.bank{display:flex;flex-direction:column;gap:10px;text-align:right}
+.bank>div{display:flex;align-items:center;gap:10px;min-height:54px;border-radius:16px;background:var(--sunken);padding:0 14px}
+.bank>div>span:first-child{display:none}
+.bank .num{flex-grow:1;direction:ltr;text-align:right;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:1px}
+.copy{height:38px;padding:0 12px;border-radius:19px;border:0;background:var(--surface);box-shadow:inset 0 0 0 1px var(--opt);color:var(--accent-text);font:inherit;font-size:12px;font-weight:800;cursor:pointer}
+.foot{margin:24px auto 0;max-width:640px;padding:0 16px;display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:center}
+.foot a{min-height:44px;display:inline-flex;align-items:center;color:var(--ink);text-decoration:none;font-weight:700;font-size:13px}
+.maker{display:block;text-align:center;padding:14px 14px 120px;color:var(--muted);font-size:12px;text-decoration:none}
 .hp{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
-.track{font-size:14px;text-align:center}
+.track{font-size:13px;text-align:center;color:var(--muted)}
 [hidden]{display:none!important}
-@media (prefers-reduced-motion:no-preference){.btn,.choice{transition:background-color .15s,border-color .15s}}
+@media (prefers-reduced-motion:no-preference){.btn,.choice{transition:background-color .15s,box-shadow .15s}}
 CSS;
 }
 
 function cd_reg_render_message($title, $text) {
     $css = cd_reg_theme_css(cd_reg_default_config()['theme']);
-    return cd_reg_head($title, $css) . '<body><main class="wrap"><div class="hero"><h1>' . esc_html($title) . '</h1><p>' . esc_html($text) . '</p></div></main></body></html>';
+    return cd_reg_head($title, $css) . '<body><header class="hero"><div class="in"><span class="sub">رویدادیار</span><h1>' . esc_html($title) . '</h1></div></header>'
+        . '<main class="wrap"><div class="state"><p>' . esc_html($text) . '</p></div></main></body></html>';
 }
 
 function cd_reg_icon($name, $color = 'currentColor', $size = 22) {
@@ -444,45 +461,37 @@ function cd_reg_render_page(array $page) {
     echo cd_reg_head('ثبت‌نام ' . $title, cd_reg_theme_css($cfg['theme'])); // phpcs:ignore WordPress.Security.EscapeOutput
     ?>
 <body>
-<header class="top">
-  <div class="brand">
-    <?php if ($c['logo_url']) : ?><img src="<?php echo esc_url($c['logo_url']); ?>" alt=""><?php endif; ?>
-    <span>ثبت‌نام <?php echo $e($title); ?></span>
+<header class="hero">
+  <div class="in">
+    <div class="top">
+      <span class="sub"><?php echo $c['subtitle'] !== '' ? $e($c['subtitle']) : 'ثبت‌نام آنلاین'; ?></span>
+      <?php if ($c['logo_url']) : ?><img src="<?php echo esc_url($c['logo_url']); ?>" alt=""><?php elseif ($c['site_url']) : ?><a class="site" href="<?php echo esc_url($c['site_url']); ?>">سایت رویداد</a><?php endif; ?>
+    </div>
+    <h1><?php echo $e($title); ?></h1>
+    <?php if ($c['days'] || $c['venue']) : ?><span class="meta"><?php echo $e(implode(' · ', array_filter([implode('، ', $c['days']), implode('، ', $c['venue'])]))); ?></span><?php endif; ?>
+    <?php if ($c['cover_url']) : ?><img class="cover" src="<?php echo esc_url($c['cover_url']); ?>" alt=""><?php endif; ?>
   </div>
-  <?php if ($c['site_url']) : ?><a class="btn-ghost" href="<?php echo esc_url($c['site_url']); ?>">سایت رویداد</a><?php endif; ?>
 </header>
 <main class="wrap">
-  <section class="hero">
-    <?php if ($c['cover_url']) : ?><img class="cover" src="<?php echo esc_url($c['cover_url']); ?>" alt=""><?php endif; ?>
-    <?php if ($c['subtitle']) : ?><span class="sub"><?php echo $e($c['subtitle']); ?></span><?php endif; ?>
-    <h1><?php echo $e($title); ?></h1>
-    <?php if ($c['days'] || $c['venue']) : ?>
-    <div class="meta">
-      <?php if ($c['days']) : ?><div><?php echo cd_reg_icon('calendar', 'var(--highlight)'); // phpcs:ignore ?><span><?php echo implode('<br>', array_map('esc_html', $c['days'])); // phpcs:ignore ?></span></div><?php endif; ?>
-      <?php if ($c['venue']) : ?><div><?php echo cd_reg_icon('pin', 'var(--highlight)'); // phpcs:ignore ?><span><?php echo implode('<br>', array_map('esc_html', $c['venue'])); // phpcs:ignore ?></span></div><?php endif; ?>
-    </div>
-    <?php endif; ?>
-    <?php if ($c['description']) : ?><p class="desc"><?php echo $e($c['description']); ?></p><?php endif; ?>
-  </section>
-
-  <div id="view" class="card" aria-live="polite">
+  <div id="view" class="stack" aria-live="polite">
     <?php if (!$open) : ?>
       <div class="state">
-        <span class="ic" style="background:var(--wait-soft)"><?php echo cd_reg_icon('user', 'var(--wait)', 34); // phpcs:ignore ?></span>
+        <span class="ic" style="background:var(--bg)"><?php echo cd_reg_icon('calendar', 'var(--muted)', 32); // phpcs:ignore ?></span>
         <h1>ثبت‌نام آنلاین بسته شد</h1>
-        <p><?php echo $e($c['closed_text'] !== '' ? $c['closed_text'] : 'ظرفیت یا مهلت ثبت‌نام آنلاین تمام شده است. اگر جا باشد، روز رویداد در میز پذیرش ثبت‌نام می‌شوید.'); ?></p>
+        <p><?php echo $e($c['closed_text'] !== '' ? $c['closed_text'] : 'ظرفیت یا مهلت تمام شده؛ اگر جا باشد روز رویداد در میز پذیرش ثبت‌نام می‌شوید.'); ?></p>
         <?php if ($c['contact']) : ?><p>دبیرخانه: <span class="ltr"><?php echo $e($c['contact']); ?></span></p><?php endif; ?>
-        <button type="button" class="btn outline" data-go="track">پیگیری ثبت‌نام قبلی</button>
+        <button type="button" class="btn soft" data-go="track">پیگیری ثبت‌نام قبلی</button>
       </div>
     <?php else : ?>
       <noscript><div class="alert"><span><b>جاوااسکریپت مرورگر خاموش است.</b>برای ثبت‌نام آن را روشن کنید.</span></div></noscript>
-      <p>در حال بارگذاری فرم…</p>
+      <div class="sec float"><p style="margin:0">در حال بارگذاری فرم…</p></div>
     <?php endif; ?>
   </div>
+  <?php if ($c['description']) : ?><p class="desc" style="margin-top:14px"><?php echo $e($c['description']); ?></p><?php endif; ?>
   <p class="track" id="track-link" <?php echo $open ? '' : 'hidden'; ?>>قبلاً ثبت‌نام کرده‌اید؟ <a href="#track" data-go="track">پیگیری ثبت‌نام</a></p>
 </main>
 <?php if ($c['links'] || $c['site_url']) : ?>
-<footer class="foot" dir="ltr">
+<footer class="foot">
   <?php if ($c['site_url']) : ?><a href="<?php echo esc_url($c['site_url']); ?>"><?php echo $e(preg_replace('#^https?://#', '', untrailingslashit($c['site_url']))); ?></a><?php endif; ?>
   <?php foreach ($c['links'] as $l) : ?><a href="<?php echo esc_url($l['url']); ?>"><?php echo $e($l['label']); ?></a><?php endforeach; ?>
 </footer>

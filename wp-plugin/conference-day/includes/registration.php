@@ -322,6 +322,10 @@ function cd_reg_path_problem($full_path, $event_id) {
     if ($other) {
         return 'این آدرس برای صفحه‌ی ثبت‌نام رویداد دیگری است.';
     }
+    $web = function_exists('cd_web_settings') ? cd_web_settings() : [];
+    if (!empty($web['enabled']) && ($web['slug'] ?? '') === $full_path) {
+        return 'این آدرس برای «داشبورد روی صفحه‌ی وب» است؛ نام دیگری بگذارید.';
+    }
     if (function_exists('get_page_by_path') && (get_page_by_path($full_path) || get_page_by_path($full_path, OBJECT, 'post'))) {
         return 'برگه یا نوشته‌ای در سایت همین آدرس را دارد؛ نام دیگری بگذارید یا پیشوند register/ را روشن کنید.';
     }

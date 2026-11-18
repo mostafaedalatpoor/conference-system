@@ -375,53 +375,225 @@ function cd_xlsx_sheet(array $rows, $filter) {
 
 // ---------------------------------------------------------------- پیشخوان وردپرس
 
-add_action('admin_menu', function () {
-    add_submenu_page('cd-dashboard', 'صفحه‌ی ثبت‌نام', 'صفحه‌ی ثبت‌نام', 'manage_options', 'cd-reg-page', 'cd_render_reg_page_admin');
-    add_submenu_page('cd-dashboard', 'ثبت‌نام‌ها', 'ثبت‌نام‌ها', 'manage_options', 'cd-registrations', 'cd_render_registrations_admin');
-}, 20);
+// منوی وردپرس: «صفحه‌ی ثبت‌نام» و «ثبت‌نام‌ها» در CD_ADMIN_PAGES (admin-ui.php) هستند، با همین تابع‌ها.
 
-function cd_admin_event_picker($slug) {
+/** رویداد انتخاب‌شده در صفحه‌های ثبت‌نام، و سربرگ با انتخاب رویداد. */
+function cd_reg_admin_open($slug, $title, $sub_fn) {
     $events = cd_all_events();
-    $current = isset($_GET['event']) ? cd_get_event((int) $_GET['event']) : ($events[0] ?? null);
-    echo '<form method="get" style="margin:12px 0"><input type="hidden" name="page" value="' . esc_attr($slug) . '"><label>رویداد: <select name="event" onchange="this.form.submit()">';
-    foreach ($events as $e) {
-        printf('<option value="%d"%s>%s</option>', (int) $e['id'], $current && (int) $current['id'] === (int) $e['id'] ? ' selected' : '', esc_html($e['name'] . ' (' . $e['code'] . ')'));
+    $event = cd_ui_current_event($events);
+    $sub = $event ? $sub_fn($event) : 'رویدادی نیست';
+    cd_ui_open($slug, $title, $sub, $event ? cd_ui_event_picker($slug, $events, $event) : '');
+    if (!$event) {
+        echo '<div class="cd-card pop"><p class="cd-mu">هنوز رویدادی نیست. رویداد را در اپ مدیریت بسازید.</p></div>';
+        cd_ui_close();
+        return null;
     }
-    echo '</select></label></form>';
-    return $current;
+    return $event;
+}
+
+/** استایل‌های کوچک ویرایشگر ثبت‌نام، روی پایه‌ی cd_ui_styles. */
+function cd_reg_admin_css() {
+    return '<style>.cd-ui .ry-fl{display:flex;flex-direction:column;gap:6px}.cd-ui .ry-fl>span:first-child{font-size:12px;font-weight:700;color:var(--mu)}'
+        . '.cd-ui .ry-area{width:100%;border:0;border-radius:14px;background:var(--sf2);padding:10px 14px;font:inherit;font-size:14px;color:var(--ink)}'
+        . '.cd-ui .ry-seg{display:flex;padding:4px;background:var(--sf2);border-radius:14px;gap:2px}.cd-ui .ry-seg button{flex:1;height:40px;border:0;border-radius:10px;background:transparent;color:var(--mu);font:inherit;font-size:13px;font-weight:700;cursor:pointer}'
+        . '.cd-ui .ry-seg button.on{background:var(--b);color:#fff;font-weight:800}'
+        . '.cd-ui .ry-tg{display:flex;align-items:center;gap:12px;font-size:14px;cursor:pointer}.cd-ui .ry-tg input{width:20px;height:20px;accent-color:var(--b)}'
+        . '.cd-ui .ry-st{display:flex;align-items:center;gap:10px;min-height:48px;padding:0 10px;border-radius:14px;font:inherit;font-size:13px;border:0;background:transparent;color:var(--ink);text-align:right;cursor:pointer}'
+        . '.cd-ui .ry-st .n{width:26px;height:26px;border-radius:13px;display:grid;place-items:center;font-size:12px;font-weight:800;background:var(--sf2);color:var(--mu);flex-shrink:0}'
+        . '.cd-ui .ry-st.on{background:color-mix(in srgb,var(--b) 12%,var(--sf));box-shadow:inset 0 0 0 2px var(--b)}.cd-ui .ry-st.on .n{background:var(--b);color:#fff}'
+        . '.cd-ui .ry-sub{border-radius:16px;box-shadow:inset 0 0 0 1px var(--ln);padding:14px;display:flex;flex-direction:column;gap:10px}'
+        . '.cd-ui .ry-sw{width:36px;height:36px;border-radius:18px;border:0;cursor:pointer}.cd-ui .ry-sw.on{box-shadow:0 0 0 3px var(--sf),0 0 0 5px var(--ink)}'
+        . '.cd-ui .ry-tbl{display:flex;flex-direction:column}.cd-ui .ry-tbl>div{display:grid;grid-template-columns:1fr 1.6fr .9fr .8fr 1.2fr;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--ln)}'
+        . '.cd-ui .ry-tbl>div.h{font-size:12px;font-weight:700;color:var(--mu)}'
+        . '.cd-ui .ry-tr{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1.2fr;gap:12px;align-items:center;padding:0 18px;min-height:56px;border-bottom:1px solid var(--ln);font-size:14px;text-decoration:none;color:var(--ink)}'
+        . '.cd-ui .ry-tr.hd{min-height:42px;background:var(--sf2);font-size:12px;font-weight:700;color:var(--mu)}.cd-ui .ry-tr.on{background:color-mix(in srgb,var(--b) 10%,var(--sf));box-shadow:inset -4px 0 0 var(--b)}'
+        . '.cd-ui .ry-kv{display:flex;justify-content:space-between;gap:10px;font-size:13px}.cd-ui .ry-kv span:first-child{color:var(--mu)}'
+        . '.cd-ui .ry-chips{display:flex;gap:8px;flex-wrap:wrap}.cd-ui .ry-chips a{height:34px;padding:0 14px;border-radius:17px;background:var(--sf);box-shadow:inset 0 0 0 1px var(--ln);display:inline-flex;align-items:center;font-size:12px;font-weight:700;color:var(--ink);text-decoration:none}'
+        . '.cd-ui .ry-chips a.on{background:#fff;color:var(--b);font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.08)}'
+        . '.cd-ui .ry-mono{direction:ltr;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}'
+        . '@media (max-width:960px){.cd-ui .ry-tr{grid-template-columns:1.4fr 1fr 1fr}.cd-ui .ry-tr>:nth-child(4),.cd-ui .ry-tr>:nth-child(2){display:none}}</style>';
 }
 
 function cd_render_reg_page_admin() {
     if (!current_user_can('manage_options')) {
         return;
     }
-    echo '<div class="wrap" dir="rtl"><h1>صفحه‌ی ثبت‌نام</h1>';
-    $event = cd_admin_event_picker('cd-reg-page');
-    if (!$event) {
-        echo '<p>هنوز رویدادی نیست. رویداد را در اپ مدیریت بسازید.</p></div>';
+    if (isset($_GET['view']) && $_GET['view'] === 'connect') {
+        cd_render_reg_connect_admin();
         return;
     }
     $notice = '';
-    if (isset($_POST['cd_reg_config']) && check_admin_referer('cd_reg_page')) {
+    $step = isset($_GET['step']) ? max(1, min(7, (int) $_GET['step'])) : 1;
+    $events = cd_all_events();
+    $event = cd_ui_current_event($events);
+    if ($event && isset($_POST['cd_reg_config']) && check_admin_referer('cd_reg_page')) {
         $cfg = cd_sanitize_reg_config(json_decode(wp_unslash($_POST['cd_reg_config']), true));
-        $saved = $cfg['path'] === '' ? new WP_Error('x', 'آدرس صفحه را بنویسید.') : cd_reg_save_page((int) $event['id'], $cfg);
-        $notice = is_wp_error($saved)
-            ? '<div class="notice notice-error"><p>' . esc_html($saved->get_error_message()) . '</p></div>'
-            : '<div class="notice notice-success"><p>ذخیره شد.</p></div>';
+        $saved = $cfg['path'] === '' ? new WP_Error('x', 'آدرس صفحه را بنویسید (گام ۱).') : cd_reg_save_page((int) $event['id'], $cfg);
+        if (is_wp_error($saved)) {
+            $notice = '<div class="cd-callout stop" style="margin-bottom:14px">' . esc_html($saved->get_error_message()) . '</div>';
+        } else {
+            $notice = '<div class="cd-callout go" style="margin-bottom:14px">ذخیره شد.</div>';
+            $step = max(1, min(7, (int) ($_POST['next'] ?? $step)));
+        }
     }
-    echo $notice; // phpcs:ignore
+    $page = $event ? cd_reg_get_page_by_event((int) $event['id']) : null;
+    $status = $page ? ['draft' => 'پیش‌نویس', 'open' => 'باز', 'closed' => 'بسته'][$page['config']['status']] : 'ساخته نشده';
+    $event = cd_reg_admin_open('cd-reg-page', 'صفحه‌ی ثبت‌نام', function ($e) use ($step, $status) {
+        return $e['name'] . ' · گام ' . cd_fa_digits((string) $step) . ' از ۷ · وضعیت: ' . $status;
+    });
+    if (!$event) {
+        return;
+    }
+    echo cd_reg_admin_css(); // phpcs:ignore WordPress.Security.EscapeOutput
+    echo $notice; // phpcs:ignore WordPress.Security.EscapeOutput
     $data = cd_reg_editor_data($event);
-    if ($data['url']) {
-        printf('<p>آدرس صفحه: <a href="%1$s" target="_blank" rel="noopener" dir="ltr">%1$s</a></p>', esc_url($data['url']));
-    }
-    echo '<form method="post" id="cd-reg-form">';
+    $data['step'] = $step;
+    $data['defaults'] = cd_reg_default_config();
+    $data['triggers'] = CD_REG_TRIGGERS;
+    $data['variables'] = ['{name}', '{code}', '{event}', '{amount}', '{status}', '{link}', '{personal_link}'];
+    $data['connect_url'] = admin_url('admin.php?page=cd-reg-page&view=connect&event=' . (int) $event['id']);
+    $data['sms_ready'] = cd_conn_get()['sms']['url'] !== '';
+    $data['home'] = trailingslashit(home_url('/'));
+    echo '<form method="post" id="cd-reg-form" action="' . esc_url(admin_url('admin.php?page=cd-reg-page&event=' . (int) $event['id'])) . '">';
     wp_nonce_field('cd_reg_page');
-    echo '<input type="hidden" name="cd_reg_config" id="cd-reg-config">';
-    echo '<div id="cd-reg-editor"></div>';
-    submit_button('ذخیره‌ی صفحه‌ی ثبت‌نام');
-    echo '</form>';
+    echo '<input type="hidden" name="cd_reg_config" id="cd-reg-config"><input type="hidden" name="next" id="cd-reg-next" value="' . (int) $step . '">';
+    echo '<div id="cd-reg-editor"><div class="cd-card pop"><p class="cd-mu">در حال بارگذاری…</p></div></div></form>';
     echo '<script>window.CD_REG_EDITOR=' . wp_json_encode($data, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) . ';</script>';
-    echo '<script>' . file_get_contents(CD_DIR . 'assets/reg-admin.js') . '</script></div>'; // phpcs:ignore
+    echo '<script>' . file_get_contents(CD_DIR . 'assets/reg-admin.js') . '</script>'; // phpcs:ignore
+    cd_ui_close();
+}
+
+/** «اتصال درگاه و سرویس پیامک» (بوم ۱۱-RegConnect). */
+function cd_render_reg_connect_admin() {
+    global $wpdb;
+    $events = cd_all_events();
+    $event = cd_ui_current_event($events);
+    $notice = '';
+    if (isset($_POST['cd_conn']) && check_admin_referer('cd_conn')) {
+        $in = wp_unslash($_POST['cd_conn']);
+        cd_conn_save(is_array($in) ? $in : []);
+        $notice = '<div class="cd-callout go" style="margin-bottom:14px">ذخیره شد.</div>';
+        if (!empty($_POST['test_sms'])) {
+            $m = cd_msg_send(0, null, 'sms', cd_normalize_mobile(sanitize_text_field(wp_unslash($_POST['test_mobile'] ?? ''))), 'پیام آزمایشی رویدادیار. اگر این را می‌خوانید، اتصال پیامک درست است.', 'test');
+            $notice = '<div class="cd-callout ' . ($m['ok'] ? 'go' : 'stop') . '" style="margin-bottom:14px">' . esc_html(($m['ok'] ? 'پیام آزمایشی فرستاده شد. ' : 'پیام آزمایشی فرستاده نشد. ') . $m['response']) . '</div>';
+        }
+    }
+    if ($event && isset($_POST['test_pay']) && check_admin_referer('cd_conn')) {
+        $req = new WP_REST_Request('POST');
+        $req['code'] = $event['code'];
+        $res = cd_rest_reg_test_payment($req);
+        if (is_wp_error($res)) {
+            $notice = '<div class="cd-callout stop" style="margin-bottom:14px">' . esc_html($res->get_error_message()) . '</div>';
+        } else {
+            wp_redirect($res['url']); // درگاه بیرونی
+            exit;
+        }
+    }
+    if (isset($_POST['retry']) && check_admin_referer('cd_conn')) {
+        $m = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . cd_table('reg_messages') . ' WHERE id = %d', (int) $_POST['retry']), ARRAY_A);
+        if ($m) {
+            $r = cd_msg_send((int) $m['event_id'], $m['registration_id'], $m['channel'], $m['recipient'], $m['body'], $m['trigger_key'], (int) $m['id']);
+            $notice = '<div class="cd-callout ' . ($r['ok'] ? 'go' : 'stop') . '" style="margin-bottom:14px">' . esc_html($r['ok'] ? 'دوباره فرستاده شد.' : 'باز هم فرستاده نشد: ' . $r['response']) . '</div>';
+        }
+    }
+    $event = cd_reg_admin_open('cd-reg-page', 'اتصال درگاه و سرویس پیامک', function () {
+        return 'صفحه‌ی ثبت‌نام · گام ۵ و ۶';
+    });
+    if (!$event) {
+        return;
+    }
+    echo cd_reg_admin_css(); // phpcs:ignore
+    echo $notice; // phpcs:ignore
+    $c = cd_conn_get();
+    $g = $c['gateway'];
+    $s = $c['sms'];
+    $page = cd_reg_get_page_by_event((int) $event['id']);
+    $gid = $page ? $page['config']['payment']['gateway'] : 'zarinpal';
+    $last = get_option('cd_reg_last_test', null);
+    $f = function ($name, $value, $ltr = true, $ph = '') {
+        return '<div class="cd-field"><input name="cd_conn' . $name . '" value="' . esc_attr($value) . '"' . ($ltr ? ' dir="ltr"' : '') . ' placeholder="' . esc_attr($ph) . '"></div>';
+    };
+    $t = function ($name, $value, $rows = 3, $ph = '') {
+        return '<textarea class="ry-area ry-mono" rows="' . (int) $rows . '" name="cd_conn' . $name . '" placeholder="' . esc_attr($ph) . '">' . esc_textarea($value) . '</textarea>';
+    };
+    $m = function ($name, $value) {
+        return '<div class="cd-field" style="max-width:120px"><select name="cd_conn' . $name . '"><option' . ($value === 'POST' ? ' selected' : '') . '>POST</option><option' . ($value === 'GET' ? ' selected' : '') . '>GET</option></select></div>';
+    };
+    $lab = function ($label, $html, $hint = '') {
+        return '<div class="ry-fl"><span>' . esc_html($label) . '</span>' . $html . ($hint ? '<span class="cd-mu" style="font-size:12px">' . esc_html($hint) . '</span>' : '') . '</div>';
+    };
+    $gw_ok = $gid !== 'custom' || ($g['start_url'] !== '' && $g['redirect_field'] !== '');
+    echo '<form method="post">';
+    wp_nonce_field('cd_conn');
+    echo '<div class="cd-grid cd-g2" style="align-items:start">';
+    // درگاه
+    echo '<div class="cd-card pop" style="display:flex;flex-direction:column;gap:12px">';
+    echo '<div style="display:flex;align-items:center;gap:10px"><span class="dashicons dashicons-money-alt cd-ic b"></span><h2 style="flex-grow:1;margin:0">درگاه پرداخت</h2><span class="cd-pl ' . ($gw_ok ? 'go">وصل است' : 'wait">کامل نیست') . '</span></div>';
+    $names = array_map(function ($x) {
+        return $x['name'];
+    }, array_column(cd_payment_gateways_out(), null, 'id'));
+    echo $lab('درگاه این رویداد', '<div class="cd-field"><b>' . esc_html($names[$gid] ?? $gid) . '</b></div>', 'انتخاب درگاه و کد مرچنت زرین‌پال در «صفحه‌ی ثبت‌نام ← گام ۵ پرداخت» است. ماژول‌های نصب‌شده: ' . implode('، ', $names) . '.'); // phpcs:ignore
+    echo $lab('آدرس برگشت (به درگاه بدهید)', '<div class="cd-field ry-mono" style="justify-content:space-between"><span>' . esc_html(rest_url(CD_NS . '/reg/callback')) . '</span></div>'); // phpcs:ignore
+    echo '<div class="cd-callout go"><span><b>درگاه دلخواه:</b> آدرس شروع، آدرس تأیید، هدر و بدنه با متغیرهای {amount} {callback} {code} {mobile} {authority} را خودتان بنویسید. هدرها و بدنه رمزشده ذخیره می‌شوند.</span></div>';
+    echo $lab('نام درگاه', $f('[gateway][name]', $g['name'], false, 'مثلاً پرداخت سازمان'));
+    echo $lab('واحد مبلغ', '<div class="ry-seg"><label style="flex:1"><input type="radio" name="cd_conn[gateway][unit]" value="toman"' . checked($g['unit'], 'toman', false) . '> تومان</label><label style="flex:1"><input type="radio" name="cd_conn[gateway][unit]" value="rial"' . checked($g['unit'], 'rial', false) . '> ریال</label></div>'); // phpcs:ignore
+    echo '<b style="font-size:14px">شروع پرداخت</b>';
+    echo '<div style="display:flex;gap:8px">' . $m('[gateway][start_method]', $g['start_method']) . '<div style="flex-grow:1">' . $f('[gateway][start_url]', $g['start_url'], true, 'https://api.gateway.example/start') . '</div></div>'; // phpcs:ignore
+    echo $lab('هدرها (هر خط Name: value)', $t('[gateway][start_headers]', $g['start_headers'], 2, 'Authorization: Bearer …')); // phpcs:ignore
+    echo $lab('بدنه', $t('[gateway][start_body]', $g['start_body'], 3, '{"amount": {amount}, "callback": "{callback}", "order": "{code}"}')); // phpcs:ignore
+    echo '<div class="cd-grid cd-g2">' . $lab('فیلد آدرس رفتن به درگاه در پاسخ', $f('[gateway][redirect_field]', $g['redirect_field'], true, 'data.url')) . $lab('فیلد شناسه‌ی تراکنش (اختیاری)', $f('[gateway][authority_field]', $g['authority_field'], true, 'data.id')) . '</div>'; // phpcs:ignore
+    echo '<b style="font-size:14px">تأیید پرداخت</b>';
+    echo '<div style="display:flex;gap:8px">' . $m('[gateway][verify_method]', $g['verify_method']) . '<div style="flex-grow:1">' . $f('[gateway][verify_url]', $g['verify_url'], true, 'https://api.gateway.example/verify') . '</div></div>'; // phpcs:ignore
+    echo $lab('هدرها', $t('[gateway][verify_headers]', $g['verify_headers'], 2)); // phpcs:ignore
+    echo $lab('بدنه', $t('[gateway][verify_body]', $g['verify_body'], 2, '{"id": "{authority}", "amount": {amount}}')); // phpcs:ignore
+    echo '<div class="cd-grid cd-g2">' . $lab('فیلد نتیجه در پاسخ', $f('[gateway][verify_field]', $g['verify_field'], true, 'status')) . $lab('پارامتر برگشت', $f('[gateway][callback_param]', $g['callback_param'], true, 'Status')) . '</div>'; // phpcs:ignore
+    echo $lab('مقدار موفق', $f('[gateway][success_value]', $g['success_value'], true, 'OK')); // phpcs:ignore
+    echo '<label class="ry-tg"><span style="flex-grow:1">حالت آزمایشی</span><input type="checkbox" name="cd_conn[gateway][test_mode]" value="1"' . checked($g['test_mode'], true, false) . '></label>'; // phpcs:ignore
+    if ($last) {
+        echo '<div class="cd-callout ' . ($last['ok'] ? 'go' : 'stop') . '">آخرین آزمون ۱۰۰ تومانی: ' . esc_html($last['ok'] ? 'موفق · ' . $last['ref'] : 'ناموفق') . '</div>';
+    }
+    echo '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="cd-btn pri">ذخیره</button><button class="cd-btn" name="test_pay" value="1"><span class="dashicons dashicons-admin-tools"></span>آزمون با ۱۰۰ تومان</button></div>';
+    echo '</div>';
+    // پیامک و آخرین ارسال‌ها
+    echo '<div style="display:flex;flex-direction:column;gap:14px">';
+    echo '<div class="cd-card" style="display:flex;flex-direction:column;gap:12px">';
+    echo '<div style="display:flex;align-items:center;gap:10px"><span class="dashicons dashicons-email-alt cd-ic b"></span><h2 style="flex-grow:1;margin:0">سرویس پیامک</h2><span class="cd-pl ' . ($s['url'] !== '' ? 'go">وصل است' : 'wait">انتخاب نشده') . '</span></div>';
+    $providers = cd_sms_providers();
+    if (count($providers) > 1) {
+        $opts = '';
+        foreach ($providers as $id => $pv) {
+            $opts .= '<option value="' . esc_attr($id) . '"' . selected($s['provider'], $id, false) . '>' . esc_html($pv['name'] ?? $id) . '</option>';
+        }
+        echo $lab('سرویس', '<div class="cd-field"><select name="cd_conn[sms][provider]">' . $opts . '</select></div>', 'ماژول‌های نصب‌شده خودکار اینجا می‌آیند.'); // phpcs:ignore
+    }
+    echo '<b style="font-size:14px">اتصال دلخواه (HTTP)</b>';
+    echo '<div style="display:flex;gap:8px">' . $m('[sms][method]', $s['method']) . '<div style="flex-grow:1">' . $f('[sms][url]', $s['url'], true, 'https://api.sms.example/send') . '</div></div>'; // phpcs:ignore
+    echo $lab('هدرها', $t('[sms][headers]', $s['headers'], 2, 'X-API-KEY: …')); // phpcs:ignore
+    echo $lab('بدنه', $t('[sms][body]', $s['body'], 3, '{"to": "{mobile}", "from": "{sender}", "text": "{text}"}')); // phpcs:ignore
+    echo '<div class="cd-grid cd-g2">' . $lab('شماره‌ی فرستنده', $f('[sms][sender]', $s['sender'])) . $lab('قاعده‌ی موفقیت', '<div class="cd-field"><select name="cd_conn[sms][success]"><option value="http200"' . selected($s['success'], 'http200', false) . '>HTTP ۲۰۰</option><option value="text"' . selected($s['success'], 'text', false) . '>متن در پاسخ</option></select></div>') . '</div>'; // phpcs:ignore
+    echo $lab('متن موفقیت (برای «متن در پاسخ»)', $f('[sms][success_text]', $s['success_text'])); // phpcs:ignore
+    echo '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="cd-btn pri">ذخیره</button><div class="cd-field" style="width:170px"><input name="test_mobile" dir="ltr" placeholder="0912…"></div><button class="cd-btn" name="test_sms" value="1"><span class="dashicons dashicons-format-chat"></span>پیام آزمایشی</button></div>';
+    echo '</div>';
+    $msgs = $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cd_table('reg_messages') . ' WHERE event_id IN (%d, 0) ORDER BY id DESC LIMIT 12', $event['id']), ARRAY_A);
+    echo '<div class="cd-card" style="display:flex;flex-direction:column;gap:2px"><h2>آخرین ارسال‌ها</h2>';
+    if (!$msgs) {
+        echo '<p class="cd-mu">هنوز پیامی فرستاده نشده.</p>';
+    }
+    $names = [];
+    foreach ($msgs as $x) {
+        if ($x['registration_id'] && !isset($names[$x['registration_id']])) {
+            $r = cd_reg_get((int) $x['registration_id']);
+            $names[$x['registration_id']] = $r ? trim($r['first_name'] . ' ' . $r['last_name']) : '';
+        }
+        $who = $x['registration_id'] ? ($names[$x['registration_id']] ?: $x['recipient']) : $x['recipient'];
+        $label = $x['trigger_key'] === 'test' ? 'آزمایشی' : (CD_REG_TRIGGERS[$x['trigger_key']] ?? $x['trigger_key']);
+        echo '<div style="display:flex;align-items:center;gap:10px;font-size:13px;min-height:38px;border-bottom:1px solid var(--ln)">';
+        echo '<span class="dashicons ' . ($x['ok'] ? 'dashicons-yes-alt" style="color:var(--go)' : 'dashicons-warning" style="color:var(--st)') . '"></span>';
+        echo '<span style="flex-grow:1">' . esc_html($who . ' · ' . $label . ($x['channel'] === 'email' ? ' · ایمیل' : '')) . ($x['ok'] ? '' : ' · <span class="cd-mu">' . esc_html(mb_substr($x['response'], 0, 60)) . '</span> <button class="cd-btn sm" name="retry" value="' . (int) $x['id'] . '">تلاش دوباره</button>') . '</span>';
+        echo '<span class="cd-mu" style="font-size:12px">' . esc_html(cd_ui_hm($x['created_at'])) . '</span></div>';
+    }
+    echo '</div></div></div></form>';
+    cd_ui_close();
 }
 
 add_action('admin_post_cd_reg_action', function () {
@@ -429,8 +601,8 @@ add_action('admin_post_cd_reg_action', function () {
         wp_die('دسترسی ندارید.', 403);
     }
     check_admin_referer('cd_reg_action');
-    $res = cd_reg_admin_action((int) ($_POST['id'] ?? 0), sanitize_key(wp_unslash($_POST['act'] ?? '')), sanitize_text_field(wp_unslash($_POST['reason'] ?? '')));
-    $msg = is_wp_error($res) ? $res->get_error_message() : 'انجام شد.';
+    $res = cd_reg_admin_action((int) ($_POST['id'] ?? 0), sanitize_key(wp_unslash($_POST['act'] ?? '')), sanitize_text_field(wp_unslash($_POST['reason'] ?? '')), sanitize_text_field(wp_unslash($_POST['confirm_code'] ?? '')));
+    $msg = is_wp_error($res) ? $res->get_error_message() : (($res['_result'] ?? '') === 'archived_instead' ? 'این ثبت‌نام پرداخت یا ورود به لیست دارد؛ به‌جای حذف بایگانی شد.' : (($res['_result'] ?? '') === 'deleted' ? 'حذف شد.' : 'انجام شد.'));
     wp_safe_redirect(add_query_arg(['page' => 'cd-registrations', 'event' => (int) ($_POST['event'] ?? 0), 'msg' => rawurlencode($msg)], admin_url('admin.php')));
     exit;
 });
@@ -472,69 +644,148 @@ function cd_render_registrations_admin() {
     if (!current_user_can('manage_options')) {
         return;
     }
-    echo '<div class="wrap" dir="rtl"><h1>ثبت‌نام‌ها</h1>';
-    $event = cd_admin_event_picker('cd-registrations');
+    $events = cd_all_events();
+    $current = cd_ui_current_event($events);
+    $count = $current ? (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . cd_table('registrations') . ' WHERE event_id = %d AND archived_at IS NULL', $current['id'])) : 0;
+    $export = $current ? wp_nonce_url(admin_url('admin-post.php?action=cd_reg_export&event=' . (int) $current['id']), 'cd_reg_export') : '';
+    $event = cd_reg_admin_open('cd-registrations', 'ثبت‌نام‌ها', function ($e) use ($count) {
+        return $e['name'] . ' · ' . cd_fa_digits((string) $count) . ' نفر';
+    });
     if (!$event) {
-        echo '</div>';
         return;
     }
+    echo cd_reg_admin_css(); // phpcs:ignore
     if (isset($_GET['msg'])) {
-        printf('<div class="notice notice-info"><p>%s</p></div>', esc_html(rawurldecode(sanitize_text_field(wp_unslash($_GET['msg'])))));
+        printf('<div class="cd-callout go" style="margin-bottom:14px">%s</div>', esc_html(rawurldecode(sanitize_text_field(wp_unslash($_GET['msg'])))));
     }
-    cd_reg_expire_holds((int) $event['id']);
+    $eid = (int) $event['id'];
+    cd_reg_expire_holds($eid);
     $filter = isset($_GET['status']) ? sanitize_key(wp_unslash($_GET['status'])) : '';
     $statuses = cd_reg_statuses();
-    $sql = 'SELECT * FROM ' . cd_table('registrations') . ' WHERE event_id = %d';
-    $args = [(int) $event['id']];
-    if (isset($statuses[$filter])) {
-        $sql .= ' AND status = %s';
-        $args[] = $filter;
+    $all = $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . cd_table('registrations') . ' WHERE event_id = %d ORDER BY id DESC LIMIT 1000', $eid), ARRAY_A);
+    $counts = ['all' => 0, 'archived' => 0];
+    foreach ($all as $x) {
+        if ($x['archived_at']) {
+            $counts['archived']++;
+            continue;
+        }
+        $counts['all']++;
+        $counts[$x['status']] = ($counts[$x['status']] ?? 0) + 1;
     }
-    $rows = $wpdb->get_results($wpdb->prepare($sql . ' ORDER BY id DESC LIMIT 500', $args), ARRAY_A);
-    $base = admin_url('admin.php?page=cd-registrations&event=' . (int) $event['id']);
-    echo '<p>';
-    printf('<a href="%s">%s</a>', esc_url($base), $filter === '' ? '<b>همه</b>' : 'همه');
-    foreach ($statuses as $k => $label) {
-        printf(' | <a href="%s">%s</a>', esc_url($base . '&status=' . $k), $filter === $k ? '<b>' . esc_html($label) . '</b>' : esc_html($label));
+    $rows = array_values(array_filter($all, function ($x) use ($filter) {
+        if ($filter === 'archived') {
+            return (bool) $x['archived_at'];
+        }
+        if ($x['archived_at']) {
+            return false;
+        }
+        if ($filter === 'ended') {
+            return in_array($x['status'], ['rejected', 'expired'], true);
+        }
+        return $filter === '' || $x['status'] === $filter;
+    }));
+    $base = admin_url('admin.php?page=cd-registrations&event=' . $eid);
+    $chips = [
+        '' => 'همه ' . cd_fa_digits((string) $counts['all']),
+        'pending_approval' => 'منتظر تأیید ' . cd_fa_digits((string) ($counts['pending_approval'] ?? 0)),
+        'pending_review' => 'بررسی پرداخت ' . cd_fa_digits((string) ($counts['pending_review'] ?? 0)),
+        'pending_payment' => 'در انتظار پرداخت ' . cd_fa_digits((string) ($counts['pending_payment'] ?? 0)),
+        'confirmed' => 'تأییدشده ' . cd_fa_digits((string) ($counts['confirmed'] ?? 0)),
+        'ended' => 'ردشده / منقضی',
+        'archived' => 'بایگانی‌شده ' . cd_fa_digits((string) $counts['archived']),
+    ];
+    $sel = isset($_GET['id']) ? (int) $_GET['id'] : ($rows[0]['id'] ?? 0);
+    $types = cd_code_names('registration_types', $eid);
+    $pill = function ($x) use ($statuses) {
+        $cls = ['confirmed' => 'go', 'pending_approval' => 'wait', 'pending_review' => 'wait', 'rejected' => 'stop'][$x['status']] ?? 'mute';
+        return '<span class="cd-pl ' . $cls . '">' . esc_html($statuses[$x['status']] ?? $x['status']) . '</span>';
+    };
+    $method = ['gateway' => 'درگاه', 'card' => 'کارت‌به‌کارت', 'link' => 'لینک بیرونی', '' => '—'];
+    echo '<div class="cd-grid" style="grid-template-columns:1fr 340px;align-items:start">';
+    echo '<div style="display:flex;flex-direction:column;gap:12px"><div class="ry-chips">';
+    foreach ($chips as $k => $label) {
+        printf('<a class="%s" href="%s">%s</a>', $filter === $k ? 'on' : '', esc_url($base . ($k !== '' ? '&status=' . $k : '')), esc_html($label));
     }
-    printf(' | <a class="button" href="%s">دریافت فایل اکسل</a></p>', esc_url(wp_nonce_url(admin_url('admin-post.php?action=cd_reg_export&event=' . (int) $event['id']), 'cd_reg_export')));
-    echo '<table class="widefat striped"><thead><tr><th>کد</th><th>نام</th><th>موبایل</th><th>نوع</th><th>مبلغ</th><th>پرداخت</th><th>وضعیت</th><th>کار</th></tr></thead><tbody>';
+    printf('<a href="%s"><span class="dashicons dashicons-download" style="font-size:16px;width:16px;height:16px;margin-left:4px"></span>خروجی اکسل</a>', esc_url($export));
+    echo '</div><div class="cd-card pop" style="padding:0;overflow:hidden">';
+    echo '<div class="ry-tr hd"><span>نام</span><span>نوع</span><span>مبلغ</span><span>روش</span><span>وضعیت</span></div>';
     if (!$rows) {
-        echo '<tr><td colspan="8">ثبت‌نامی نیست.</td></tr>';
+        echo '<p class="cd-mu" style="padding:18px">ثبت‌نامی نیست.</p>';
     }
     foreach ($rows as $x) {
-        $pay = [];
-        if ($x['pay_ref']) {
-            $pay[] = 'بانک: ' . esc_html($x['pay_ref']);
-        }
-        if ($x['pay_tracking']) {
-            $pay[] = 'پیگیری: ' . esc_html($x['pay_tracking']);
-        }
-        if ($x['receipt_file']) {
-            $pay[] = '<a target="_blank" href="' . esc_url(wp_nonce_url(admin_url('admin-post.php?action=cd_reg_receipt&id=' . (int) $x['id']), 'cd_reg_receipt')) . '">رسید</a>';
-        }
-        echo '<tr><td dir="ltr">' . esc_html($x['code']) . '</td><td>' . esc_html($x['first_name'] . ' ' . $x['last_name']) . '</td><td dir="ltr">' . esc_html($x['mobile'])
-            . '</td><td>' . esc_html($x['type_code']) . '</td><td>' . esc_html(number_format((int) $x['amount_online'])) . ($x['amount_onsite'] ? ' + ' . esc_html(number_format((int) $x['amount_onsite'])) . ' روز اجرا' : '')
-            . '</td><td>' . implode('<br>', $pay) . '</td><td>' . esc_html($statuses[$x['status']] ?? $x['status']) . ($x['reject_reason'] ? '<br><small>' . esc_html($x['reject_reason']) . '</small>' : '') . '</td><td>';
-        $form = function ($act, $label, $reason = false) use ($x, $event) {
-            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline-block;margin:2px">';
-            wp_nonce_field('cd_reg_action');
-            echo '<input type="hidden" name="action" value="cd_reg_action"><input type="hidden" name="act" value="' . esc_attr($act) . '"><input type="hidden" name="id" value="' . (int) $x['id'] . '"><input type="hidden" name="event" value="' . (int) $event['id'] . '">';
-            if ($reason) {
-                echo '<input name="reason" placeholder="دلیل (به فرد نشان داده می‌شود)" style="width:180px"> ';
-            }
-            echo '<button class="button">' . esc_html($label) . '</button></form>';
-        };
-        if ($x['status'] === 'pending_approval') {
-            $form('approve', 'تأیید');
-        }
-        if (in_array($x['status'], ['pending_payment', 'pending_review', 'expired'], true)) {
-            $form('mark_paid', 'پرداخت شد');
-        }
-        if (!in_array($x['status'], ['rejected', 'confirmed'], true)) {
-            $form('reject', 'رد', true);
-        }
-        echo '</td></tr>';
+        printf(
+            '<a class="ry-tr%s" href="%s"><b>%s</b><span>%s</span><span>%s</span><span>%s</span>%s</a>',
+            (int) $x['id'] === $sel ? ' on' : '',
+            esc_url($base . ($filter !== '' ? '&status=' . $filter : '') . '&id=' . (int) $x['id']),
+            esc_html(trim($x['first_name'] . ' ' . $x['last_name'])),
+            esc_html($types[$x['type_code']] ?? $x['type_code']),
+            esc_html(cd_fa_digits(number_format((int) $x['amount_online']))),
+            esc_html($method[$x['pay_method']] ?? $x['pay_method']),
+            $pill($x) // phpcs:ignore
+        );
     }
-    echo '</tbody></table></div>';
+    echo '</div></div>';
+    // پنل جزئیات
+    $x = $sel ? cd_reg_get($sel) : null;
+    echo '<div class="cd-card pop" style="display:flex;flex-direction:column;gap:10px">';
+    if (!$x || (int) $x['event_id'] !== $eid) {
+        echo '<p class="cd-mu">یک ثبت‌نام را از فهرست انتخاب کنید.</p></div></div>';
+        cd_ui_close();
+        return;
+    }
+    $page = cd_reg_get_page_by_event($eid);
+    $cfg = $page ? $page['config'] : cd_reg_default_config();
+    echo '<div style="display:flex;flex-direction:column"><b style="font-size:18px">' . esc_html(trim($x['first_name'] . ' ' . $x['last_name'])) . '</b><span class="cd-mu" style="font-size:12px">کد <span dir="ltr">' . esc_html($x['code']) . '</span> · ' . esc_html(cd_ui_ago($x['created_at'])) . '</span></div>';
+    echo $pill($x); // phpcs:ignore
+    $kv = function ($k, $v, $ltr = false) {
+        if ($v === '' || $v === null) {
+            return;
+        }
+        echo '<div class="ry-kv"><span>' . esc_html($k) . '</span><b' . ($ltr ? ' dir="ltr"' : '') . '>' . esc_html($v) . '</b></div>';
+    };
+    $kv('موبایل', cd_fa_digits($x['mobile']), true);
+    $kv('ایمیل', $x['email'], true);
+    $kv('سازمان', $x['organization']);
+    $kv('نوع', $types[$x['type_code']] ?? $x['type_code']);
+    $addons = (array) json_decode((string) $x['addons'], true);
+    foreach ($cfg['addons'] as $a) {
+        if (in_array($a['id'], $addons, true)) {
+            $kv($a['title'] . ($a['price_mode'] === 'onsite' ? ' · در محل' : ''), $a['price'] ? cd_fa_digits(number_format((int) $a['price'])) : '✓');
+        }
+    }
+    $kv('مبلغ آنلاین', cd_fa_digits(number_format((int) $x['amount_online'])) . ' تومان');
+    $kv('روش پرداخت', $method[$x['pay_method']] ?? '');
+    $kv('شماره‌ی بانک', $x['pay_ref'], true);
+    $kv('شماره‌ی پیگیری', $x['pay_tracking'], true);
+    if ($x['receipt_file']) {
+        echo '<a class="cd-btn" target="_blank" href="' . esc_url(wp_nonce_url(admin_url('admin-post.php?action=cd_reg_receipt&id=' . (int) $x['id']), 'cd_reg_receipt')) . '"><span class="dashicons dashicons-media-document"></span>رسید (فقط برای مدیر)</a>';
+    }
+    if ($x['reject_reason']) {
+        echo '<div class="cd-callout stop">دلیل رد: ' . esc_html($x['reject_reason']) . '</div>';
+    }
+    $act = function ($a, $label, $cls = '', $extra = '') use ($x, $eid) {
+        return '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:contents">' . wp_nonce_field('cd_reg_action', '_wpnonce', true, false)
+            . '<input type="hidden" name="action" value="cd_reg_action"><input type="hidden" name="act" value="' . esc_attr($a) . '"><input type="hidden" name="id" value="' . (int) $x['id'] . '"><input type="hidden" name="event" value="' . $eid . '">'
+            . $extra . '<button class="cd-btn ' . esc_attr($cls) . '" style="justify-content:center">' . esc_html($label) . '</button></form>';
+    };
+    $s = $x['status'];
+    echo '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+    if (!in_array($s, ['rejected', 'confirmed'], true)) {
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="grid-column:1/-1;display:flex;gap:8px">' . wp_nonce_field('cd_reg_action', '_wpnonce', true, false) // phpcs:ignore
+            . '<input type="hidden" name="action" value="cd_reg_action"><input type="hidden" name="act" value="reject"><input type="hidden" name="id" value="' . (int) $x['id'] . '"><input type="hidden" name="event" value="' . $eid . '">'
+            . '<div class="cd-field" style="flex-grow:1;height:44px"><input name="reason" placeholder="دلیل رد (به فرد نشان داده می‌شود)"></div><button class="cd-btn danger">رد…</button></form>';
+    }
+    if (in_array($s, ['pending_payment', 'pending_review', 'expired'], true)) {
+        echo $act('mark_paid', 'پرداخت شد'); // phpcs:ignore
+    }
+    if ($s === 'pending_approval') {
+        echo $act('approve', 'تأیید ثبت‌نام', 'pri'); // phpcs:ignore
+    }
+    echo $x['archived_at'] ? $act('unarchive', 'برگرداندن از بایگانی') : $act('archive', 'بایگانی'); // phpcs:ignore
+    echo $act('delete', 'حذف…', 'danger', '<input type="hidden" name="confirm_code" value="" class="ry-confirm">'); // phpcs:ignore
+    echo '</div>';
+    echo '<span class="cd-mu" style="font-size:12px">حذف دو مرحله‌ای است و کد پیگیری را می‌خواهد؛ ثبت‌نامی که پرداخت یا ورود به لیست دارد فقط بایگانی می‌شود.</span>';
+    echo '<script>document.querySelectorAll(".ry-confirm").forEach(function(i){i.form.addEventListener("submit",function(e){var v=prompt("برای حذف، کد پیگیری را بنویسید: ' . esc_js($x['code']) . '");if(!v){e.preventDefault();return;}i.value=v;});});</script>';
+    echo '</div></div>';
+    cd_ui_close();
 }

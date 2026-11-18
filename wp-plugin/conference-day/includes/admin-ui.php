@@ -16,6 +16,8 @@ const CD_SUPPORT_URL = 'https://newvisionteam.ir/contact-us';
 const CD_ADMIN_PAGES = [
     'cd-dashboard' => 'داشبورد',
     'cd-events' => 'رویدادها',
+    'cd-reg-page' => 'صفحه‌ی ثبت‌نام',
+    'cd-registrations' => 'ثبت‌نام‌ها',
     'cd-connect' => 'اتصال اپ‌ها',
     'cd-public' => 'صفحه‌های عمومی',
     'cd-help' => 'راهنما',
@@ -26,6 +28,8 @@ add_action('admin_menu', function () {
     $render = [
         'cd-dashboard' => 'cd_render_dashboard',
         'cd-events' => 'cd_render_events',
+        'cd-reg-page' => 'cd_render_reg_page_admin',
+        'cd-registrations' => 'cd_render_registrations_admin',
         'cd-connect' => 'cd_render_connect',
         'cd-public' => 'cd_render_public',
         'cd-help' => 'cd_render_help',

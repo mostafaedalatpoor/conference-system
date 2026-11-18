@@ -122,13 +122,13 @@
   }
 
   function buildForm() {
-    var form = el('form', { novalidate: true, class: 'group', style: 'gap:26px' });
-    form.appendChild(el('div', { class: 'steps' }, el('div', { class: 'on' }, el('span'), '۱. اطلاعات'), el('div', null, el('span'), '۲. تأیید')));
+    var form = el('form', { novalidate: true, class: 'stack' });
+    form.appendChild(stepper(1));
     var summary = el('div', { id: 'summary', class: 'alert', role: 'alert', tabindex: '-1', hidden: true });
     form.appendChild(summary);
 
     // نوع ثبت‌نام
-    var types = el('div', { class: 'group', id: 'f-type' }, el('h2', { text: 'نوع حضور' }));
+    var types = el('div', { class: 'group sec', id: 'f-type' }, el('h2', { text: 'نوع حضور' }));
     var anyOpen = C.types.filter(function (t) { return !t.closed; });
     C.types.forEach(function (t) {
       var checked = draft ? draft.type === t.code : (anyOpen.length === 1 && anyOpen[0].code === t.code);
@@ -142,7 +142,7 @@
     form.appendChild(types);
 
     // مشخصات
-    var me = el('div', { class: 'group' }, el('h2', { text: 'مشخصات شما' }));
+    var me = el('div', { class: 'group sec' }, el('h2', { text: 'مشخصات شما' }));
     me.appendChild(field('first_name', 'نام', textInput('first_name', { autocomplete: 'given-name' })));
     me.appendChild(field('last_name', 'نام خانوادگی', textInput('last_name', { autocomplete: 'family-name' }), { help: 'همان‌طور که روی کارت ورود چاپ شود.' }));
     me.appendChild(field('mobile', 'شماره موبایل', textInput('mobile', { type: 'tel', inputmode: 'tel', autocomplete: 'tel', dir: 'ltr', class: 'ltr', placeholder: '09xx xxx xxxx' })));
@@ -151,18 +151,18 @@
     form.appendChild(me);
 
     // فیلدهای دلخواه
-    var custom = el('div', { class: 'group', id: 'custom' });
+    var custom = el('div', { class: 'group sec', id: 'custom' });
     form.appendChild(custom);
     // گزینه‌های اضافه
-    var addons = el('div', { class: 'group', id: 'addons' });
+    var addons = el('div', { class: 'group sec', id: 'addons' });
     form.appendChild(addons);
 
     form.appendChild(el('div', { class: 'hp', 'aria-hidden': 'true' }, el('label', { for: 'website', text: 'وب‌سایت' }), el('input', { id: 'website', name: 'website', tabindex: '-1', autocomplete: 'off' })));
 
+    // نوار پایین چسبان: مبلغ آنلاین و «ادامه».
     var total = el('div', { class: 'total', id: 'total' });
-    form.appendChild(total);
-    var btn = el('button', { type: 'submit', class: 'btn', id: 'submit' }, 'تأیید و ثبت‌نام');
-    form.appendChild(btn);
+    var btn = el('button', { type: 'submit', class: 'btn', id: 'submit' }, 'ادامه');
+    form.appendChild(el('div', { class: 'bar' }, total, btn));
     if (C.contact) form.appendChild(el('p', { class: 'track', style: 'margin:0' }, 'پرسشی دارید؟ دبیرخانه: ', el('span', { class: 'ltr', dir: 'ltr', text: C.contact })));
 
     function currentType() {
@@ -233,14 +233,8 @@
         if (a.price_mode === 'online') online += a.price; else if (a.price_mode === 'onsite') onsite += a.price;
       });
       total.textContent = '';
-      total.appendChild(el('div', { class: 'row' }, el('span', { text: 'مبلغ قابل پرداخت' }), el('span', { class: 'sum', text: money(online) })));
-      if (onsite > 0) total.appendChild(el('div', { class: 'row' }, el('span', { text: 'تسویه در روز اجرا' }), el('span', { text: money(onsite) })));
-      var how = '';
-      if (online > 0) {
-        how = { gateway: 'پرداخت از درگاه بانکی، بعد از ثبت.', link: 'بعد از ثبت، لینک پرداخت نشان داده می‌شود.', card: 'بعد از ثبت، شماره‌کارت برای واریز نشان داده می‌شود.' }[C.payment.method];
-      }
-      if (how) total.appendChild(el('span', { style: 'font-size:13px;color:var(--muted)', text: how }));
-      btn.textContent = online > 0 ? (C.payment.method === 'gateway' ? 'ثبت و پرداخت' : 'ثبت و ادامه') : 'تأیید و ثبت‌نام';
+      total.appendChild(el('div', { class: 'row' }, el('span', { text: 'مبلغ آنلاین' }), el('span', { class: 'sum', text: money(online) })));
+      if (onsite > 0) total.appendChild(el('div', { class: 'row small' }, el('span', { text: 'در محل می‌پردازید' }), el('span', { text: money(onsite) })));
     }
 
     form.addEventListener('change', function (e) {
@@ -254,10 +248,69 @@
     });
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      submit(form, btn, summary);
+      var d = collect(form);
+      var errors = validate(form, d);
+      showErrors(form, summary, errors);
+      if (Object.keys(errors).length) return;
+      draft = d;
+      showConfirm(d);
     });
     renderDynamic();
     return form;
+  }
+
+  /** نوار گام‌ها: ۱ اطلاعات، ۲ تأیید. */
+  function stepper(n) {
+    function step(i, label) {
+      var done = i < n, on = i === n;
+      return el('div', { class: 'st' + (on ? ' on' : '') + (done ? ' done' : '') },
+        el('span', { class: 'n', text: done ? '✓' : fa(i) }), el(on ? 'b' : 'span', { text: label }));
+    }
+    return el('div', { class: 'stepper float' }, step(1, 'اطلاعات'), el('span', { class: 'ln' + (n > 1 ? ' done' : '') }), step(2, 'تأیید'));
+  }
+
+  function amounts(d) {
+    var online = 0, onsite = 0, lines = [], later = [];
+    C.types.forEach(function (t) { if (t.code === d.type && t.price > 0) { online += t.price; lines.push(['ثبت‌نام ' + t.name, t.price]); } });
+    C.addons.forEach(function (a) {
+      if (d.addons.indexOf(a.id) < 0) return;
+      if (a.price_mode === 'online') { online += a.price; lines.push([a.title, a.price]); }
+      else if (a.price_mode === 'onsite') { onsite += a.price; later.push([a.title + ' · در محل می‌پردازید', a.price]); }
+    });
+    return { online: online, onsite: onsite, lines: lines, later: later };
+  }
+
+  /** گام ۲: خلاصه و مبلغ، بعد ثبت. */
+  function showConfirm(d) {
+    var kv = function (k, v, ltr) { return v ? el('div', { class: 'kv' }, el('span', { text: k }), el('b', { dir: ltr ? 'ltr' : null, text: v })) : null; };
+    var answers = [];
+    C.custom.forEach(function (f) {
+      var v = d.answers[f.id];
+      if (v == null || v === '' || (Array.isArray(v) && !v.length)) return;
+      var label = function (id) { for (var i = 0; i < f.options.length; i++) if (f.options[i].id === id) return f.options[i].label; return id; };
+      answers.push(kv(f.label, f.kind === 'text' ? v : (Array.isArray(v) ? v.map(label).join('، ') : label(v))));
+    });
+    var a = amounts(d);
+    var summary = el('div', { class: 'alert', role: 'alert', tabindex: '-1', hidden: true });
+    var info = el('div', { class: 'group sec' }, el('h2', { text: 'خلاصه‌ی ثبت‌نام' }),
+      kv('نام', (d.first_name + ' ' + d.last_name).trim()), kv('موبایل', fa(mobileNorm(d.mobile)), true),
+      kv('نوع حضور', typeName(d.type)), kv('ایمیل', d.email, true), kv('سازمان', d.organization), answers);
+    var money_ = el('div', { class: 'group sec' }, el('h2', { text: 'مبلغ' }),
+      a.lines.map(function (x) { return el('div', { class: 'kv' }, el('span', { text: x[0] }), el('span', { text: fa(Number(x[1]).toLocaleString('en-US').replace(/,/g, '٬')) })); }),
+      el('div', { class: 'hr' }),
+      el('div', { class: 'kv big' }, el('span', { text: 'مبلغ آنلاین' }), el('span', { text: money(a.online) })),
+      a.later.map(function (x) { return el('div', { class: 'kv small' }, el('span', { text: x[0] }), el('span', { text: fa(Number(x[1]).toLocaleString('en-US').replace(/,/g, '٬')) })); }));
+    var how = a.online > 0 ? {
+      gateway: 'پرداخت از <strong>درگاه بانکی</strong> است. بعد از ثبت به درگاه می‌روید؛ جای شما ۳۰ دقیقه نگه داشته می‌شود.',
+      link: 'پرداخت از <strong>لینک</strong> است. بعد از ثبت، لینک پرداخت و راه ثبت رسید را می‌بینید.',
+      card: 'پرداخت با <strong>کارت‌به‌کارت</strong> است. بعد از ثبت، شماره کارت و راه ثبت رسید را می‌بینید. جای شما تا ' + fa(C.payment.hold_hours) + ' ساعت نگه داشته می‌شود.'
+    }[C.payment.method] : '';
+    var note = null;
+    if (how) { note = el('div', { class: 'alert go' }); note.appendChild(el('span')); note.lastChild.innerHTML = how; }
+    var edit = el('button', { type: 'button', class: 'btn soft', onclick: function () { show(buildForm()); } }, 'ویرایش');
+    var go = el('button', { type: 'button', class: 'btn' }, a.online > 0 ? 'ثبت و ادامه به پرداخت' : 'تأیید و ثبت‌نام');
+    go.addEventListener('click', function () { sendDraft(d, go, summary); });
+    show(el('div', { class: 'stack' }, stepper(2), summary, info, money_, note, el('div', { class: 'bar two' }, edit, go)));
   }
 
   function collect(form) {
@@ -330,12 +383,7 @@
     summary.focus();
   }
 
-  function submit(form, btn, summary) {
-    var d = collect(form);
-    var errors = validate(form, d);
-    showErrors(form, summary, errors);
-    if (Object.keys(errors).length) return;
-    draft = d;
+  function sendDraft(d, btn, summary) {
     btn.disabled = true;
     var label = btn.textContent;
     btn.textContent = 'در حال ثبت…';
@@ -356,7 +404,12 @@
       var j = r.body || {};
       if (r.status === 429) return failed(j.message || 'تلاش زیاد بود. ده دقیقه بعد دوباره امتحان کنید.');
       if (r.status >= 500 || !j.state) return failed('سرور جواب درستی نداد. اطلاعات شما حفظ شده؛ دوباره امتحان کنید.');
-      if (j.state === 'invalid') return showErrors(form, summary, j.errors || {});
+      if (j.state === 'invalid') {
+        // خطای سرور: برگشت به فرم با همان اطلاعات و نشان دادن خطاها.
+        var f = buildForm();
+        show(f);
+        return showErrors(f, f.querySelector('#summary'), j.errors || {});
+      }
       if (j.state === 'duplicate') return showDuplicate(j.masked);
       if (j.state === 'closed') return showClosed();
       // ثبت انجام شده؛ از اینجا به بعد خطای نمایش نباید «ثبت انجام نشد» نشان دهد.
@@ -420,7 +473,7 @@
 
   function proofForm(j, method) {
     var need = method === 'card' ? (C.payment.card.require || 'code') : 'any';
-    var form = el('form', { class: 'group', novalidate: true, style: 'text-align:right' });
+    var form = el('form', { class: 'group sec', novalidate: true, style: 'text-align:right' });
     var summary = el('div', { class: 'alert', role: 'alert', hidden: true });
     form.appendChild(summary);
     if (need !== 'receipt') form.appendChild(field('tracking', 'شماره‌ی پیگیری واریز', el('input', { id: 'tracking', name: 'tracking', type: 'text', inputmode: 'numeric', dir: 'ltr', class: 'ltr' }), { optional: need === 'any' }));
@@ -553,9 +606,10 @@
 
   function showTrack() {
     if (trackLink) trackLink.hidden = true;
-    var form = el('form', { class: 'group', novalidate: true });
+    var form = el('form', { class: 'group sec float', novalidate: true });
     var summary = el('div', { class: 'alert', role: 'alert', hidden: true });
     form.appendChild(el('h2', { text: 'پیگیری ثبت‌نام' }));
+    form.appendChild(el('span', { class: 'help', text: 'کد پیگیری و شماره‌ی موبایل خود را بنویسید.' }));
     form.appendChild(summary);
     form.appendChild(field('t_code', 'کد ثبت‌نام', el('input', { id: 't_code', name: 't_code', type: 'text', dir: 'ltr', class: 'ltr', placeholder: 'RY-XXXXXX', autocomplete: 'off' })));
     form.appendChild(field('t_mobile', 'شماره موبایل', el('input', { id: 't_mobile', name: 't_mobile', type: 'tel', dir: 'ltr', class: 'ltr', placeholder: '09xx xxx xxxx' })));

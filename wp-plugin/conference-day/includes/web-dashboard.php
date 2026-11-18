@@ -26,7 +26,9 @@ function cd_web_slug_error($slug) {
     if (!preg_match('/^[a-z0-9][a-z0-9-]{1,62}$/', $slug)) {
         return 'آدرس فقط حروف کوچک لاتین، رقم و خط تیره می‌تواند باشد (دست‌کم ۲ نویسه).';
     }
-    if (in_array($slug, CD_WEB_RESERVED, true) || get_page_by_path($slug, OBJECT, ['page', 'post'])) {
+    global $wpdb;
+    $reg = $wpdb->get_var($wpdb->prepare('SELECT event_id FROM ' . cd_table('reg_pages') . ' WHERE path = %s', $slug));
+    if (in_array($slug, CD_WEB_RESERVED, true) || $reg || get_page_by_path($slug, OBJECT, ['page', 'post'])) {
         return 'این آدرس با یک برگه‌ی دیگر سایت یکی است؛ آدرس دیگری بنویسید.';
     }
     return null;
