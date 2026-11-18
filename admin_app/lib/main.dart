@@ -7,6 +7,8 @@ import 'package:local_auth_platform_interface/local_auth_platform_interface.dart
 
 import 'android/nv_admin.dart';
 import 'android/nv_theme.dart';
+import 'registration/reg_home.dart';
+import 'registration/reg_list.dart';
 import 'screens/cards.dart';
 import 'screens/config.dart';
 import 'screens/connect.dart';
@@ -208,7 +210,7 @@ class _DeskShellState extends State<DeskShell> {
     if (v == 4 && !s.settings.usesCards) return;
     // دسترسی محدود: فقط اتصال، امروز و افراد.
     if (s.limited && !const [0, 5, 6].contains(v)) return;
-    if (v == 7 && s.limited) return;
+    if ((v == 7 || v == 8 || v == 9) && s.limited) return;
     setState(() => _i = v);
   }
 
@@ -227,6 +229,9 @@ class _DeskShellState extends State<DeskShell> {
       6 => s.limited ? const LimitedPeopleScreen() : const PeopleDeskScreen(),
       2 => const StaffScreen(showDevices: true),
       7 => const ReportScreen(title: 'گزارش‌ها'),
+      // ثبت‌نام آنلاین در Navigator خودش تا نوار کناری با رفتن به ویزارد و جزئیات بماند.
+      8 => _DeskNav(key: const ValueKey('reg-list'), child: const RegListPage(filter: 'attention')),
+      9 => _DeskNav(key: const ValueKey('reg-home'), child: const RegHomePage()),
       _ => steps.firstWhere((e) => e.$1 == i).$4,
     };
 
@@ -235,21 +240,29 @@ class _DeskShellState extends State<DeskShell> {
       (5, Icons.insights_rounded, 'امروز'),
       (6, Icons.groups_rounded, 'افراد'),
       if (!s.limited) ...[
+        (8, Icons.pending_actions_rounded, 'تأیید ثبت‌نام'),
         (2, Icons.smartphone_rounded, 'گوشی‌ها و کارکنان'),
         (1, Icons.tune_rounded, 'تنظیم رویداد'),
         (3, Icons.upload_file_rounded, 'ورود اکسل'),
         if (s.settings.usesCards) (4, Icons.badge_rounded, 'کارت‌ها'),
+        (9, Icons.how_to_reg_rounded, 'ثبت‌نام آنلاین'),
         (7, Icons.download_rounded, 'گزارش‌ها'),
       ],
     ];
 
     Widget item(int k, IconData icon, String title) {
-      final (line, _, attention) = k == 7 ? ('خروجی اکسل، CSV و PDF', false, false) : stepStatus(s, k);
+      final (line, _, attention) = switch (k) {
+        7 => ('خروجی اکسل، CSV و PDF', false, false),
+        8 => (s.regWaiting > 0 ? '${faDigits(s.regWaiting)} منتظر تصمیم' : 'ثبت‌نام‌های منتظر تأیید یا بررسی پرداخت', false, false),
+        9 => ('صفحه، پرداخت، پیام‌ها و گزارش مالی', false, false),
+        _ => stepStatus(s, k),
+      };
       return _NavItem(
         icon: icon,
         title: title,
         tooltip: line,
         current: k == i,
+        badge: k == 8 && s.regWaiting > 0 ? faDigits(s.regWaiting) : null,
         attention: attention && k != i,
         onTap: needsEvent && k != 0 ? null : () => _go(s, k),
       );
@@ -628,6 +641,15 @@ class _AppLockState extends State<AppLock> with WidgetsBindingObserver {
   }
 }
 
+/// Navigator جدا برای یک بخش دسکتاپ، تا صفحه‌های داخلی زیر همان نوار کناری باز شوند.
+class _DeskNav extends StatelessWidget {
+  final Widget child;
+  const _DeskNav({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Navigator(onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => child));
+}
+
 /// ردیف نوار کناری ویندوز (بوم «نوار کناری»): ۴۶px، گوشه‌ی ۱۴، فعال پر از brand.
 class _NavItem extends StatelessWidget {
   final IconData icon;
@@ -635,8 +657,10 @@ class _NavItem extends StatelessWidget {
   final String tooltip;
   final bool current;
   final bool attention;
+  final String? badge;
   final VoidCallback? onTap;
   const _NavItem({
+    this.badge,
     required this.icon,
     required this.title,
     required this.tooltip,
@@ -675,7 +699,16 @@ class _NavItem extends StatelessWidget {
                           style: theme.textTheme.bodyMedium
                               ?.copyWith(color: fg, fontWeight: current ? FontWeight.w800 : FontWeight.w600)),
                     ),
-                    if (attention)
+                    if (badge != null)
+                      Container(
+                        constraints: const BoxConstraints(minWidth: 22),
+                        height: 22,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        decoration: BoxDecoration(color: x.waitSoft, borderRadius: BorderRadius.circular(11)),
+                        child: Text(badge!, style: theme.textTheme.labelMedium?.copyWith(color: x.wait, fontWeight: FontWeight.w800)),
+                      )
+                    else if (attention)
                       Container(
                         constraints: const BoxConstraints(minWidth: 22),
                         height: 22,

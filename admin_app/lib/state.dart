@@ -1260,6 +1260,8 @@ class AdminState extends ChangeNotifier {
 
   Future<void> loadReport() => run('', () async {
         report = await _fetchReport();
+        // شمار ثبت‌نام‌های منتظر تصمیم (نوار کناری و «نیاز به توجه»).
+        await refreshRegWaiting();
       });
 
   Future<void> setReportDay(String? day) {
@@ -1268,6 +1270,21 @@ class AdminState extends ChangeNotifier {
   }
 
   /// کل داده‌ی رویداد از سرور (برای «پشتیبان کامل» و «تاریخچه‌ی رویدادها»).
+  /// ثبت‌نام‌های آنلاین منتظر تصمیم (منتظر تأیید + بررسی پرداخت)؛ بی‌صدا تازه می‌شود.
+  int regWaiting = 0;
+
+  Future<void> refreshRegWaiting() async {
+    if (eventCode == null || limited) return;
+    try {
+      final r = (await api.get('/admin/events/${Uri.encodeComponent(eventCode!)}/registrations') as Map).cast<String, dynamic>();
+      final by = (r['by_status'] as Map?) ?? {};
+      regWaiting = ((by['pending_approval'] as num?) ?? 0).toInt() + ((by['pending_review'] as num?) ?? 0).toInt();
+      notifyListeners();
+    } catch (_) {
+      // افزونه‌ی بدون ثبت‌نام یا صفحه‌ی ساخته‌نشده: چیزی نشان داده نمی‌شود.
+    }
+  }
+
   List<Map<String, dynamic>> _reportList(String k) =>
       ((report?[k] as List?) ?? const []).map((e) => (e as Map).cast<String, dynamic>()).toList();
 

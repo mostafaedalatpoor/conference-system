@@ -361,7 +361,7 @@ function cd_msg_out($m) {
     ];
 }
 
-/** متن پیام با متغیرها: {name} {code} {event} {amount} {status} {link} {personal_link}. */
+/** متن پیام با متغیرها: {name} {code} {event} {amount} {status} {link} {personal_link} {reason}. */
 function cd_msg_render($tpl, array $page, array $reg) {
     $event = cd_get_event((int) $page['event_id']);
     $state = cd_reg_public_state($page, $reg);
@@ -374,6 +374,7 @@ function cd_msg_render($tpl, array $page, array $reg) {
         '{status}' => cd_reg_statuses()[$reg['status']] ?? $reg['status'],
         '{link}' => $link,
         '{personal_link}' => $state['personal_url'] ?? '',
+        '{reason}' => $reg['reject_reason'] ?? '',
     ]);
 }
 
@@ -410,7 +411,7 @@ function cd_msg_default_templates() {
         'pending_review' => 'رسید پرداخت شما برای «{event}» رسید و بررسی می‌شود. کد: {code}',
         'pending_approval' => 'ثبت‌نام شما در «{event}» ثبت شد و منتظر تأیید است. کد: {code}',
         'confirmed' => '{name} عزیز، ثبت‌نام شما در «{event}» تأیید شد. کد: {code} {personal_link}',
-        'rejected' => 'ثبت‌نام شما در «{event}» تأیید نشد. برای پیگیری: {link}',
+        'rejected' => 'ثبت‌نام شما در «{event}» تأیید نشد. {reason} پیگیری: {link}',
         'expired' => 'مهلت پرداخت ثبت‌نام «{event}» تمام شد. برای ثبت دوباره: {link}',
     ];
 }
@@ -442,6 +443,8 @@ function cd_reg_finance(array $event) {
         'awaiting_payment' => 0, 'awaiting_review' => 0, 'rejected_paid' => 0,
         'onsite_due' => 0, 'onsite_settled' => 0, 'onsite_open' => 0,
         'registrations' => count($rows), 'confirmed' => 0,
+        'awaiting_payment_count' => 0, 'awaiting_review_count' => 0, 'awaiting_approval' => 0, 'awaiting_approval_count' => 0,
+        'expected_total' => 0,
     ];
     $by_type = [];
     $by_addon = [];
@@ -456,11 +459,20 @@ function cd_reg_finance(array $event) {
         if ($r['status'] === 'confirmed') {
             $t['confirmed']++;
         }
+        if (!in_array($r['status'], ['rejected', 'expired'], true)) {
+            $t['expected_total'] += $online; // پایه‌ی درصد «دریافت‌شده»
+        }
         if ($r['status'] === 'pending_payment') {
             $t['awaiting_payment'] += $online;
+            $t['awaiting_payment_count']++;
         }
         if ($r['status'] === 'pending_review') {
             $t['awaiting_review'] += $online;
+            $t['awaiting_review_count']++;
+        }
+        if ($r['status'] === 'pending_approval') {
+            $t['awaiting_approval'] += $online;
+            $t['awaiting_approval_count']++;
         }
         if ($paid) {
             if ($r['status'] === 'rejected') {
@@ -669,7 +681,7 @@ function cd_rest_connections_get() {
         'variables' => [
             'gateway' => ['{amount}', '{callback}', '{code}', '{mobile}', '{email}', '{description}', '{authority}'],
             'sms' => ['{mobile}', '{sender}', '{text}'],
-            'messages' => ['{name}', '{code}', '{event}', '{amount}', '{status}', '{link}', '{personal_link}'],
+            'messages' => ['{name}', '{code}', '{event}', '{amount}', '{status}', '{link}', '{personal_link}', '{reason}'],
         ],
     ];
 }

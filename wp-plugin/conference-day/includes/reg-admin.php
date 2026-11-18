@@ -59,6 +59,8 @@ function cd_reg_editor_data(array $event) {
     $cfg = $page ? $page['config'] : cd_reg_default_config();
     $config = cd_event_config($eid);
     $counts = $page ? cd_reg_counts($eid) : ['total' => 0, 'types' => [], 'addons' => [], 'options' => []];
+    // تنظیم خالی درگاه شیء JSON بماند، نه آرایه.
+    $cfg['payment']['gateway_settings'] = (object) $cfg['payment']['gateway_settings'];
     return [
         'page' => $page ? $cfg : null,
         'url' => $page && $cfg['path'] !== '' ? cd_reg_page_url($cfg) : null,
@@ -450,7 +452,7 @@ function cd_render_reg_page_admin() {
     $data['step'] = $step;
     $data['defaults'] = cd_reg_default_config();
     $data['triggers'] = CD_REG_TRIGGERS;
-    $data['variables'] = ['{name}', '{code}', '{event}', '{amount}', '{status}', '{link}', '{personal_link}'];
+    $data['variables'] = ['{name}', '{code}', '{event}', '{amount}', '{status}', '{link}', '{personal_link}', '{reason}'];
     $data['connect_url'] = admin_url('admin.php?page=cd-reg-page&view=connect&event=' . (int) $event['id']);
     $data['sms_ready'] = cd_conn_get()['sms']['url'] !== '';
     $data['home'] = trailingslashit(home_url('/'));

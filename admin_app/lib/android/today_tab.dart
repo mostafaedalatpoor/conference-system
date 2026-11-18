@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../main.dart';
 import '../normalize.dart';
+import '../registration/reg_list.dart';
 import '../state.dart';
 import 'nv_admin.dart';
 import 'nv_theme.dart';
@@ -136,6 +137,10 @@ class _TodayTabState extends State<TodayTab> {
   List<_Item> _attention(BuildContext context, AdminState s, Map<String, dynamic> r) {
     final c = NvColors.of(context);
     final out = <_Item>[];
+    if (s.regWaiting > 0) {
+      out.add(_Item(Icons.pending_actions_rounded, c.waitSoft, c.wait, '${faDigits(s.regWaiting)} ثبت‌نام منتظر تصمیم شما', 'تأیید یا بررسی پرداخت',
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegListPage(filter: 'attention')))));
+    }
     for (final f in s.flaggedList.where((f) => f['resolved_at'] == null).take(6)) {
       final flag = '${f['flag']}';
       final (IconData icon, bool red) = switch (flag) {

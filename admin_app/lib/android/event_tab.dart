@@ -10,6 +10,7 @@ import '../screens/config.dart';
 import '../screens/connect.dart';
 import '../screens/import.dart';
 import '../screens/report.dart';
+import '../registration/reg_home.dart';
 import '../screens/staff.dart';
 import 'jalali.dart';
 import 'nv_admin.dart';
@@ -70,6 +71,8 @@ class _EventTabState extends State<EventTab> {
       if (cards)
         (Icons.style_rounded, 'کارت‌ها و چاپ', e.locked ? 'PDF ساخته شد؛ آدرس قفل است${unprinted > 0 ? ' · ${faDigits(unprinted)} چاپ‌نشده' : ''}' : 'قالب، بررسی و ساخت PDF',
             e.locked, () => _push(context, sub('کارت‌ها و چاپ', const CardsScreen()))),
+      (Icons.how_to_reg_rounded, 'ثبت‌نام آنلاین', s.regWaiting > 0 ? '${faDigits(s.regWaiting)} منتظر تصمیم' : 'صفحه، پرداخت، ثبت‌نام‌ها و گزارش مالی (اختیاری)', null,
+          () => _push(context, const RegHomePage())),
       (Icons.insights_rounded, 'گزارش و خروجی', 'گزارش روزانه، اکسل، CSV و PDF', null, () => _push(context, sub('گزارش و خروجی', const ReportScreen()))),
     ];
     final required = steps.where((x) => x.$4 != null).toList();
