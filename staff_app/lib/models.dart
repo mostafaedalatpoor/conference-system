@@ -50,8 +50,11 @@ class Meal {
         'rules': {'registration_type_ids': typeIds.toList(), 'role_ids': roleIds.toList()},
       };
 
+  /// حق این وعده: نوع یا نقش، یا گزینه‌ی اضافه‌ی صفحه‌ی ثبت‌نام که به این وعده وصل است.
   bool entitles(Attendee a) =>
-      typeIds.contains(a.registrationTypeId) || (a.roleId != null && roleIds.contains(a.roleId));
+      typeIds.contains(a.registrationTypeId) ||
+      (a.roleId != null && roleIds.contains(a.roleId)) ||
+      a.extraMeals.contains(code);
 }
 
 class Attendee {
@@ -67,6 +70,12 @@ class Attendee {
   final String presentationKind;
   final int? roleId;
   final String source;
+
+  /// از صفحه‌ی ثبت‌نام: مبلغ «پرداخت در محل» (تومان)، برای چه، کد ثبت‌نام و وعده‌های گزینه‌های اضافه (کد وعده).
+  final int onsiteDue;
+  final String onsiteNote;
+  final String regCode;
+  final Set<String> extraMeals;
   late final String searchKey;
 
   Attendee({
@@ -82,8 +91,12 @@ class Attendee {
     this.presentationKind = '',
     this.roleId,
     this.source = 'import',
+    this.onsiteDue = 0,
+    this.onsiteNote = '',
+    this.regCode = '',
+    this.extraMeals = const {},
   }) {
-    searchKey = normalizeText('$firstName $lastName $mobile $email $organization');
+    searchKey = normalizeText('$firstName $lastName $mobile $email $organization $regCode');
   }
 
   String get fullName => '$firstName $lastName'.trim();
@@ -102,6 +115,10 @@ class Attendee {
         presentationKind: _str(j['presentation_kind']),
         roleId: _int(j['role_id']),
         source: _str(j['source']).isEmpty ? 'import' : _str(j['source']),
+        onsiteDue: _int(j['onsite_due']) ?? 0,
+        onsiteNote: _str(j['onsite_note']),
+        regCode: _str(j['reg_code']),
+        extraMeals: {for (final m in (j['extra_meals'] as List?) ?? const []) m.toString()},
       );
 
   Map<String, dynamic> toJson() => {
@@ -117,6 +134,10 @@ class Attendee {
         'presentation_kind': presentationKind,
         'role_id': roleId,
         'source': source,
+        'onsite_due': onsiteDue,
+        'onsite_note': onsiteNote,
+        'reg_code': regCode,
+        'extra_meals': extraMeals.toList(),
       };
 }
 

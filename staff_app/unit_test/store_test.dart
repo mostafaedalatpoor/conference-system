@@ -92,4 +92,18 @@ void main() {
     expect(s.unknownCardMessage('res'), contains('رزرو'));
     expect(s.unknownCardMessage('zzz'), contains('در لیست نیست'));
   });
+
+  test('addon meal entitles; onsite settled from log', () {
+    final m = Meal(1, 'lunch', 'ناهار', '2026-11-20', {9}, {});
+    final a = Attendee(id: 'a', firstName: 'x', lastName: 'y', registrationTypeId: 1, extraMeals: {'lunch'}, onsiteDue: 150000);
+    expect(m.entitles(a), isTrue);
+    expect(m.entitles(Attendee(id: 'b', firstName: 'x', lastName: 'y', registrationTypeId: 1)), isFalse);
+    final s = store(daily: false, today: d1)..serverLog = [ev('onsite_settled', 'a', d1, seq: 1)];
+    s.recomputeForTest();
+    expect(s.onsiteSettled.containsKey('a'), isTrue);
+    expect(s.onsiteOwed(a), 0);
+    final s2 = store(daily: false, today: d1);
+    s2.recomputeForTest();
+    expect(s2.onsiteOwed(a), 150000);
+  });
 }

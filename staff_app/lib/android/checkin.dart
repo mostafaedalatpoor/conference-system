@@ -752,6 +752,8 @@ class NvCheckinPanelState extends State<NvCheckinPanel> {
     void add(Widget w) => out.addAll([const SizedBox(height: 12), w]);
     final noFirst = a.firstName.trim().isEmpty || a.firstName.startsWith('بی‌نام (ردیف ');
     final missing = [if (noFirst) 'نام', if (a.lastName.trim().isEmpty) 'نام خانوادگی'];
+    // پرداخت در محل (بوم ۲۱-Settle): از صفحه‌ی ثبت‌نام؛ «تسویه شد» با ۸ ثانیه برگرداندن.
+    if (a.onsiteDue > 0) add(NvSettleCard(attendee: a));
     // حضور روزانه: روزهای قبلی که آمده؛ پذیرش امروز جدا ثبت می‌شود.
     final days = s.dailyAttendance ? (s.checkinDays[a.id]?.toList() ?? const <String>[]) : const <String>[];
     if (days.isNotEmpty && !s.checkins.containsKey(a.id)) {
@@ -975,4 +977,131 @@ class NvCornersPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+
+/// کارت «پرداخت در محل مانده است» (بوم ۲۱ اندروید و ۱۴ ویندوز).
+class NvSettleCard extends StatefulWidget {
+  final Attendee attendee;
+  const NvSettleCard({super.key, required this.attendee});
+
+  @override
+  State<NvSettleCard> createState() => _NvSettleCardState();
+}
+
+class _NvSettleCardState extends State<NvSettleCard> {
+  bool _later = false;
+  Timer? _tick;
+  int _left = 0;
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  void _settle(AppStore s) {
+    s.settleOnsite(widget.attendee);
+    setState(() => _left = 8);
+    _tick?.cancel();
+    _tick = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return t.cancel();
+      setState(() => _left--);
+      if (_left <= 0) t.cancel();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = StoreScope.of(context);
+    final c = NvColors.of(context);
+    final a = widget.attendee;
+    final what = a.onsiteNote.isEmpty ? 'پرداخت در محل' : a.onsiteNote;
+    if (s.onsiteSettled.containsKey(a.id)) {
+      return NvBanner(tone: NvTone.go, icon: Icons.paid_rounded, title: 'تسویه شده', text: '$what · ${moneyFa(a.onsiteDue)}');
+    }
+    if (s.settlePending(a)) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: c.goSoft, borderRadius: BorderRadius.circular(Nv.r22)),
+        child: Row(children: [
+          Icon(Icons.paid_rounded, color: c.go),
+          const SizedBox(width: 10),
+          Expanded(child: Text('تسویه‌ی ${moneyFa(a.onsiteDue)} ثبت شد.', style: nvText(context, 15, w: FontWeight.w700, color: c.goInk))),
+          TextButton.icon(
+            onPressed: () {
+              s.undoSettle(a);
+              _tick?.cancel();
+              setState(() => _left = 0);
+            },
+            icon: const Icon(Icons.undo_rounded),
+            label: Text('برگرداندن${_left > 0 ? ' (${faDigits(_left)})' : ''}'),
+          ),
+        ]),
+      );
+    }
+    if (_later) {
+      return NvBanner(
+        tone: NvTone.wait,
+        icon: Icons.payments_rounded,
+        title: 'پرداخت در محل مانده است',
+        text: '$what · ${moneyFa(a.onsiteDue)}',
+        action: TextButton(onPressed: () => setState(() => _later = false), child: const Text('تسویه…')),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.waitSoft,
+        borderRadius: BorderRadius.circular(Nv.r22),
+        border: Border.all(color: const Color(0xFFF5B000), width: 2),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Icon(Icons.payments_rounded, size: 26, color: c.wait),
+          const SizedBox(width: 10),
+          Expanded(child: Text('پرداخت در محل مانده است', style: nvText(context, 17, w: FontWeight.w800, color: c.waitInk))),
+        ]),
+        const SizedBox(height: 12),
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Expanded(child: Text(what, style: nvText(context, 14, color: c.waitInk))),
+          Text(moneyFa(a.onsiteDue), style: nvText(context, 26, w: FontWeight.w800, color: c.waitInk)),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            flex: 14,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: c.go,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(62),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                textStyle: nvText(context, 18, w: FontWeight.w800),
+              ),
+              onPressed: () => _settle(s),
+              icon: const Icon(Icons.paid_rounded, size: 24),
+              label: const Text('تسویه شد'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 10,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(62),
+                backgroundColor: c.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              ),
+              onPressed: () => setState(() => _later = true),
+              child: const Text('بعداً'),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        Text('پول را نقد یا با کارت‌خوان گرفتید؟ بعد از دریافت، «تسویه شد» را بزنید. اشتباه زدید، ۸ ثانیه فرصت برگرداندن دارید.',
+            style: nvText(context, 12, color: c.waitInk, height: 1.6)),
+      ]),
+    );
+  }
 }

@@ -254,6 +254,7 @@ class AppStore extends ChangeNotifier {
     final chk = <String, CheckState>{};
     final days = <String, Set<String>>{};
     final served = <String, Map<int, List<DateTime>>>{};
+    final settled = <String, DateTime>{};
     final today = this.today;
 
     final all = [...serverLog, ...pending];
@@ -287,6 +288,9 @@ class AppStore extends ChangeNotifier {
             served.putIfAbsent(aid, () => {}).putIfAbsent(e.mealId!, () => []).add(e.deviceTime);
           }
           break;
+        case 'onsite_settled':
+          if (aid != null) settled.putIfAbsent(aid, () => e.deviceTime);
+          break;
         case 'meal_undo':
           // برگرداندن: آخرین تحویل همان وعده حذف می‌شود.
           final l = aid == null || e.mealId == null ? null : served[aid]?[e.mealId!];
@@ -299,6 +303,33 @@ class AppStore extends ChangeNotifier {
     checkins = chk;
     checkinDays = days;
     mealsServed = served;
+    onsiteSettled = settled;
+  }
+
+  /// تسویه‌ی «پرداخت در محل»: شناسه‌ی نفر ← زمان.
+  Map<String, DateTime> onsiteSettled = {};
+
+  /// مبلغی که هنوز باید در محل گرفته شود (تومان)؛ صفر یعنی چیزی نمانده.
+  int onsiteOwed(Attendee a) =>
+      a.onsiteDue > 0 && !onsiteSettled.containsKey(a.id) && !_settleHold.containsKey(a.id) ? a.onsiteDue : 0;
+
+  /// تسویه‌هایی که ۸ ثانیه فرصت برگرداندن دارند و هنوز ثبت نشده‌اند.
+  final Map<String, Timer> _settleHold = {};
+  bool settlePending(Attendee a) => _settleHold.containsKey(a.id);
+
+  /// «تسویه شد»: بعد از ۸ ثانیه ثبت و فرستاده می‌شود؛ تا آن موقع با [undoSettle] برمی‌گردد.
+  void settleOnsite(Attendee a, {Duration hold = const Duration(seconds: 8)}) {
+    if (a.onsiteDue < 1 || onsiteSettled.containsKey(a.id) || _settleHold.containsKey(a.id)) return;
+    _settleHold[a.id] = Timer(hold, () {
+      _settleHold.remove(a.id);
+      _record('onsite_settled', attendeeId: a.id);
+    });
+    notifyListeners();
+  }
+
+  void undoSettle(Attendee a) {
+    _settleHold.remove(a.id)?.cancel();
+    notifyListeners();
   }
 
   /// برای آزمون واحد: محاسبه‌ی دوباره‌ی وضعیت (مثلاً بعد از عوض کردن [now]).
@@ -449,6 +480,7 @@ class AppStore extends ChangeNotifier {
         'walkin_register' => 'ثبت‌نام در محل',
         'meal_served' => 'تحویل ${meals.where((m) => m.id == e.mealId).firstOrNull?.name ?? 'وعده'}',
         'meal_undo' => 'لغو تحویل',
+        'onsite_settled' => 'تسویه',
         _ => 'کار دیگر',
       };
       parts[label] = (parts[label] ?? 0) + 1;
