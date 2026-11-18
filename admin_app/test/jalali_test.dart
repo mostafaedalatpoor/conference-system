@@ -1,4 +1,4 @@
-import 'package:conference_admin/jalali.dart';
+import 'package:roydadyar_admin/jalali.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

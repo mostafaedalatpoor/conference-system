@@ -3,20 +3,28 @@
  * Plugin Name: رویدادیار (RoydadYar)
  * Plugin URI: https://newvisionteam.ir
  * Description: سامانه‌ی روز اجرای رویداد: API همگام‌سازی برای اپ نیروها و اپ مدیریت، صفحه‌ی عمومی /c/&lt;token&gt;، و داشبورد زنده.
- * Version: 2.1.1
+ * Version: 2.2.0
  * Author: NewVisionteam - تیم راهکارهای نرم‌افزاری نگاه جدید
  * Author URI: https://newvisionteam.ir
  * Requires at least: 5.6
  * Requires PHP: 7.4
- * Text Domain: conference-day
+ * Text Domain: roydadyar
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-// نام‌های فنی (پوشه‌ی افزونه، مسیر API conf/v1، پیشوند جدول‌ها wp_cd_) عوض نمی‌شوند تا داده و اپ‌های نصب‌شده بمانند.
-define('CD_VERSION', '2.1.1');
+// نسخه‌ی پیش از ۲٫۲ (پوشه‌ی قدیمی) هنوز فعال است: این یکی چیزی بار نمی‌کند تا تابع‌ها دو بار تعریف نشوند.
+if (defined('CD_VERSION')) {
+    add_action('admin_notices', function () {
+        echo '<div class="notice notice-warning"><p><b>رویدادیار:</b> نسخه‌ی قبلی افزونه هنوز فعال است. آن را غیرفعال کنید تا نسخه‌ی تازه کار کند؛ داده‌ها می‌مانند. بعد نسخه‌ی قبلی را حذف کنید.</p></div>';
+    });
+    return;
+}
+
+// مسیر API (conf/v1) و پیشوند جدول‌ها (wp_cd_) عوض نمی‌شوند تا داده و اتصال اپ‌ها بماند.
+define('CD_VERSION', '2.2.0');
 // ۸: ماژول ثبت‌نام (صفحه، ثبت‌نام‌ها، پیام‌ها). ارتقا از ۰٫۲، ۰٫۴ و ۲٫۰ همه جدول‌ها را به‌روز می‌کند.
 define('CD_DB_VERSION', '8');
 define('CD_NS', 'conf/v1');
@@ -69,7 +77,7 @@ add_filter('rest_post_dispatch', function ($response, $server, $request) {
     if (strpos($request->get_route(), '/' . CD_NS) === 0 && $response instanceof WP_REST_Response) {
         $response->header('Cache-Control', 'no-store, private');
         $response->header('X-LiteSpeed-Cache-Control', 'no-cache');
-        do_action('litespeed_control_set_nocache', 'conference-day');
+        do_action('litespeed_control_set_nocache', 'roydadyar');
     }
     return $response;
 }, 10, 3);

@@ -460,7 +460,7 @@ class AdminState extends ChangeNotifier {
 
   Future<File> _file() async {
     final dir = await getApplicationSupportDirectory();
-    return File('${dir.path}/conference_admin.json');
+    return File('${dir.path}/roydadyar_admin.json');
   }
 
   Future<void> load() async {

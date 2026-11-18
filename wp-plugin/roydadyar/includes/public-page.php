@@ -235,7 +235,7 @@ function cd_render_public_page($event, $person, $message, $settings = null, $tok
     };
     $settings = $settings ?: cd_default_settings();
     $title = $event ? $event['name'] : get_bloginfo('name');
-    $font = plugins_url('assets/fonts/', CD_DIR . 'conference-day.php');
+    $font = plugins_url('assets/fonts/', CD_DIR . 'roydadyar.php');
     $contact = $person ? cd_allowed_contact($person, $settings) : null;
     $full = $person ? trim($person['first_name'] . ' ' . $person['last_name']) : '';
 

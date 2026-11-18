@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
  * ساخت و ویرایش رویداد در اپ مدیریت است؛ اینجا فقط دیدن، لینک‌ها، کلیدها و چند کار ساده (خروجی، بایگانی).
  */
 
-const CD_DOWNLOADS_URL = 'https://github.com/mostafaedalatpoor/conference-system/releases/latest';
+const CD_DOWNLOADS_URL = 'https://github.com/mostafaedalatpoor/roydadyar/releases/latest';
 const CD_SUPPORT_EMAIL = 'info@newvisionteam.ir';
 const CD_SUPPORT_URL = 'https://newvisionteam.ir/contact-us';
 
@@ -61,7 +61,7 @@ add_filter('admin_footer_text', function ($text) {
 
 /** لینک «پشتیبانی» در فهرست افزونه‌ها. */
 add_filter('plugin_row_meta', function ($links, $file) {
-    if ($file === plugin_basename(CD_DIR . 'conference-day.php')) {
+    if ($file === plugin_basename(CD_DIR . 'roydadyar.php')) {
         $links[] = '<a href="https://newvisionteam.ir" target="_blank" rel="noopener">پشتیبانی</a>';
     }
     return $links;

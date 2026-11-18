@@ -14,7 +14,7 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-/// کلاینت API مدیریت افزونه‌ی Conference Day (هدر X-Conf-Admin).
+/// کلاینت API مدیریت افزونه‌ی رویدادیار (هدر X-Conf-Admin).
 class AdminApi {
   final String server;
   final String key;

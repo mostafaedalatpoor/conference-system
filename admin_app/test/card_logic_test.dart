@@ -1,4 +1,4 @@
-import 'package:conference_admin/card_logic.dart';
+import 'package:roydadyar_admin/card_logic.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 CardTemplate _t(String id, {Set<String>? roles, Set<String>? types, bool isDefault = false}) =>
