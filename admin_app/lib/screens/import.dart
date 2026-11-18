@@ -227,16 +227,11 @@ class _ImportScreenState extends State<ImportScreen> {
     final items = role ? s.roles : s.types;
     if (values.isEmpty) return const Hint('این ستون مقداری ندارد.');
     return Column(children: [
+      // گوشی: مقدار فایل بالا، انتخاب نوع/نقش و دکمه زیرش (کنار هم جا نمی‌شد).
       for (final v in values)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(children: [
-            Expanded(child: Text(v, style: const TextStyle(fontWeight: FontWeight.w700))),
-            const Icon(Icons.arrow_back_rounded, size: 18),
-            const SizedBox(width: FirouzehSize.space2),
-            SizedBox(
-              width: 220,
-              child: DropdownButtonFormField<String?>(
+        Builder(builder: (context) {
+          final narrow = MediaQuery.sizeOf(context).width < 640;
+          final Widget dropdown = DropdownButtonFormField<String?>(
                 key: ValueKey('${role ? 'r' : 't'}:$v:${items.length}'),
                 initialValue: role ? _roleByValue[normalizeText(v)] : _typeByValue[normalizeText(v)],
                 isDense: true,
@@ -252,12 +247,8 @@ class _ImportScreenState extends State<ImportScreen> {
                     _typeByValue[normalizeText(v)] = c;
                   }
                 }),
-              ),
-            ),
-            const SizedBox(width: FirouzehSize.space2),
-            SizedBox(
-              width: 120,
-              child: (role ? _roleByValue.containsKey(normalizeText(v)) : _typeByValue.containsKey(normalizeText(v)))
+              );
+          final Widget action = (role ? _roleByValue.containsKey(normalizeText(v)) : _typeByValue.containsKey(normalizeText(v)))
                   ? _pill('تطبیق شد', true)
                   : TextButton(
                       onPressed: s.busy
@@ -269,10 +260,26 @@ class _ImportScreenState extends State<ImportScreen> {
                               }
                             },
                       child: Text(role ? 'ساخت نقش تازه' : 'ساخت نوع تازه'),
-                    ),
-            ),
-          ]),
-        ),
+                    );
+          return Padding(
+            padding: EdgeInsets.symmetric(vertical: narrow ? 6 : 3),
+            child: narrow
+                ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Text(v, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 4),
+                    dropdown,
+                    Align(alignment: AlignmentDirectional.centerStart, child: action),
+                  ])
+                : Row(children: [
+                    Expanded(child: Text(v, style: const TextStyle(fontWeight: FontWeight.w700))),
+                    const Icon(Icons.arrow_back_rounded, size: 18),
+                    const SizedBox(width: FirouzehSize.space2),
+                    SizedBox(width: 220, child: dropdown),
+                    const SizedBox(width: FirouzehSize.space2),
+                    SizedBox(width: 120, child: action),
+                  ]),
+          );
+        }),
     ]);
   }
 
@@ -284,13 +291,14 @@ class _ImportScreenState extends State<ImportScreen> {
     return [
       Text('هر ستون اکسل کدام ویژگی است؟', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: FirouzehSize.space2),
+      // گوشی: نام ویژگی و برچسب بالا، انتخاب ستون تمام‌عرض زیرش (ستون ۲۲۰ پیکسلی جا را می‌گرفت).
       for (final f in fieldLabels.entries)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(children: [
-            SizedBox(width: 220, child: Text(f.value)),
-            Expanded(
-              child: DropdownButtonFormField<int>(
+        Builder(builder: (context) {
+          final narrow = MediaQuery.sizeOf(context).width < 640;
+          final Widget? pill = _guessed.contains(f.key) && _mapping.containsKey(f.key)
+                  ? _pill('خودکار', true)
+                  : (const ['first_name', 'last_name'].contains(f.key) && !_namesMapped ? _pill('نیاز به انتخاب', false) : null);
+          final Widget dropdown = DropdownButtonFormField<int>(
                 key: ValueKey('map:${f.key}:${_mapping[f.key]}'),
                 initialValue: _mapping[f.key] ?? -1,
                 isExpanded: true,
@@ -318,17 +326,23 @@ class _ImportScreenState extends State<ImportScreen> {
                   if (f.key == 'type') _typeByValue.clear();
                   if (f.key == 'role') _roleByValue.clear();
                 }),
-              ),
-            ),
-            const SizedBox(width: FirouzehSize.space2),
-            SizedBox(
-              width: 110,
-              child: _guessed.contains(f.key) && _mapping.containsKey(f.key)
-                  ? _pill('خودکار', true)
-                  : (const ['first_name', 'last_name'].contains(f.key) && !_namesMapped ? _pill('نیاز به انتخاب', false) : null),
-            ),
-          ]),
-        ),
+              );
+          return Padding(
+            padding: EdgeInsets.symmetric(vertical: narrow ? 6 : 3),
+            child: narrow
+                ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Row(children: [Expanded(child: Text(f.value)), if (pill != null) pill]),
+                    const SizedBox(height: 4),
+                    dropdown,
+                  ])
+                : Row(children: [
+                    SizedBox(width: 220, child: Text(f.value)),
+                    Expanded(child: dropdown),
+                    const SizedBox(width: FirouzehSize.space2),
+                    SizedBox(width: 110, child: pill),
+                  ]),
+          );
+        }),
       const SectionTitle('نوع ثبت‌نام'),
       SegmentedButton<bool>(
         segments: const [

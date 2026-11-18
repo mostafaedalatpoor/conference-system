@@ -351,8 +351,11 @@ class _MealEditor extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 8),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            const Text('حق دارند:  '),
+          // «حق دارند» در دو گروه جدا تا نوع و نقش هم‌نام با هم قاطی نشوند.
+          Text('حق دارند (هر کس نوعش یا نقشش انتخاب شده باشد):', style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 6),
+          Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            Text('نوع ثبت‌نام:', style: Theme.of(context).textTheme.labelLarge),
             for (final t in s.types)
               FilterChip(
                 label: Text(t.name),
@@ -362,17 +365,22 @@ class _MealEditor extends StatelessWidget {
                   s.notify();
                 },
               ),
-            for (final r in s.roles)
-              FilterChip(
-                avatar: const Icon(Icons.person_outline_rounded, size: 16),
-                label: Text(r.name),
-                selected: meal.roles.contains(r.code),
-                onSelected: (v) {
-                  v ? meal.roles.add(r.code) : meal.roles.remove(r.code);
-                  s.notify();
-                },
-              ),
           ]),
+          if (s.roles.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              Text('نقش:', style: Theme.of(context).textTheme.labelLarge),
+              for (final r in s.roles)
+                FilterChip(
+                  label: Text(r.name),
+                  selected: meal.roles.contains(r.code),
+                  onSelected: (v) {
+                    v ? meal.roles.add(r.code) : meal.roles.remove(r.code);
+                    s.notify();
+                  },
+                ),
+            ]),
+          ],
         ]),
       ),
     );

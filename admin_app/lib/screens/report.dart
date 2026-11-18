@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../export.dart';
 import '../main.dart';
+import '../state.dart' show AdminState;
 import 'export_dialog.dart';
 import '../normalize.dart';
 import '../theme/firouzeh.dart';
@@ -142,6 +143,10 @@ class _ReportScreenState extends State<ReportScreen> {
             ]),
         ]),
         const SectionTitle('پذیرایی'),
+        // گوشی: هر وعده یک کارت (جدول شش‌ستونه در پهنای کم بیرون می‌زد).
+        if (MediaQuery.sizeOf(context).width < 640)
+          for (final m in r['meals'] as List) _MealCard(m: (m as Map).cast<String, dynamic>(), onOpen: () => _openMeal(context, s, m))
+        else
         DataTable(columns: const [
           DataColumn(label: Text('وعده')),
           DataColumn(label: Text('حق دارند')),
@@ -157,17 +162,7 @@ class _ReportScreenState extends State<ReportScreen> {
               DataCell(Text(faDigits(m['served']))),
               DataCell(Text(faDigits(m['duplicates']))),
               DataCell(Text(faDigits(m['not_entitled']))),
-              DataCell(TextButton(
-                onPressed: () {
-                  // افزونه‌ی تازه کد وعده را در گزارش می‌فرستد (حالت دسترسی محدود وعده‌ها را ندارد).
-                  final code = (m['code'] as String?) ?? s.meals.where((x) => x.id == m['id']).map((x) => x.code).firstOrNull;
-                  if (code == null) return;
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => MealPeoplePage(code: code, name: '${m['name']}'),
-                  ));
-                },
-                child: const Text('دیدن فهرست'),
-              )),
+              DataCell(TextButton(onPressed: () => _openMeal(context, s, m), child: const Text('دیدن فهرست'))),
             ]),
         ]),
         Text('حق دارند: فقط افراد فعال؛ غیرفعال‌ها شمرده نمی‌شوند.',
@@ -189,7 +184,8 @@ class _ReportScreenState extends State<ReportScreen> {
         ],
         if (((r['staff_activity'] as List?) ?? const []).isNotEmpty) ...[
           const SectionTitle('نیروها'),
-          DataTable(columns: const [
+          // در گوشی جدول به پهنای خودش می‌ماند و افقی جابه‌جا می‌شود.
+          SingleChildScrollView(scrollDirection: Axis.horizontal, child: DataTable(columns: const [
             DataColumn(label: Text('نام')),
             DataColumn(label: Text('پذیرش'), numeric: true),
             DataColumn(label: Text('تحویل'), numeric: true),
@@ -204,7 +200,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ? '—'
                     : relativeTime(DateTime.parse('${st['last_at']}')))),
               ]),
-          ]),
+          ])),
         ],
         const SectionTitle('خروجی‌ها'),
         _ExportCards(report: r),
@@ -592,5 +588,57 @@ class _ExportCards extends StatelessWidget {
         ('ساخت پشتیبان', () => _backup(context)),
       ]),
     ]);
+  }
+}
+
+
+/// «دیدن فهرست» یک وعده. افزونه‌ی تازه کد وعده را در گزارش می‌فرستد (حالت دسترسی محدود وعده‌ها را ندارد).
+void _openMeal(BuildContext context, AdminState s, Map m) {
+  final code = (m['code'] as String?) ?? s.meals.where((x) => x.id == m['id']).map((x) => x.code).firstOrNull;
+  if (code == null) return;
+  Navigator.of(context).push(MaterialPageRoute(builder: (_) => MealPeoplePage(code: code, name: '${m['name']}')));
+}
+
+/// یک وعده در گوشی: نام، «تحویل از حق دارند» با نوار، تکراری و بدون حق، و «دیدن فهرست».
+class _MealCard extends StatelessWidget {
+  final Map<String, dynamic> m;
+  final VoidCallback onOpen;
+  const _MealCard({required this.m, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final x = FirouzehColors.of(context);
+    final theme = Theme.of(context);
+    final entitled = (m['entitled'] as num?)?.toInt() ?? 0;
+    final served = (m['served'] as num?)?.toInt() ?? 0;
+    final dup = (m['duplicates'] as num?)?.toInt() ?? 0;
+    final no = (m['not_entitled'] as num?)?.toInt() ?? 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: FirouzehSize.space2),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(FirouzehSize.space4),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              Expanded(child: Text('${m['name']}', style: theme.textTheme.titleMedium)),
+              Text('${faDigits(served)} از ${faDigits(entitled)}', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+            ]),
+            const SizedBox(height: FirouzehSize.space2),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(value: entitled == 0 ? 0 : (served / entitled).clamp(0, 1).toDouble(), minHeight: 8),
+            ),
+            const SizedBox(height: FirouzehSize.space2),
+            Row(children: [
+              Expanded(
+                child: Text('تکراری ${faDigits(dup)} · بدون حق ${faDigits(no)}',
+                    style: theme.textTheme.bodySmall?.copyWith(color: dup + no > 0 ? x.wait : x.inkMuted)),
+              ),
+              TextButton(onPressed: onOpen, child: const Text('دیدن فهرست')),
+            ]),
+          ]),
+        ),
+      ),
+    );
   }
 }

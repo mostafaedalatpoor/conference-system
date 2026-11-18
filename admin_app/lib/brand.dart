@@ -5,7 +5,7 @@ const appName = 'رویدادیار مدیریت';
 const appNameLatin = 'RoydadYar Admin';
 
 /// همان نسخه‌ی pubspec.yaml؛ با هر انتشار هر دو با هم عوض شوند.
-const appVersion = '2.0.0';
+const appVersion = '2.1.0';
 
 const makerFull = 'ساخته‌ی تیم راهکارهای نرم‌افزاری نگاه جدید';
 const makerTeam = 'تیم راهکارهای نرم‌افزاری نگاه جدید';

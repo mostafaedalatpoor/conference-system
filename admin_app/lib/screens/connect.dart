@@ -91,7 +91,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final e in s.events)
             ChoiceChip(
-              label: Text('${e.name} (${e.code})'),
+              label: Text(eventChipLabel(e.name, e.code)),
               selected: !_creating && s.event?.code == e.code,
               onSelected: (_) {
                 setState(() => _creating = false);
@@ -106,7 +106,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
           for (final e in s.archivedEvents)
             ChoiceChip(
               avatar: const Icon(Icons.archive_rounded, size: 18),
-              label: Text('${e.name} (${e.code})'),
+              label: Text(eventChipLabel(e.name, e.code)),
               selected: !_creating && s.event?.code == e.code,
               onSelected: (_) {
                 setState(() => _creating = false);
@@ -151,9 +151,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
       ],
       if (s.apiKey.isNotEmpty && !s.limited) ...[
         SectionTitle(s.event == null || _creating ? 'ساخت رویداد جدید' : 'مشخصات رویداد'),
-        Row(children: [
-          Expanded(
-            child: TextField(
+        // گوشی: کد و نام زیر هم (کنار هم کد بریده می‌شد).
+        Builder(builder: (context) {
+          final code = TextField(
               controller: _code,
               // کد رویداد بعد از ساخت قابل تغییر نیست؛ تغییرش رویداد تازه می‌ساخت.
               enabled: s.event == null || _creating,
@@ -163,11 +163,16 @@ class _ConnectScreenState extends State<ConnectScreen> {
                 suffixIcon: s.event == null || _creating ? null : const Icon(Icons.lock_rounded, size: 18),
               ),
               textDirection: TextDirection.ltr,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(flex: 2, child: TextField(controller: _name, decoration: const InputDecoration(labelText: 'نام رویداد'))),
-        ]),
+            );
+          final name = TextField(controller: _name, decoration: const InputDecoration(labelText: 'نام رویداد'));
+          return MediaQuery.sizeOf(context).width < 640
+              ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [name, const SizedBox(height: 8), code])
+              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(child: code),
+                  const SizedBox(width: 12),
+                  Expanded(flex: 2, child: name),
+                ]);
+        }),
         const SizedBox(height: 8),
         JalaliRangePicker(
           key: ValueKey(_filledFor),
@@ -405,3 +410,8 @@ Future<bool?> _confirmUnlock(BuildContext context, EventInfo e) {
     ),
   );
 }
+
+
+/// برچسب چیپ رویداد: «نام (کد)» با جداسازی جهت (نام فارسی با حرف لاتین، کد لاتین)؛ اگر نام همان کد است (بی‌توجه به حروف بزرگ و کوچک) فقط یکی.
+String eventChipLabel(String name, String code) =>
+    name.trim().isEmpty || name.trim().toLowerCase() == code.trim().toLowerCase() ? code : '\u2067$name\u2069 (\u2066$code\u2069)';
