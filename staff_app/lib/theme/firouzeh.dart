@@ -1,4 +1,4 @@
-// «فیروزه» — زبان طراحی مشترک اپ نیروها و اپ مدیریت.
+// «فیروزه» — سیستم طراحی مشترک اپ نیروها و اپ مدیریت (فیروزه‌ای #0B7A7B، هدر خمیده، کارت شناور).
 // مقدارها از tokens.json سامانه‌ی طراحی آمده‌اند؛ این فایل در هر دو اپ یکسان است.
 // صفحه‌ها رنگ وضعیت را از FirouzehColors.of(context) و بقیه را از ThemeData می‌گیرند.
 import 'package:flutter/material.dart';
@@ -45,51 +45,51 @@ class FirouzehColors extends ThemeExtension<FirouzehColors> {
   });
 
   static const light = FirouzehColors(
-    paper: Color(0xFFF4F5F7),
+    paper: Color(0xFFF2F6F6), // ground
     surface: Color(0xFFFFFFFF),
-    sunken: Color(0xFFE9ECF0),
-    line: Color(0xFFDCE0E6),
-    lineStrong: Color(0xFF7E8796),
-    ink: Color(0xFF10141A),
-    inkMuted: Color(0xFF505966),
-    stamp: Color(0xFF2A42D4),
-    stampSoft: Color(0xFFE6E9FC),
+    sunken: Color(0xFFEAF1F1), // surface-2
+    line: Color(0xFFDCE7E7),
+    lineStrong: Color(0xFF7B8C8D),
+    ink: Color(0xFF0F1C1D),
+    inkMuted: Color(0xFF5B6B6C),
+    stamp: Color(0xFF0B7A7B), // brand-text
+    stampSoft: Color(0xFFE1F1F1), // brand-soft
     onStamp: Color(0xFFFFFFFF),
-    action: Color(0xFF10141A),
-    onAction: Color(0xFFFFFFFF),
-    go: Color(0xFF127A3B),
-    goSoft: Color(0xFFE1F5E8),
-    goFill: Color(0xFF3DD27A),
+    action: Color(0xFF0B7A7B), // brand
+    onAction: Color(0xFFFFFFFF), // on-brand
+    go: Color(0xFF138A43),
+    goSoft: Color(0xFFE3F5EA),
+    goFill: Color(0xFF3DD27A), // scan-go
     onGo: Color(0xFF06210F),
-    stop: Color(0xFFB42318),
-    stopSoft: Color(0xFFFDE8E6),
-    stopFill: Color(0xFFA3170F),
+    stop: Color(0xFFB3261E),
+    stopSoft: Color(0xFFFDE9E7),
+    stopFill: Color(0xFFA3170F), // scan-stop
     onStop: Color(0xFFFFFFFF),
     wait: Color(0xFF8A5300),
     waitSoft: Color(0xFFFFF1D1),
-    waitFill: Color(0xFFF5B000),
+    waitFill: Color(0xFFF5B000), // scan-wait
     onWait: Color(0xFF231600),
-    idleFill: Color(0xFF59616E),
+    idleFill: Color(0xFF59616E), // scan-idle
     onIdle: Color(0xFFFFFFFF),
-    scrim: Color(0x8F080A0E), // rgba(8,10,14,0.56)
+    scrim: Color(0x730F1C1D),
     camera: Color(0xFF000000),
   );
 
   static const dark = FirouzehColors(
-    paper: Color(0xFF0D1015),
-    surface: Color(0xFF161A21),
-    sunken: Color(0xFF08090C),
-    line: Color(0xFF262C36),
-    lineStrong: Color(0xFF6E7888),
-    ink: Color(0xFFEDF0F4),
-    inkMuted: Color(0xFFA0A9B6),
-    stamp: Color(0xFF8E9CFF),
-    stampSoft: Color(0xFF1E2552),
-    onStamp: Color(0xFF0D1015),
-    action: Color(0xFFEDF0F4),
-    onAction: Color(0xFF0D1015),
+    paper: Color(0xFF0D1415),
+    surface: Color(0xFF162022),
+    sunken: Color(0xFF1E2A2C),
+    line: Color(0xFF2A3A3C),
+    lineStrong: Color(0xFF6B7F80),
+    ink: Color(0xFFEAF1F1),
+    inkMuted: Color(0xFF9FB0B1),
+    stamp: Color(0xFF6FD0D1),
+    stampSoft: Color(0xFF12302F),
+    onStamp: Color(0xFF0D1415),
+    action: Color(0xFF0B7A7B),
+    onAction: Color(0xFFFFFFFF),
     go: Color(0xFF5CD68B),
-    goSoft: Color(0xFF112B1B),
+    goSoft: Color(0xFF12301F),
     goFill: Color(0xFF3DD27A),
     onGo: Color(0xFF06210F),
     stop: Color(0xFFFF8A80),
@@ -102,7 +102,7 @@ class FirouzehColors extends ThemeExtension<FirouzehColors> {
     onWait: Color(0xFF231600),
     idleFill: Color(0xFF59616E),
     onIdle: Color(0xFFFFFFFF),
-    scrim: Color(0xA3000000), // rgba(0,0,0,0.64)
+    scrim: Color(0xA0000000),
     camera: Color(0xFF000000),
   );
 
@@ -125,27 +125,30 @@ abstract final class FirouzehSize {
   static const space6 = 32.0;
   static const space7 = 48.0;
 
-  static const radiusXs = 4.0;
-  static const radiusSm = 8.0;
-  static const radiusMd = 12.0;
+  static const radiusXs = 8.0;
+  static const radiusSm = 12.0;
+  static const radiusMd = 16.0;
   static const radiusLg = 20.0;
+  static const radiusXl = 28.0;
   static const radiusPill = 999.0;
 
   static const tapMin = 48.0;
   static const tapLg = 56.0;
   static const tapXl = 64.0;
-  static const controlDesk = 36.0;
-  static const rowDesk = 40.0;
+  static const controlDesk = 40.0;
+  static const rowDesk = 46.0;
+  static const sideNav = 264.0;
 }
 
-/// سایه فقط برای باتم‌شیت و منوهای بازشو؛ بقیه‌ی سطوح با خط line جدا می‌شوند.
-List<BoxShadow> firouzehShadowPop(Brightness b) => [
-      BoxShadow(
-        offset: const Offset(0, 8),
-        blurRadius: 28,
-        color: b == Brightness.dark ? const Color(0x99000000) : const Color(0x2910141A),
-      ),
+/// shadow-float: ناوبری شناور پایین، باتم‌شیت و منوهای بازشو.
+List<BoxShadow> firouzehShadowPop(Brightness b) => const [
+      BoxShadow(offset: Offset(0, 10), blurRadius: 30, color: Color(0x2E000000)),
     ];
+
+/// shadow-card: تنها کارت اصلی هر صفحه که روی هدر خمیده می‌نشیند.
+const firouzehShadowCard = [
+  BoxShadow(offset: Offset(0, 10), blurRadius: 30, color: Color(0x240B7A7B)),
+];
 
 /// ارقام ثابت‌عرض برای شمارنده، ساعت و جدول.
 const tabularFigures = [FontFeature.tabularFigures()];
@@ -199,7 +202,7 @@ final _deskText = TextTheme(
   labelSmall: _t(12, 18, FontWeight.w500),
 );
 
-/// ThemeData کامل «فیروزه». [desktop] برای اپ ویندوز: کنترل ۳۶px، گوشه‌ی ۴px، متن فشرده‌تر.
+/// ThemeData کامل «فیروزه». [desktop] برای اپ ویندوز: کنترل ۴۰px، گوشه‌ی ۱۲px، متن فشرده‌تر.
 ThemeData firouzehTheme(Brightness b, {bool desktop = false}) {
   final dark = b == Brightness.dark;
   final x = dark ? FirouzehColors.dark : FirouzehColors.light;
@@ -241,10 +244,11 @@ ThemeData firouzehTheme(Brightness b, {bool desktop = false}) {
     bodyColor: x.ink,
     displayColor: x.ink,
   );
-  final r = desktop ? FirouzehSize.radiusXs : FirouzehSize.radiusSm;
+  // radius-sm (۱۲) برای کنترل دسکتاپ، radius-md (۱۶) برای دکمه و فیلد موبایل.
+  final r = desktop ? FirouzehSize.radiusSm : FirouzehSize.radiusMd;
   final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(r));
   final h = desktop ? FirouzehSize.controlDesk : FirouzehSize.tapLg;
-  final border = desktop ? 1.0 : 1.5;
+  const border = 1.0;
   final buttonText = text.labelLarge;
   final pad = EdgeInsets.symmetric(horizontal: desktop ? 16 : 20);
 
@@ -265,15 +269,21 @@ ThemeData firouzehTheme(Brightness b, {bool desktop = false}) {
     materialTapTargetSize: desktop ? MaterialTapTargetSize.shrinkWrap : MaterialTapTargetSize.padded,
     focusColor: x.stamp.withValues(alpha: .12),
     splashFactory: InkRipple.splashFactory,
+    // هدر خمیده: پر از brand، پایین با radius-xl، متن on-brand.
     appBarTheme: AppBarTheme(
-      backgroundColor: x.paper,
-      foregroundColor: x.ink,
+      backgroundColor: x.action,
+      foregroundColor: x.onAction,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: text.titleLarge,
-      shape: Border(bottom: BorderSide(color: x.line)),
+      toolbarHeight: 64,
+      titleTextStyle: text.titleLarge?.copyWith(color: x.onAction, fontWeight: FontWeight.w800),
+      iconTheme: IconThemeData(color: x.onAction),
+      actionsIconTheme: IconThemeData(color: x.onAction),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(FirouzehSize.radiusXl)),
+      ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
@@ -339,9 +349,9 @@ ThemeData firouzehTheme(Brightness b, {bool desktop = false}) {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: x.surface,
+      fillColor: x.sunken,
       isDense: desktop,
-      contentPadding: EdgeInsets.symmetric(horizontal: desktop ? 10 : 14, vertical: desktop ? 10 : 16),
+      contentPadding: EdgeInsets.symmetric(horizontal: desktop ? 12 : 16, vertical: desktop ? 12 : 17),
       hintStyle: text.bodyMedium?.copyWith(color: x.inkMuted),
       helperStyle: text.bodySmall?.copyWith(color: x.inkMuted),
       errorStyle: text.bodySmall?.copyWith(color: x.stop),
@@ -351,27 +361,29 @@ ThemeData firouzehTheme(Brightness b, {bool desktop = false}) {
       suffixIconColor: x.inkMuted,
       helperMaxLines: 3,
       errorMaxLines: 3,
-      border: box(x.lineStrong, border),
-      enabledBorder: box(x.lineStrong, border),
+      border: box(x.line, border),
+      enabledBorder: box(x.line, border),
       disabledBorder: box(x.line, border),
-      focusedBorder: box(x.stamp, 2),
+      focusedBorder: box(x.action, 2),
       errorBorder: box(x.stop, 2),
       focusedErrorBorder: box(x.stop, 2),
     ),
     checkboxTheme: CheckboxThemeData(
-      side: BorderSide(color: x.lineStrong, width: border),
+      side: BorderSide(color: x.lineStrong, width: 1.5),
+      fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? x.action : Colors.transparent),
+      checkColor: WidgetStateProperty.all(x.onAction),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusXs)),
     ),
     navigationBarTheme: NavigationBarThemeData(
-      height: 72,
+      height: 68,
       elevation: 0,
       backgroundColor: x.surface,
       surfaceTintColor: Colors.transparent,
       indicatorColor: x.action,
-      indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusSm)),
+      indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusMd)),
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       labelTextStyle: WidgetStateProperty.resolveWith((s) => text.labelMedium?.copyWith(
-            color: s.contains(WidgetState.selected) ? x.ink : x.inkMuted,
+            color: s.contains(WidgetState.selected) ? x.stamp : x.inkMuted,
             fontWeight: s.contains(WidgetState.selected) ? FontWeight.w800 : FontWeight.w600,
           )),
       iconTheme: WidgetStateProperty.resolveWith(
@@ -385,16 +397,16 @@ ThemeData firouzehTheme(Brightness b, {bool desktop = false}) {
       showDragHandle: true,
       dragHandleColor: x.lineStrong,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(FirouzehSize.radiusLg)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(FirouzehSize.radiusXl)),
       ),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: x.action,
-      contentTextStyle: text.bodyMedium?.copyWith(color: x.onAction),
-      actionTextColor: x.onAction,
+      backgroundColor: x.ink,
+      contentTextStyle: text.bodyMedium?.copyWith(color: x.paper),
+      actionTextColor: dark ? x.action : const Color(0xFF6FD0D1),
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusSm)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusMd)),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: x.surface,
@@ -402,15 +414,16 @@ ThemeData firouzehTheme(Brightness b, {bool desktop = false}) {
       barrierColor: x.scrim,
       titleTextStyle: text.titleLarge,
       contentTextStyle: text.bodyMedium,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusMd)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusLg)),
     ),
+    // کارت شناور: surface، radius-lg، بدون قاب پررنگ.
     cardTheme: CardThemeData(
       color: x.surface,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(FirouzehSize.radiusMd),
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusLg),
         side: BorderSide(color: x.line),
       ),
     ),
@@ -423,7 +436,7 @@ ThemeData firouzehTheme(Brightness b, {bool desktop = false}) {
     ),
     dividerTheme: DividerThemeData(color: x.line, space: 1, thickness: 1),
     chipTheme: ChipThemeData(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusXs)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FirouzehSize.radiusPill)),
       side: BorderSide(color: x.line),
       backgroundColor: x.surface,
       selectedColor: x.stampSoft,
@@ -437,10 +450,12 @@ ThemeData firouzehTheme(Brightness b, {bool desktop = false}) {
     ),
     switchTheme: SwitchThemeData(
       trackOutlineColor: WidgetStateProperty.all(x.lineStrong),
+      thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? x.onAction : x.lineStrong),
+      trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? x.action : x.sunken),
     ),
     tooltipTheme: TooltipThemeData(
-      decoration: BoxDecoration(color: x.action, borderRadius: BorderRadius.circular(FirouzehSize.radiusXs)),
-      textStyle: text.bodySmall?.copyWith(color: x.onAction),
+      decoration: BoxDecoration(color: x.ink, borderRadius: BorderRadius.circular(FirouzehSize.radiusXs)),
+      textStyle: text.bodySmall?.copyWith(color: x.paper),
     ),
     navigationRailTheme: NavigationRailThemeData(
       backgroundColor: x.surface,
@@ -461,7 +476,7 @@ ThemeData firouzehTheme(Brightness b, {bool desktop = false}) {
       decoration: BoxDecoration(
         color: x.surface,
         border: Border.all(color: x.line),
-        borderRadius: BorderRadius.circular(FirouzehSize.radiusXs),
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusSm),
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(

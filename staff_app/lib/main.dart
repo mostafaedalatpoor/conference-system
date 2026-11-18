@@ -18,11 +18,9 @@ void main() {
 class StoreScope extends InheritedNotifier<AppStore> {
   const StoreScope({super.key, required AppStore store, required super.child}) : super(notifier: store);
 
-  static AppStore of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<StoreScope>()!.notifier!;
+  static AppStore of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<StoreScope>()!.notifier!;
 
-  static AppStore read(BuildContext context) =>
-      context.getInheritedWidgetOfExactType<StoreScope>()!.notifier!;
+  static AppStore read(BuildContext context) => context.getInheritedWidgetOfExactType<StoreScope>()!.notifier!;
 }
 
 class StaffApp extends StatelessWidget {

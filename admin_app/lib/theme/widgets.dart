@@ -290,3 +290,59 @@ class AboutCard extends StatelessWidget {
     );
   }
 }
+
+/// ناوبری شناور موبایل (BottomNav): ۶۸px، گوشه‌ی ۲۴، shadow-float، فاصله از لبه‌ها.
+class FloatingNav extends StatelessWidget {
+  final Widget child;
+  const FloatingNav({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final x = FirouzehColors.of(context);
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(FirouzehSize.space4, 0, FirouzehSize.space4, FirouzehSize.space3),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: x.surface,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: firouzehShadowPop(Theme.of(context).brightness),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: MediaQuery.removePadding(context: context, removeBottom: true, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+/// هدر خمیده‌ی دسکتاپ (CurvedHeader): پر از brand، گوشه‌ی radius-xl، عنوان display روی on-brand.
+class CurvedHeader extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  const CurvedHeader({super.key, required this.title, this.subtitle, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    final x = FirouzehColors.of(context);
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(FirouzehSize.space6, FirouzehSize.space5, FirouzehSize.space6, FirouzehSize.space5),
+      decoration: BoxDecoration(color: x.action, borderRadius: BorderRadius.circular(FirouzehSize.radiusXl)),
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            if (subtitle != null)
+              Text(subtitle!, style: theme.textTheme.bodySmall?.copyWith(color: x.onAction.withValues(alpha: .85))),
+            Text(title,
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(color: x.onAction, fontSize: 28, height: 38 / 28, fontWeight: FontWeight.w800)),
+          ]),
+        ),
+        if (trailing != null) trailing!,
+      ]),
+    );
+  }
+}

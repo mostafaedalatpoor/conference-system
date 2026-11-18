@@ -5,6 +5,7 @@ import '../brand.dart';
 import '../main.dart';
 import '../normalize.dart';
 import '../theme/firouzeh.dart';
+import '../theme/widgets.dart';
 import 'checkin.dart';
 import 'meal.dart';
 import 'status.dart';
@@ -101,10 +102,19 @@ class _HomeScreenState extends State<HomeScreen> {
               ? PreferredSize(
                   preferredSize: const Size.fromHeight(56),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(FirouzehSize.space4, 0, FirouzehSize.space4, FirouzehSize.space2),
+                    padding:
+                        const EdgeInsets.fromLTRB(FirouzehSize.space4, 0, FirouzehSize.space4, FirouzehSize.space2),
                     child: Align(
                       alignment: AlignmentDirectional.centerStart,
                       child: SegmentedButton<int>(
+                        // روی هدر خمیده: انتخاب‌شده سفید با متن brand.
+                        style: SegmentedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          foregroundColor: x.onAction,
+                          selectedBackgroundColor: x.onAction,
+                          selectedForegroundColor: x.action,
+                          side: BorderSide(color: x.onAction.withValues(alpha: .6)),
+                        ),
                         showSelectedIcon: false,
                         segments: [
                           for (var k = 0; k < tabs.length; k++)
@@ -116,7 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(width: FirouzehSize.space2),
                                 Text('F${k + 1}',
                                     style: theme.textTheme.bodySmall?.copyWith(
-                                      color: k == i ? x.onAction.withValues(alpha: .7) : x.inkMuted,
+                                      color: k == i ? x.action.withValues(alpha: .7) : x.onAction.withValues(alpha: .7),
                                     )),
                               ]),
                             ),
@@ -132,10 +142,12 @@ class _HomeScreenState extends State<HomeScreen> {
         // فقط صفحه‌ی فعال ساخته می‌شود تا دوربین پذیرایی در پس‌زمینه روشن نماند.
         body: KeyedSubtree(key: ValueKey(i), child: tabs[i].page),
         bottomNavigationBar: showNav && !wide
-            ? NavigationBar(
-                selectedIndex: i,
-                onDestinationSelected: go,
-                destinations: [for (final t in tabs) NavigationDestination(icon: t.icon, label: t.label)],
+            ? FloatingNav(
+                child: NavigationBar(
+                  selectedIndex: i,
+                  onDestinationSelected: go,
+                  destinations: [for (final t in tabs) NavigationDestination(icon: t.icon, label: t.label)],
+                ),
               )
             : null,
       ),
@@ -215,7 +227,8 @@ class _SyncPillState extends State<SyncPill> with SingleTickerProviderStateMixin
           (Icons.cloud_off_rounded, n > 0 ? 'آفلاین، ${faDigits(n)} در صف' : 'آفلاین', x.sunken, x.ink, x.ink);
       semantics = n > 0 ? 'آفلاین، ${faDigits(n)} کار در صف' : 'آفلاین';
     } else if (n > 0) {
-      (icon, label, bg, fg, iconColor) = (Icons.cloud_upload_rounded, '${faDigits(n)} در صف', x.waitSoft, x.wait, x.wait);
+      (icon, label, bg, fg, iconColor) =
+          (Icons.cloud_upload_rounded, '${faDigits(n)} در صف', x.waitSoft, x.wait, x.wait);
       semantics = '${faDigits(n)} کار در صف';
     } else {
       final last = store.lastSyncOk;

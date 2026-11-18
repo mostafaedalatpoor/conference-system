@@ -78,7 +78,8 @@ List<(int, String, IconData, Widget)> adminSteps(AdminState s) => [
 (String, bool, bool) stepStatus(AdminState s, int k) {
   switch (k) {
     case 0:
-      if (s.event == null) return (s.apiKey.isEmpty ? 'هنوز وصل نشده' : 'رویداد را انتخاب کنید', false, s.apiKey.isNotEmpty);
+      if (s.event == null)
+        return (s.apiKey.isEmpty ? 'هنوز وصل نشده' : 'رویداد را انتخاب کنید', false, s.apiKey.isNotEmpty);
       return ('${s.event!.code}${s.event!.locked ? '، آدرس قفل' : ''}', true, false);
     case 1:
       if (s.types.isEmpty) return ('نوع ثبت‌نامی تعریف نشده', false, true);
@@ -97,7 +98,11 @@ List<(int, String, IconData, Widget)> adminSteps(AdminState s) => [
       if (s.event?.locked == true) return ('PDF ساخته شد، ${faDigits(free)} رزرو آزاد', true, false);
       return (s.reserveCards.isEmpty ? 'کارت رزرو ساخته نشده' : '${faDigits(free)} کارت رزرو آزاد', false, false);
     case 6:
-      return ('${faDigits(s.people.values.where((p) => p.isActive).length)} نفر · جستجو، ویرایش، کار گروهی', false, false);
+      return (
+        '${faDigits(s.people.values.where((p) => p.isActive).length)} نفر · جستجو، ویرایش، کار گروهی',
+        false,
+        false
+      );
     default:
       return ('شمارش زنده‌ی روز اجرا', false, false);
   }
@@ -231,9 +236,9 @@ class _DeskShellState extends State<DeskShell> {
         child: Scaffold(
           body: Row(
             children: [
-              // SideNav: فهرست مراحل، ۲۶۰px سمت راست (ابتدای RTL).
+              // SideNav: فهرست مراحل، ۲۶۴px سمت راست (ابتدای RTL)، ردیف فعال پر از brand.
               Container(
-                width: 260,
+                width: FirouzehSize.sideNav,
                 decoration: BoxDecoration(
                   color: x.surface,
                   border: BorderDirectional(end: BorderSide(color: x.line)),
@@ -244,16 +249,19 @@ class _DeskShellState extends State<DeskShell> {
                       padding: const EdgeInsets.all(FirouzehSize.space3),
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(FirouzehSize.space2, FirouzehSize.space2, FirouzehSize.space2, 0),
+                          padding: const EdgeInsets.fromLTRB(
+                              FirouzehSize.space2, FirouzehSize.space2, FirouzehSize.space2, 0),
                           child: Row(children: [
-                            Image.asset('assets/brand/logo.png', width: 32, height: 32, semanticLabel: 'لوگوی رویدادیار'),
+                            Image.asset('assets/brand/logo.png',
+                                width: 32, height: 32, semanticLabel: 'لوگوی رویدادیار'),
                             const SizedBox(width: FirouzehSize.space2),
                             Text(appName, style: theme.textTheme.titleMedium),
                           ]),
                         ),
                         Divider(color: x.line, height: FirouzehSize.space5),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(FirouzehSize.space2, 0, FirouzehSize.space2, FirouzehSize.space4),
+                          padding: const EdgeInsets.fromLTRB(
+                              FirouzehSize.space2, 0, FirouzehSize.space2, FirouzehSize.space4),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(s.event?.name ?? 'رویدادی انتخاب نشده',
                                 style: theme.textTheme.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -354,13 +362,15 @@ class _MobileShellState extends State<MobileShell> {
             ),
           ),
         ]),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: i,
-          onDestinationSelected: (v) => setState(() => _i = v),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.insights_rounded), label: 'امروز'),
-            NavigationDestination(icon: Icon(Icons.people_alt_rounded), label: 'افراد'),
-          ],
+        bottomNavigationBar: FloatingNav(
+          child: NavigationBar(
+            selectedIndex: i,
+            onDestinationSelected: (v) => setState(() => _i = v),
+            destinations: const [
+              NavigationDestination(icon: Icon(Icons.insights_rounded), label: 'امروز'),
+              NavigationDestination(icon: Icon(Icons.people_alt_rounded), label: 'افراد'),
+            ],
+          ),
         ),
       );
     }
@@ -376,15 +386,17 @@ class _MobileShellState extends State<MobileShell> {
         title: Text(_i == 0 ? s.event!.name : titles[_i], overflow: TextOverflow.ellipsis),
       ),
       body: Column(children: [const MessageBar(), Expanded(child: KeyedSubtree(key: ValueKey(_i), child: pages[_i]))]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _i,
-        onDestinationSelected: (v) => setState(() => _i = v),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.insights_rounded), label: 'امروز'),
-          NavigationDestination(icon: Icon(Icons.people_alt_rounded), label: 'افراد'),
-          NavigationDestination(icon: Icon(Icons.badge_rounded), label: 'نیروها'),
-          NavigationDestination(icon: Icon(Icons.checklist_rounded), label: 'آماده‌سازی'),
-        ],
+      bottomNavigationBar: FloatingNav(
+        child: NavigationBar(
+          selectedIndex: _i,
+          onDestinationSelected: (v) => setState(() => _i = v),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.insights_rounded), label: 'امروز'),
+            NavigationDestination(icon: Icon(Icons.people_alt_rounded), label: 'افراد'),
+            NavigationDestination(icon: Icon(Icons.badge_rounded), label: 'نیروها'),
+            NavigationDestination(icon: Icon(Icons.checklist_rounded), label: 'آماده‌سازی'),
+          ],
+        ),
       ),
     );
   }
@@ -571,7 +583,7 @@ class _StepItem extends StatelessWidget {
     final current = state == StepState.current;
     final disabled = state == StepState.disabled;
     final (badgeBg, badgeFg) = switch (state) {
-      StepState.current => (x.stamp, x.onStamp),
+      StepState.current => (x.onAction, x.action),
       StepState.done => (x.goSoft, x.go),
       StepState.attention => (x.waitSoft, x.wait),
       _ => (x.sunken, x.inkMuted),
@@ -579,10 +591,10 @@ class _StepItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: Material(
-        color: current ? x.stampSoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(FirouzehSize.radiusXs),
+        color: current ? x.action : Colors.transparent,
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusMd),
         child: InkWell(
-          borderRadius: BorderRadius.circular(FirouzehSize.radiusXs),
+          borderRadius: BorderRadius.circular(FirouzehSize.radiusMd),
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space2, vertical: FirouzehSize.space2),
@@ -593,7 +605,8 @@ class _StepItem extends StatelessWidget {
                   width: 28,
                   height: 28,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(FirouzehSize.radiusXs)),
+                  decoration:
+                      BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(FirouzehSize.radiusPill)),
                   child: number == null
                       ? Icon(Icons.insights_rounded, size: 16, color: badgeFg)
                       : state == StepState.done
@@ -605,12 +618,16 @@ class _StepItem extends StatelessWidget {
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(title,
-                        style: theme.textTheme.bodyMedium?.copyWith(fontWeight: current ? FontWeight.w800 : FontWeight.w600)),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: current ? FontWeight.w800 : FontWeight.w600,
+                            color: current ? x.onAction : x.ink)),
                     Text(line,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: state == StepState.attention ? x.wait : x.inkMuted)),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: current
+                                ? x.onAction.withValues(alpha: .85)
+                                : (state == StepState.attention ? x.wait : x.inkMuted))),
                   ]),
                 ),
               ]),
@@ -634,13 +651,14 @@ class PageBody extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(FirouzehSize.space5, FirouzehSize.space5, FirouzehSize.space5, FirouzehSize.space7),
+            padding: const EdgeInsets.fromLTRB(
+                FirouzehSize.space5, FirouzehSize.space5, FirouzehSize.space5, FirouzehSize.space7),
             children: [
               // روی گوشی عنوان در نوار بالاست و تکرار نمی‌شود.
               if (title != null && MediaQuery.sizeOf(context).width >= 1024)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: FirouzehSize.space2),
-                  child: Text(title!, style: Theme.of(context).textTheme.titleLarge),
+                  padding: const EdgeInsets.only(bottom: FirouzehSize.space4),
+                  child: CurvedHeader(title: title!, subtitle: StateScope.of(context).event?.name),
                 ),
               ...children,
             ],
