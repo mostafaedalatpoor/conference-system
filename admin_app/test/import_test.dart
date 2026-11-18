@@ -1,6 +1,6 @@
-import 'package:conference_admin/excel_import.dart';
-import 'package:conference_admin/normalize.dart';
-import 'package:conference_admin/state.dart';
+import 'package:roydadyar_admin/excel_import.dart';
+import 'package:roydadyar_admin/normalize.dart';
+import 'package:roydadyar_admin/state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

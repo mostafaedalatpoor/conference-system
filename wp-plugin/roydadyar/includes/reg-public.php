@@ -324,7 +324,7 @@ function cd_reg_public_config(array $page, array $counts) {
 }
 
 function cd_reg_head($title, $css) {
-    $font = plugins_url('assets/fonts/', CD_DIR . 'conference-day.php');
+    $font = plugins_url('assets/fonts/', CD_DIR . 'roydadyar.php');
     return '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">'
         . '<meta name="viewport" content="width=device-width, initial-scale=1">'
         . '<title>' . esc_html($title) . '</title>'

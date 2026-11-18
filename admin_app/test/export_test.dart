@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:conference_admin/export.dart';
-import 'package:conference_admin/screens/people_desk.dart';
-import 'package:conference_admin/state.dart';
+import 'package:roydadyar_admin/export.dart';
+import 'package:roydadyar_admin/screens/people_desk.dart';
+import 'package:roydadyar_admin/state.dart';
 import 'package:excel/excel.dart';
 import 'package:flutter_test/flutter_test.dart';
 

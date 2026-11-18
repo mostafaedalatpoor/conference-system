@@ -69,7 +69,7 @@ function cd_event_phase(array $e) {
 
 /** استایل مشترک صفحه‌های افزونه. */
 function cd_ui_styles() {
-    $font = esc_url(plugins_url('assets/fonts/', CD_DIR . 'conference-day.php'));
+    $font = esc_url(plugins_url('assets/fonts/', CD_DIR . 'roydadyar.php'));
     $b = CD_BRAND;
     return "<style>
 @font-face{font-family:'Vazirmatn';src:url('{$font}Vazirmatn-Regular.woff2') format('woff2');font-weight:400 600;font-display:swap}

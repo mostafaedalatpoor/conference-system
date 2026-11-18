@@ -1,7 +1,7 @@
 // آزمون‌های واحد منطق خالص. پوشه‌ی test/ در CI بعد از flutter create پاک می‌شود، پس این‌ها اینجاست:
 // flutter test unit_test
-import 'package:conference_staff/models.dart';
-import 'package:conference_staff/store.dart';
+import 'package:roydadyar_staff/models.dart';
+import 'package:roydadyar_staff/store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 LogEvent ev(String kind, String aid, DateTime t, {String? day, int? meal, int seq = 0}) => LogEvent(

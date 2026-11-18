@@ -1,7 +1,7 @@
 // آزمون‌های واحد منطق خالص. پوشه‌ی test/ در CI بعد از flutter create پاک می‌شود، پس این‌ها اینجاست:
 // flutter test unit_test
-import 'package:conference_admin/excel_import.dart';
-import 'package:conference_admin/state.dart';
+import 'package:roydadyar_admin/excel_import.dart';
+import 'package:roydadyar_admin/state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

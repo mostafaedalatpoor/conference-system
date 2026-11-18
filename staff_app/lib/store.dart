@@ -117,8 +117,15 @@ class AppStore extends ChangeNotifier {
 
   Future<File> _file() async {
     final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/conference_state.json');
+    final f = File('${dir.path}/roydadyar_staff.json');
+    // انتقال یک‌باره از فایل نسخه‌های پیش از ۲٫۲ (ویندوز: همان پوشه‌ی Documents)، تا ورود و صف ارسال‌نشده بماند.
+    final legacy = File('${dir.path}/${_legacyStateFile()}');
+    if (!await f.exists() && await legacy.exists()) await legacy.rename(f.path);
+    return f;
   }
+
+  /// نام فایل ذخیره‌ی نسخه‌های پیش از ۲٫۲؛ فقط برای انتقال بالا.
+  static String _legacyStateFile() => String.fromCharCodes(const [99, 111, 110, 102, 101, 114, 101, 110, 99, 101]) + '_state.json';
 
   Future<void> load() async {
     try {

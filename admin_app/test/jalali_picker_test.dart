@@ -1,5 +1,5 @@
-import 'package:conference_admin/theme/firouzeh.dart';
-import 'package:conference_admin/theme/jalali_picker.dart';
+import 'package:roydadyar_admin/theme/firouzeh.dart';
+import 'package:roydadyar_admin/theme/jalali_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';

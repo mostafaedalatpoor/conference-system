@@ -122,7 +122,7 @@ function cd_send_nocache_headers() {
         nocache_headers();
         header('X-LiteSpeed-Cache-Control: no-cache');
     }
-    do_action('litespeed_control_set_nocache', 'conference-day');
+    do_action('litespeed_control_set_nocache', 'roydadyar');
 }
 
 function cd_client_ip() {

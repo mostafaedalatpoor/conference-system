@@ -15,7 +15,7 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-/// کلاینت API افزونه‌ی Conference Day برای گوشی‌ها.
+/// کلاینت API افزونه‌ی رویدادیار برای گوشی‌ها.
 class Api {
   final String server;
   final String? token;

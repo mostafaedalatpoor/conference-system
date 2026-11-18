@@ -40,7 +40,7 @@ jobs:
 
       - name: ساخت پوشه‌ی اندروید
         run: |
-          flutter create --org ir.newvisionteam --project-name conference_staff --platforms=android .
+          flutter create --org ir.newvisionteam --project-name roydadyar_staff --platforms=android .
           rm -rf test
           python3 ../ci/patch_android.py android --label "رویدادیار نیروها"
           cp -r ../branding/android/mipmap-* android/app/src/main/res/
@@ -85,7 +85,7 @@ jobs:
 
       - name: ساخت پوشه‌ی ویندوز
         run: |
-          flutter create --org ir.newvisionteam --project-name conference_staff --platforms=windows .
+          flutter create --org ir.newvisionteam --project-name roydadyar_staff --platforms=windows .
           rm -rf test
           python ../ci/patch_windows.py windows --binary RoydadYarStaff --title "رویدادیار نیروها" --icon ../branding/windows/app_icon.ico
 
@@ -121,7 +121,7 @@ jobs:
 
       - name: ساخت پوشه‌ی ویندوز
         run: |
-          flutter create --org ir.newvisionteam --project-name conference_admin --platforms=windows .
+          flutter create --org ir.newvisionteam --project-name roydadyar_admin --platforms=windows .
           rm -rf test
           python ../ci/patch_windows.py windows --binary RoydadYarAdmin --title "رویدادیار مدیریت" --icon ../branding/windows/app_icon.ico
 
@@ -161,7 +161,7 @@ jobs:
 
       - name: ساخت پوشه‌ی اندروید
         run: |
-          flutter create --org ir.newvisionteam --project-name conference_admin --platforms=android .
+          flutter create --org ir.newvisionteam --project-name roydadyar_admin --platforms=android .
           rm -rf test
           python3 ../ci/patch_android.py android --label "رویدادیار مدیریت" --biometric
           cp -r ../branding/android/mipmap-* android/app/src/main/res/
@@ -191,17 +191,16 @@ jobs:
         run: |
           find wp-plugin -name '*.php' -print0 | xargs -0 -n1 php -l
 
-      # conference-day.zip پوشه‌ی conference-day را در ریشه دارد و همان را در وردپرس بارگذاری کنید
-      # تا جای نسخه‌ی قبلی بنشیند.
+      # roydadyar.zip پوشه‌ی roydadyar را در ریشه دارد و همان را در وردپرس بارگذاری کنید.
       - name: ساخت zip افزونه
         run: |
           cd wp-plugin
-          zip -r ../conference-day.zip conference-day
+          zip -r ../roydadyar.zip roydadyar
 
       - uses: actions/upload-artifact@v4
         with:
           name: roydadyar-wp-plugin
-          path: conference-day.zip
+          path: roydadyar.zip
 
   release:
     name: انتشار در Releases
@@ -234,8 +233,8 @@ jobs:
           cp artifacts/roydadyar-admin-android/app-armeabi-v7a-release.apk   "out/RoydadYar-Admin-$V-android-armv7.apk"
           (cd artifacts/roydadyar-staff-windows && zip -qr "../../out/RoydadYar-Staff-$V-windows.zip" .)
           (cd artifacts/roydadyar-admin-windows && zip -qr "../../out/RoydadYar-Admin-$V-windows.zip" .)
-          # پوشه‌ی conference-day در ریشه‌ی zip است تا در وردپرس جای نسخه‌ی قبلی بنشیند.
-          cp artifacts/roydadyar-wp-plugin/conference-day.zip "out/RoydadYar-WordPress-plugin-$V.zip"
+          # پوشه‌ی roydadyar در ریشه‌ی zip است.
+          cp artifacts/roydadyar-wp-plugin/roydadyar.zip "out/RoydadYar-WordPress-plugin-$V.zip"
           ls -la out
 
       - uses: softprops/action-gh-release@v2
