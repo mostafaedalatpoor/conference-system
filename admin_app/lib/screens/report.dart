@@ -242,9 +242,10 @@ class StatTile extends StatelessWidget {
       width: width,
       padding: const EdgeInsets.all(FirouzehSize.space4),
       decoration: BoxDecoration(
+        // کاشی آمار بوم «امروز»: سفید، گوشه‌ی ۲۰، سایه‌ی نرم فیروزه‌ای.
         color: attention ? x.waitSoft : x.surface,
-        border: Border.all(color: attention ? x.waitSoft : x.line),
-        borderRadius: BorderRadius.circular(FirouzehSize.radiusMd),
+        borderRadius: BorderRadius.circular(FirouzehSize.radiusLg),
+        boxShadow: const [BoxShadow(offset: Offset(0, 6), blurRadius: 20, color: Color(0x1A0B7A7B))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [

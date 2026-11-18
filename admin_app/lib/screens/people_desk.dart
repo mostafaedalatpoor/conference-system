@@ -135,9 +135,13 @@ class _PeopleDeskScreenState extends State<PeopleDeskScreen> {
 
     final table = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
+        // عنوان صفحه طبق بوم «افراد» ویندوز: خط کوچک بالای عنوان ۲۸px.
         Expanded(
-          child: Text('${faDigits(count(PeopleFilter.all))} نفر · ${faDigits(arrived)} پذیرش‌شده',
-              style: theme.textTheme.bodyMedium?.copyWith(color: x.inkMuted)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${faDigits(count(PeopleFilter.all))} نفر · ${faDigits(arrived)} پذیرش‌شده',
+                style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+            Text('افراد', style: theme.textTheme.titleLarge?.copyWith(fontSize: 28, height: 38 / 28, fontWeight: FontWeight.w800)),
+          ]),
         ),
         IconButton(tooltip: 'به‌روزرسانی', onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh_rounded)),
         FilledButton.icon(

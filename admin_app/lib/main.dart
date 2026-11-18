@@ -201,13 +201,14 @@ class DeskShell extends StatefulWidget {
 }
 
 class _DeskShellState extends State<DeskShell> {
-  int _i = 0;
+  int _i = 5; // «امروز» اول، طبق بوم.
 
   void _go(AdminState s, int v) {
     if (s.event == null && v != 0) return;
     if (v == 4 && !s.settings.usesCards) return;
     // دسترسی محدود: فقط اتصال، امروز و افراد.
     if (s.limited && !const [0, 5, 6].contains(v)) return;
+    if (v == 7 && s.limited) return;
     setState(() => _i = v);
   }
 
@@ -219,101 +220,138 @@ class _DeskShellState extends State<DeskShell> {
     final theme = Theme.of(context);
     final steps = adminSteps(s);
     var i = needsEvent ? 0 : _i;
-    if (i == 4 && !s.settings.usesCards) i = 0;
+    if (i == 4 && !s.settings.usesCards) i = 5;
     if (s.limited && !needsEvent && !const [0, 5, 6].contains(i)) i = 5;
     final page = switch (i) {
-      5 => const ReportScreen(title: 'امروز'),
+      5 => const ReportScreen(title: 'امروز', autoRefresh: true),
       6 => s.limited ? const LimitedPeopleScreen() : const PeopleDeskScreen(),
+      2 => const StaffScreen(showDevices: true),
+      7 => const ReportScreen(title: 'گزارش‌ها'),
       _ => steps.firstWhere((e) => e.$1 == i).$4,
     };
 
-    Widget item(int k, String title, {int? number}) {
-      final (line, done, attention) = stepStatus(s, k);
-      final StepState st = needsEvent && k != 0
-          ? StepState.disabled
-          : k == i
-              ? StepState.current
-              : attention
-                  ? StepState.attention
-                  : done
-                      ? StepState.done
-                      : StepState.idle;
-      return _StepItem(
-        number: number,
+    // ترتیب و نام‌ها طبق بوم «نوار کناری» مدیریت ویندوز.
+    final nav = <(int, IconData, String)>[
+      (5, Icons.insights_rounded, 'امروز'),
+      (6, Icons.groups_rounded, 'افراد'),
+      if (!s.limited) ...[
+        (2, Icons.smartphone_rounded, 'گوشی‌ها و کارکنان'),
+        (1, Icons.tune_rounded, 'تنظیم رویداد'),
+        (3, Icons.upload_file_rounded, 'ورود اکسل'),
+        if (s.settings.usesCards) (4, Icons.badge_rounded, 'کارت‌ها'),
+        (7, Icons.download_rounded, 'گزارش‌ها'),
+      ],
+    ];
+
+    Widget item(int k, IconData icon, String title) {
+      final (line, _, attention) = k == 7 ? ('خروجی اکسل، CSV و PDF', false, false) : stepStatus(s, k);
+      return _NavItem(
+        icon: icon,
         title: title,
-        line: line,
-        state: st,
-        onTap: st == StepState.disabled ? null : () => _go(s, k),
+        tooltip: line,
+        current: k == i,
+        attention: attention && k != i,
+        onTap: needsEvent && k != 0 ? null : () => _go(s, k),
       );
     }
 
     return CallbackShortcuts(
       bindings: {
-        // Ctrl+1 تا Ctrl+5 مراحل، Ctrl+6 گزارش زنده، Ctrl+7 افراد.
-        for (var k = 0; k < 7; k++)
-          SingleActivator(LogicalKeyboardKey(0x00000000031 + k), control: true): () => _go(s, k),
+        // Ctrl+1 تا Ctrl+7 به ترتیب نوار کناری.
+        for (var n = 0; n < nav.length && n < 9; n++)
+          SingleActivator(LogicalKeyboardKey(0x00000000031 + n), control: true): () => _go(s, nav[n].$1),
       },
       child: Focus(
         autofocus: true,
         child: Scaffold(
           body: Row(
             children: [
-              // SideNav: فهرست مراحل، ۲۶۴px سمت راست (ابتدای RTL)، ردیف فعال پر از brand.
+              // SideNav: ۲۶۴px سمت راست (ابتدای RTL)، ردیف ۴۶px، فعال پر از brand.
               Container(
                 width: FirouzehSize.sideNav,
                 decoration: BoxDecoration(
                   color: x.surface,
                   border: BorderDirectional(end: BorderSide(color: x.line)),
                 ),
-                child: Column(children: [
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.all(FirouzehSize.space3),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                              FirouzehSize.space2, FirouzehSize.space2, FirouzehSize.space2, 0),
-                          child: Row(children: [
-                            Image.asset('assets/brand/logo.png',
-                                width: 32, height: 32, semanticLabel: 'لوگوی رویدادیار'),
-                            const SizedBox(width: FirouzehSize.space2),
-                            Text(appName, style: theme.textTheme.titleMedium),
-                          ]),
-                        ),
-                        Divider(color: x.line, height: FirouzehSize.space5),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                              FirouzehSize.space2, 0, FirouzehSize.space2, FirouzehSize.space4),
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(s.event?.name ?? 'رویدادی انتخاب نشده',
-                                style: theme.textTheme.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
-                            if (s.event != null)
-                              Text(s.event!.code,
-                                  textDirection: TextDirection.ltr,
-                                  style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
-                          ]),
-                        ),
-                        if (s.limited)
-                          item(0, 'اتصال و رویداد')
-                        else
-                          for (var n = 0; n < steps.length; n++) item(steps[n].$1, steps[n].$2, number: n + 1),
-                        const SizedBox(height: FirouzehSize.space2),
-                        Divider(color: x.line),
-                        const SizedBox(height: FirouzehSize.space2),
-                        item(5, s.limited ? 'امروز' : 'گزارش زنده'),
-                        item(6, 'افراد'),
-                      ],
+                padding: const EdgeInsets.symmetric(horizontal: FirouzehSize.space3, vertical: FirouzehSize.space4),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 14),
+                    child: Row(children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(color: x.action, borderRadius: BorderRadius.circular(FirouzehSize.radiusSm)),
+                        child: Icon(Icons.event_available_rounded, color: x.onAction, size: 24),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(productName, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+                        Text('مدیریت', style: theme.textTheme.labelSmall?.copyWith(color: x.inkMuted)),
+                      ]),
+                    ]),
+                  ),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => _go(s, 0),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: i == 0 ? x.stampSoft : x.sunken,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(needsEvent ? 'اتصال و رویداد' : 'رویداد فعال', style: theme.textTheme.labelSmall?.copyWith(color: x.inkMuted)),
+                        Text(s.event?.name ?? 'رویدادی انتخاب نشده',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800, height: 20 / 14)),
+                        if (s.event != null)
+                          Text('${s.event!.code}${s.event!.archived ? ' · بایگانی' : ''} · تغییر رویداد',
+                              style: theme.textTheme.labelSmall?.copyWith(color: x.stamp)),
+                      ]),
                     ),
                   ),
-                  // MakerCredit: پایین ناوبری، کوچک‌ترین متن.
+                  Expanded(
+                    child: ListView(padding: EdgeInsets.zero, children: [
+                      for (final n in nav) item(n.$1, n.$2, n.$3),
+                    ]),
+                  ),
+                  // وضعیت همگام‌سازی و «درباره».
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: s.messageIsError ? x.waitSoft : x.goSoft,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(children: [
+                      Icon(s.messageIsError ? Icons.cloud_off_rounded : Icons.cloud_done_rounded,
+                          size: 18, color: s.messageIsError ? x.wait : x.go),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          s.busy ? 'در حال به‌روزرسانی…' : (s.messageIsError ? 'به سرور نرسیدیم' : 'متصل به سرور'),
+                          style: theme.textTheme.labelMedium?.copyWith(
+                              color: s.messageIsError ? x.wait : x.go, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ]),
+                  ),
                   InkWell(
+                    borderRadius: BorderRadius.circular(14),
                     onTap: () => showAboutRoydadyar(context),
                     child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(FirouzehSize.space4),
-                      decoration: BoxDecoration(border: Border(top: BorderSide(color: x.line))),
-                      child: Text('$productName ${faDigits(appVersion.split('.').take(2).join('٫'))}، $makerShort',
-                          style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+                      height: 46,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(children: [
+                        Icon(Icons.info_outline_rounded, size: 22, color: x.inkMuted),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text('$productName ${faDigits(appVersion.split('.').take(2).join('٫'))}، $makerShort',
+                              style: theme.textTheme.bodySmall?.copyWith(color: x.inkMuted)),
+                        ),
+                      ]),
                     ),
                   ),
                 ]),
@@ -590,6 +628,73 @@ class _AppLockState extends State<AppLock> with WidgetsBindingObserver {
   }
 }
 
+/// ردیف نوار کناری ویندوز (بوم «نوار کناری»): ۴۶px، گوشه‌ی ۱۴، فعال پر از brand.
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String tooltip;
+  final bool current;
+  final bool attention;
+  final VoidCallback? onTap;
+  const _NavItem({
+    required this.icon,
+    required this.title,
+    required this.tooltip,
+    required this.current,
+    required this.attention,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final x = FirouzehColors.of(context);
+    final theme = Theme.of(context);
+    final fg = current ? x.onAction : x.ink;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Tooltip(
+        message: tooltip,
+        waitDuration: const Duration(milliseconds: 600),
+        child: Material(
+          color: current ? x.action : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onTap,
+            child: Opacity(
+              opacity: onTap == null ? .45 : 1,
+              child: SizedBox(
+                height: 46,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(children: [
+                    Icon(icon, size: 22, color: fg),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(title,
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(color: fg, fontWeight: current ? FontWeight.w800 : FontWeight.w600)),
+                    ),
+                    if (attention)
+                      Container(
+                        constraints: const BoxConstraints(minWidth: 22),
+                        height: 22,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        decoration: BoxDecoration(color: x.waitSoft, borderRadius: BorderRadius.circular(11)),
+                        child: Text('!', style: theme.textTheme.labelMedium?.copyWith(color: x.wait, fontWeight: FontWeight.w800)),
+                      ),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _StepItem extends StatelessWidget {
   final int? number;
   final String title;
@@ -680,7 +785,16 @@ class PageBody extends StatelessWidget {
               if (title != null && MediaQuery.sizeOf(context).width >= 1024)
                 Padding(
                   padding: const EdgeInsets.only(bottom: FirouzehSize.space4),
-                  child: CurvedHeader(title: title!, subtitle: StateScope.of(context).event?.name),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    if (StateScope.of(context).event != null)
+                      Text(StateScope.of(context).event!.name,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: FirouzehColors.of(context).inkMuted)),
+                    Text(title!,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontSize: 28, height: 38 / 28, fontWeight: FontWeight.w800)),
+                  ]),
                 ),
               ...children,
             ],
